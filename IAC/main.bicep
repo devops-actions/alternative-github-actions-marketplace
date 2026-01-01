@@ -10,6 +10,9 @@ param staticWebAppLocation string = 'West Europe'
 @description('Table Storage table name for GitHub Actions metadata.')
 param tableName string = 'actions'
 
+@description('Assign Storage Table Data Contributor role to the function app managed identity. Requires role assignment permissions on the storage account scope.')
+param assignTableDataContributor bool = false
+
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -124,7 +127,7 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
   }
 }
 
-resource tableDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource tableDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (assignTableDataContributor) {
   name: guid(storageAccount.id, 'StorageTableDataContributor', functionApp.id)
   scope: storageAccount
   properties: {
