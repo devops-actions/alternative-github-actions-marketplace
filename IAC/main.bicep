@@ -125,7 +125,7 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
 }
 
 resource tableDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, 'StorageTableDataContributor', functionApp.identity.principalId)
+  name: guid(storageAccount.id, 'StorageTableDataContributor', functionApp.id)
   scope: storageAccount
   properties: {
     principalId: functionApp.identity.principalId
