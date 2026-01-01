@@ -156,5 +156,6 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
 
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
 output functionAppDefaultHostname string = functionApp.properties.defaultHostName
+output functionAppName string = functionApp.name
 output tableEndpoint string = storageAccount.properties.primaryEndpoints.table
 output applicationInsightsConnection string = appInsights.properties.ConnectionString

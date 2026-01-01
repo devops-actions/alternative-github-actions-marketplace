@@ -39,6 +39,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy Bicep template
+        id: deploy
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -49,3 +50,34 @@ jobs:
             location=${{ vars.DEPLOY_LOCATION }}
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
           failOnStdErr: false
+
+      - name: Retrieve ActionsUpsert function key
+        id: fetch_function_key
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            function_app_name="${{ steps.deploy.outputs.functionAppName }}"
+            if [ -z "$function_app_name" ]; then
+              echo "Function app name output is empty." >&2
+              exit 1
+            fi
+
+            function_key=$(az functionapp function keys list \
+              --name "$function_app_name" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --function-name "ActionsUpsert" \
+              --query "default" -o tsv)
+
+            if [ -z "$function_key" ]; then
+              echo "Failed to retrieve default function key." >&2
+              exit 1
+            fi
+
+            echo "function_key=$function_key" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test ActionsUpsert endpoint
+        env:
+          FUNCTION_HOST: ${{ steps.deploy.outputs.functionAppDefaultHostname }}
+          FUNCTION_KEY: ${{ steps.fetch_function_key.outputs.function_key }}
+        run: |
+          bash IAC/smoke-test-actions.sh "$FUNCTION_HOST" "$FUNCTION_KEY"
