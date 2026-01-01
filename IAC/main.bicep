@@ -120,6 +120,10 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           name: 'ACTIONS_TABLE_URL'
           value: 'https://${storageAccount.name}.table.${az.environment().suffixes.storage}'
         }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
       ]
     }
   }

@@ -74,3 +74,4 @@ jobs:
         with:
           app-name: ${{ env.FUNCTION_APP_NAME }}
           package: functionapp.zip
+          deployment-method: runFromPackage
