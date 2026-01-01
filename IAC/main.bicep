@@ -16,7 +16,7 @@ var functionAppName = 'func-${uniqueSuffix}'
 var staticWebAppName = 'swa-${uniqueSuffix}'
 var hostingPlanName = 'plan-${uniqueSuffix}'
 var insightsName = 'appi-${uniqueSuffix}'
-var fileShareName = toLower('func${environment}')
+var fileShareName = toLower('func${uniqueSuffix}')
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -78,15 +78,15 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
-          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', az.environment().suffixes.storage)
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
         }
         {
           name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', az.environment().suffixes.storage)
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
         }
         {
           name: 'WEBSITE_CONTENTSHARE'
-          value: fileShareName
+          value: split(fileShare.name, '/')[2]
         }
         {
           name: 'FUNCTIONS_WORKER_RUNTIME'
