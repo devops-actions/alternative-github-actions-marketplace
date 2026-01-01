@@ -108,11 +108,29 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsights.properties.ConnectionString
         }
+        {
+          name: 'ACTIONS_TABLE_NAME'
+          value: tableName
+        }
+        {
+          name: 'ACTIONS_TABLE_URL'
+          value: 'https://${storageAccount.name}.table.${az.environment().suffixes.storage}'
+        }
       ]
     }
   }
   identity: {
     type: 'SystemAssigned'
+  }
+}
+
+resource tableDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, 'StorageTableDataContributor', functionApp.identity.principalId)
+  scope: storageAccount
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b8fa-4a7e-88f8-87b6abefc6c0')
   }
 }
 

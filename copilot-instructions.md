@@ -14,3 +14,4 @@
 ## Collaboration Notes
 - Default to ASCII when editing files; keep comments concise and only when necessary for clarity.
 - Update the decision records first when architecture or cost assumptions change before implementing code.
+- Backend tests live under `/src/backend/tests`; run `npm test` from `/src/backend` whenever touching backend logic or data contracts.

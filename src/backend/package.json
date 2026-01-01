@@ -1,0 +1,21 @@
+{
+  "name": "actions-marketplace-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Azure Functions backend for Actions marketplace metadata ingestion.",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.2.2",
+    "@azure/identity": "^4.13.0"
+  },
+  "devDependencies": {
+    "@azure/functions": "^4.4.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0"
+  }
+}
