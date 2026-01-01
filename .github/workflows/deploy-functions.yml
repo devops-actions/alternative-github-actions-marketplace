@@ -9,6 +9,17 @@ on:
       - 'src/backend/**'
       - '.github/workflows/deploy-functions.yml'
 
+env:
+  # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
+  AZURE_CORE_ONLY_SHOW_ERRORS: true
+  AZURE_CORE_ERROR_RECOMMENDATION: false
+  AZURE_CORE_COLLECT_TELEMETRY: false
+  AZURE_LOGGING_ENABLE_LOG_FILE: false
+  AZURE_CORE_SURVEY_MESSAGE: false
+  AZURE_AUTO_UPGRADE_ENABLE: false
+  AZURE_CORE_NO_COLOR: true
+  AZURE_EXTENSION_USE_DYNAMIC_INSTALL: false
+
 permissions:
   contents: read
   id-token: write

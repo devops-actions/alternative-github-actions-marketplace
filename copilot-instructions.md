@@ -19,3 +19,4 @@
 - Function deploy workflow discovers the app name via `az functionapp list` scoped to `${{ vars.AZURE_RESOURCE_GROUP }}`; keep the target RG unique to avoid ambiguous matches.
 - `main.bicep` exposes `assignTableDataContributor`; leave it `false` unless the deployment identity can create role assignments, otherwise grant Storage Table Data Contributor manually post-deploy.
 - Azure Functions runtime targets Node.js 22; develop and test with Node 22+ to stay aligned with production.
+- Workflows set Azure CLI automation-friendly env vars (only show errors, disable telemetry/dynamic install); mirror them locally to match CI behavior. See the docs here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
