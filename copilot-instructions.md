@@ -17,3 +17,4 @@
 - Backend tests live under `/src/backend/tests`; run `npm test` from `/src/backend` whenever touching backend logic or data contracts.
 - CI includes `deploy-functions.yml` which runs backend tests and zip deploys the function app on backend changes. Keep it green before merging.
 - `main.bicep` exposes `assignTableDataContributor`; leave it `false` unless the deployment identity can create role assignments, otherwise grant Storage Table Data Contributor manually post-deploy.
+- Azure Functions runtime targets Node.js 22; develop and test with Node 22+ to stay aligned with production.
