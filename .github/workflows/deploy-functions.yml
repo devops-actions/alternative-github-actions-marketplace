@@ -1,0 +1,56 @@
+name: Deploy Functions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      #- main
+    paths:
+      - 'src/backend/**'
+      - '.github/workflows/deploy-functions.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: src/backend
+
+      - name: Run unit tests
+        run: npm test
+        working-directory: src/backend
+
+      - name: Prune dev dependencies
+        run: npm prune --omit=dev
+        working-directory: src/backend
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Package function app
+        working-directory: src/backend
+        run: zip -r ../../functionapp.zip . -x "*.git*" "node_modules/.cache/*" "tests/*"
+
+      - name: Deploy function app
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
+          package: functionapp.zip

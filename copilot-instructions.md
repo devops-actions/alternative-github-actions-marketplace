@@ -15,3 +15,4 @@
 - Default to ASCII when editing files; keep comments concise and only when necessary for clarity.
 - Update the decision records first when architecture or cost assumptions change before implementing code.
 - Backend tests live under `/src/backend/tests`; run `npm test` from `/src/backend` whenever touching backend logic or data contracts.
+- CI includes `deploy-functions.yml` which runs backend tests and zip deploys the function app on backend changes. Keep it green before merging.
