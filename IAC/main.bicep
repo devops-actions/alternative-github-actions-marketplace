@@ -41,7 +41,7 @@ resource table 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-01-0
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
   name: '${storageAccount.name}/default/${fileShareName}'
   properties: {
-    quota: 1
+    shareQuota: 1
   }
 }
 
@@ -78,11 +78,11 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
-          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', environment().suffixes.storage)
+          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', az.environment().suffixes.storage)
         }
         {
           name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', environment().suffixes.storage)
+          value: concat('DefaultEndpointsProtocol=https;AccountName=', storageAccount.name, ';AccountKey=', storageAccount.listKeys().keys[0].value, ';EndpointSuffix=', az.environment().suffixes.storage)
         }
         {
           name: 'WEBSITE_CONTENTSHARE'
@@ -114,12 +114,6 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
   identity: {
     type: 'SystemAssigned'
   }
-  dependsOn: [
-    storageAccount
-    hostingPlan
-    appInsights
-    fileShare
-  ]
 }
 
 resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
@@ -135,7 +129,6 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
       apiLocation: 'api'
       outputLocation: 'dist'
     }
-    functionAppResourceId: functionApp.id
   }
 }
 
