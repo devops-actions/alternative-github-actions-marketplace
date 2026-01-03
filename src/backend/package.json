@@ -27,6 +27,9 @@
     "url": "https://github.com/devops-actions/alternative-github-actions-marketplace/issues"
   },
   "homepage": "https://github.com/devops-actions/alternative-github-actions-marketplace#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "files": [
     "client/",
     "lib/",

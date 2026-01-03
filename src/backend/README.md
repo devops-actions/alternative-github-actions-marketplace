@@ -4,9 +4,22 @@ Client library for uploading GitHub Actions metadata to the alternative marketpl
 
 ## Installation
 
+This package is published to GitHub Packages. To install it, you need to configure npm to use GitHub Packages for the `@devops-actions` scope.
+
+Create or edit `.npmrc` in your project root:
+
+```
+@devops-actions:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then install the package:
+
 ```bash
 npm install @devops-actions/actions-marketplace-client
 ```
+
+**Note:** You need a GitHub personal access token with `read:packages` scope to install packages from GitHub Packages. Set it as the `GITHUB_TOKEN` environment variable or directly in your `.npmrc` file.
 
 ## Quick Start
 
