@@ -1,0 +1,233 @@
+[
+  {
+    "owner": "Owner1",
+    "name": "Owner1_github-actions-jwt-generator",
+    "dependabot": null,
+    "vulnerabilityStatus": {
+      "lastUpdated": "2022-11-25T14:24:07.8339363Z",
+      "critical": 0,
+      "high": 0
+    },
+    "forkFound": true,
+    "actionType": {
+      "actionType": "Node",
+      "fileFound": "action.yml",
+      "actionDockerType": "",
+      "nodeVersion": "12"
+    },
+    "repoInfo": {
+      "latest_release_published_at": "2019-08-31T09:23:23Z",
+      "disabled": false,
+      "updated_at": "2021-10-21T10:50:20Z",
+      "archived": false
+    },
+    "tagInfo": [
+      "0.0.9",
+      "0.0.10",
+      "0.0.11",
+      "1.0.0",
+      "1.0.1"
+    ],
+    "releaseInfo": [
+      "1.0.1",
+      "1.0.0",
+      "0.0.11",
+      "0.0.10",
+      "0.0.9"
+    ],
+    "dependabotEnabled": true,
+    "mirrorLastUpdated": null,
+    "secretScanningEnabled": true,
+    "repoSize": null,
+    "ossfDateLastUpdate": "2024-01-15",
+    "dependents": {
+      "dependentsLastUpdated": "2025-11-07T10:46:29.6273859+00:00",
+      "dependents": "25"
+    },
+    "verified": false,
+    "ossf": true,
+    "ossfScore": 2.8
+  },
+  {
+    "owner": "Owner2",
+    "name": "Owner2_container-audit",
+    "dependabot": {
+      "alerts": 2,
+      "open": 1
+    },
+    "vulnerabilityStatus": {
+      "lastUpdated": "2023-03-10T08:11:00Z",
+      "critical": 1,
+      "high": 2
+    },
+    "forkFound": false,
+    "actionType": {
+      "actionType": "Docker",
+      "fileFound": "Dockerfile",
+      "actionDockerType": "ubuntu-latest",
+      "nodeVersion": null
+    },
+    "repoInfo": {
+      "latest_release_published_at": "2023-02-01T12:00:00Z",
+      "disabled": false,
+      "updated_at": "2023-11-12T18:43:00Z",
+      "archived": false
+    },
+    "tagInfo": [
+      "1.0.0",
+      "1.1.0",
+      "1.2.0"
+    ],
+    "releaseInfo": [
+      "1.2.0",
+      "1.1.0",
+      "1.0.0"
+    ],
+    "dependabotEnabled": true,
+    "mirrorLastUpdated": "2025-12-01T00:00:00Z",
+    "secretScanningEnabled": false,
+    "repoSize": 2048,
+    "ossfDateLastUpdate": "2025-05-19",
+    "dependents": {
+      "dependentsLastUpdated": "2025-12-15T09:15:00Z",
+      "dependents": "104"
+    },
+    "verified": true,
+    "ossf": true,
+    "ossfScore": 7.1
+  },
+  {
+    "owner": "Owner3",
+    "name": "Owner3_codeql-bootstrap",
+    "dependabot": null,
+    "vulnerabilityStatus": {
+      "lastUpdated": "2024-08-22T15:00:00Z",
+      "critical": 0,
+      "high": 1
+    },
+    "forkFound": true,
+    "actionType": {
+      "actionType": "Composite",
+      "fileFound": "action.yml",
+      "actionDockerType": "",
+      "nodeVersion": "20"
+    },
+    "repoInfo": {
+      "latest_release_published_at": "2024-08-01T10:00:00Z",
+      "disabled": false,
+      "updated_at": "2024-12-12T11:47:00Z",
+      "archived": false
+    },
+    "tagInfo": [
+      "0.1.0",
+      "0.2.0",
+      "0.3.0"
+    ],
+    "releaseInfo": [
+      "0.3.0",
+      "0.2.0",
+      "0.1.0"
+    ],
+    "dependabotEnabled": false,
+    "mirrorLastUpdated": null,
+    "secretScanningEnabled": true,
+    "repoSize": 512,
+    "ossfDateLastUpdate": "2024-12-12",
+    "dependents": {
+      "dependentsLastUpdated": "2025-12-20T10:00:00Z",
+      "dependents": "7"
+    },
+    "verified": false,
+    "ossf": false,
+    "ossfScore": 5.3
+  },
+  {
+    "owner": "Owner4",
+    "name": "Owner4_secret-auditor",
+    "dependabot": {
+      "alerts": 0,
+      "open": 0
+    },
+    "vulnerabilityStatus": {
+      "lastUpdated": "2025-06-30T06:30:00Z",
+      "critical": 0,
+      "high": 0
+    },
+    "forkFound": false,
+    "actionType": {
+      "actionType": "Node",
+      "fileFound": "action.yml",
+      "actionDockerType": "",
+      "nodeVersion": "18"
+    },
+    "repoInfo": {
+      "latest_release_published_at": "2025-05-30T09:00:00Z",
+      "disabled": false,
+      "updated_at": "2025-12-18T14:05:00Z",
+      "archived": false
+    },
+    "tagInfo": [
+      "1.0.0",
+      "1.0.1"
+    ],
+    "releaseInfo": [
+      "1.0.1",
+      "1.0.0"
+    ],
+    "dependabotEnabled": true,
+    "mirrorLastUpdated": "2025-12-10T00:00:00Z",
+    "secretScanningEnabled": true,
+    "repoSize": 1024,
+    "ossfDateLastUpdate": "2025-12-18",
+    "dependents": {
+      "dependentsLastUpdated": "2025-12-19T16:20:00Z",
+      "dependents": "59"
+    },
+    "verified": true,
+    "ossf": true,
+    "ossfScore": 8.4
+  },
+  {
+    "owner": "Owner1",
+    "name": "Owner1_deprecated-cache",
+    "dependabot": null,
+    "vulnerabilityStatus": {
+      "lastUpdated": "2021-07-14T00:00:00Z",
+      "critical": 0,
+      "high": 0
+    },
+    "forkFound": false,
+    "actionType": {
+      "actionType": "Node",
+      "fileFound": "action.yml",
+      "actionDockerType": "",
+      "nodeVersion": "10"
+    },
+    "repoInfo": {
+      "latest_release_published_at": "2020-04-03T11:30:00Z",
+      "disabled": true,
+      "updated_at": "2021-07-14T00:00:00Z",
+      "archived": true
+    },
+    "tagInfo": [
+      "0.1.0",
+      "0.1.1"
+    ],
+    "releaseInfo": [
+      "0.1.1",
+      "0.1.0"
+    ],
+    "dependabotEnabled": false,
+    "mirrorLastUpdated": null,
+    "secretScanningEnabled": false,
+    "repoSize": 256,
+    "ossfDateLastUpdate": "2021-07-14",
+    "dependents": {
+      "dependentsLastUpdated": "2022-01-01T00:00:00Z",
+      "dependents": "0"
+    },
+    "verified": false,
+    "ossf": false,
+    "ossfScore": 1.2
+  }
+]

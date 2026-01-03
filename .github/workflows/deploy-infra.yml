@@ -1,0 +1,83 @@
+name: Deploy IaC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      #- main
+    paths:
+      - 'IAC/**'
+      - '.github/workflows/deploy-infra.yml'
+
+env:
+  # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
+  AZURE_CORE_ONLY_SHOW_ERRORS: true
+  AZURE_CORE_ERROR_RECOMMENDATION: false
+  AZURE_CORE_COLLECT_TELEMETRY: false
+  AZURE_LOGGING_ENABLE_LOG_FILE: false
+  AZURE_CORE_SURVEY_MESSAGE: false
+  AZURE_AUTO_UPGRADE_ENABLE: false
+  AZURE_CORE_NO_COLOR: true
+  AZURE_EXTENSION_USE_DYNAMIC_INSTALL: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Bicep template
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
+          template: IAC/main.bicep
+          parameters: |
+            environment=${{ vars.DEPLOY_ENVIRONMENT }}
+            location=${{ vars.DEPLOY_LOCATION }}
+            staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
+          failOnStdErr: false
+
+      - name: Retrieve ActionsUpsert function key
+        id: fetch_function_key
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            function_app_name="${{ steps.deploy.outputs.functionAppName }}"
+            if [ -z "$function_app_name" ]; then
+              echo "Function app name output is empty." >&2
+              exit 1
+            fi
+
+            function_key=$(az functionapp function keys list \
+              --name "$function_app_name" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --function-name "ActionsUpsert" \
+              --query "default" -o tsv)
+
+            if [ -z "$function_key" ]; then
+              echo "Failed to retrieve default function key." >&2
+              exit 1
+            fi
+
+            echo "function_key=$function_key" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test ActionsUpsert endpoint
+        env:
+          FUNCTION_HOST: ${{ steps.deploy.outputs.functionAppDefaultHostname }}
+          FUNCTION_KEY: ${{ steps.fetch_function_key.outputs.function_key }}
+        run: |
+          bash IAC/smoke-test-actions.sh "$FUNCTION_HOST" "$FUNCTION_KEY"
