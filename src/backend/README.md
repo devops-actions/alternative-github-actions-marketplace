@@ -8,6 +8,10 @@ Client library for uploading GitHub Actions metadata to the alternative marketpl
 npm install @devops-actions/actions-marketplace-client
 ```
 
+## Quick Start
+
+See the [examples/upload-actions.js](examples/upload-actions.js) file for a complete working example.
+
 ## Usage
 
 The client supports two modes of operation:

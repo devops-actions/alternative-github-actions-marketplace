@@ -30,6 +30,7 @@
   "files": [
     "client/",
     "lib/",
+    "examples/",
     "README.md",
     "LICENSE"
   ],
