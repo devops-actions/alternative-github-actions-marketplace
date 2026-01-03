@@ -1,15 +1,42 @@
 {
-  "name": "actions-marketplace-backend",
+  "name": "@devops-actions/actions-marketplace-client",
   "version": "0.1.0",
-  "private": true,
-  "description": "Azure Functions backend for Actions marketplace metadata ingestion.",
-  "main": "index.js",
+  "description": "Client library for uploading GitHub Actions metadata to the alternative marketplace API.",
+  "main": "client/index.js",
   "scripts": {
     "start": "func start",
     "lint": "eslint .",
     "test": "jest",
-    "integration": "cucumber-js \"integration/features/**/*.feature\" --require \"integration/features/step_definitions/**/*.js\" --require \"integration/support/**/*.js\" --format pretty --format summary"
+    "integration": "cucumber-js \"integration/features/**/*.feature\" --require \"integration/features/step_definitions/**/*.js\" --require \"integration/support/**/*.js\" --format pretty --format summary",
+    "prepublishOnly": "npm test && npm run lint"
   },
+  "keywords": [
+    "github-actions",
+    "marketplace",
+    "metadata",
+    "azure"
+  ],
+  "author": "devops-actions",
+  "license": "CC0-1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devops-actions/alternative-github-actions-marketplace.git",
+    "directory": "src/backend"
+  },
+  "bugs": {
+    "url": "https://github.com/devops-actions/alternative-github-actions-marketplace/issues"
+  },
+  "homepage": "https://github.com/devops-actions/alternative-github-actions-marketplace#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "client/",
+    "lib/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@azure/data-tables": "^13.2.2",
     "@azure/identity": "^4.13.0"
@@ -21,6 +48,6 @@
     "@cucumber/cucumber": "^11.0.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   }
 }
