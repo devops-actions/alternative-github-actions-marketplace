@@ -1,39 +1,11 @@
-const { TableClient } = require('@azure/data-tables');
-const { DefaultAzureCredential } = require('@azure/identity');
 const { ActionRecord } = require('../lib/actionRecord');
+const { getTableClient, getActionEntity } = require('../lib/tableStorage');
 
-const defaultTableName = process.env.ACTIONS_TABLE_NAME || 'actions';
-const storageConnection = process.env.ACTIONS_TABLE_CONNECTION || process.env.AzureWebJobsStorage;
-const tableEndpoint = process.env.ACTIONS_TABLE_URL || process.env.ACTIONS_TABLE_ENDPOINT;
-
-function createTableClient() {
-  if (storageConnection) {
-    return TableClient.fromConnectionString(storageConnection, defaultTableName);
-  }
-
-  if (!tableEndpoint) {
-    throw new Error('Missing table endpoint. Configure ACTIONS_TABLE_URL or provide a connection string.');
-  }
-
-  // Use managed identity when no connection string is supplied.
-  const credential = new DefaultAzureCredential();
-  return new TableClient(tableEndpoint, defaultTableName, credential);
+async function fetchExisting(tableClient, partitionKey, rowKey) {
+  return getActionEntity(partitionKey, rowKey, { tableClient });
 }
 
-const tableClient = createTableClient();
-
-async function fetchExisting(partitionKey, rowKey) {
-  try {
-    return await tableClient.getEntity(partitionKey, rowKey);
-  } catch (error) {
-    if (error.statusCode === 404) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-async function persistActionRecord(actionRecord, existing) {
+async function persistActionRecord(tableClient, actionRecord, existing) {
   const entity = actionRecord.toEntity();
 
   if (!existing) {
@@ -45,7 +17,7 @@ async function persistActionRecord(actionRecord, existing) {
         throw error;
       }
       const latest = await tableClient.getEntity(entity.partitionKey, entity.rowKey);
-      return persistActionRecord(actionRecord, latest);
+      return persistActionRecord(tableClient, actionRecord, latest);
     }
   }
 
@@ -60,7 +32,7 @@ async function persistActionRecord(actionRecord, existing) {
     if (actionRecord.matchesExisting(latest)) {
       return { updated: false, created: false, lastSyncedUtc: latest.LastSyncedUtc };
     }
-    return persistActionRecord(actionRecord, latest);
+    return persistActionRecord(tableClient, actionRecord, latest);
   }
 }
 
@@ -87,7 +59,8 @@ module.exports = async function actionsUpsert(context, req) {
   }
 
   try {
-    const existing = await fetchExisting(record.partitionKey, record.rowKey);
+    const tableClient = getTableClient();
+    const existing = await fetchExisting(tableClient, record.partitionKey, record.rowKey);
 
     if (record.matchesExisting(existing)) {
       context.res = {
@@ -102,7 +75,7 @@ module.exports = async function actionsUpsert(context, req) {
       return;
     }
 
-    const result = await persistActionRecord(record, existing);
+    const result = await persistActionRecord(tableClient, record, existing);
 
     context.res = {
       status: result.created ? 201 : 200,

@@ -1,7 +1,7 @@
 [
   {
-    "owner": "morzzz007",
-    "name": "morzzz007_github-actions-jwt-generator",
+    "owner": "Owner1",
+    "name": "Owner1_github-actions-jwt-generator",
     "dependabot": null,
     "vulnerabilityStatus": {
       "lastUpdated": "2022-11-25T14:24:07.8339363Z",
@@ -49,8 +49,8 @@
     "ossfScore": 2.8
   },
   {
-    "owner": "opensource-labs",
-    "name": "gha-container-audit",
+    "owner": "Owner2",
+    "name": "Owner2_container-audit",
     "dependabot": {
       "alerts": 2,
       "open": 1
@@ -97,8 +97,8 @@
     "ossfScore": 7.1
   },
   {
-    "owner": "devrel-samples",
-    "name": "gha-codeql-bootstrap",
+    "owner": "Owner3",
+    "name": "Owner3_codeql-bootstrap",
     "dependabot": null,
     "vulnerabilityStatus": {
       "lastUpdated": "2024-08-22T15:00:00Z",
@@ -142,8 +142,8 @@
     "ossfScore": 5.3
   },
   {
-    "owner": "cloud-secops",
-    "name": "gha-secret-auditor",
+    "owner": "Owner4",
+    "name": "Owner4_secret-auditor",
     "dependabot": {
       "alerts": 0,
       "open": 0
@@ -188,8 +188,8 @@
     "ossfScore": 8.4
   },
   {
-    "owner": "archived-playground",
-    "name": "gha-deprecated-cache",
+    "owner": "Owner1",
+    "name": "Owner1_deprecated-cache",
     "dependabot": null,
     "vulnerabilityStatus": {
       "lastUpdated": "2021-07-14T00:00:00Z",
