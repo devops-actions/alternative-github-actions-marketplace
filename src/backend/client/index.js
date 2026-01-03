@@ -111,11 +111,15 @@ class ActionsMarketplaceClient {
     const results = [];
     
     for (const action of actions) {
+      const actionName = (action && action.owner && action.name) 
+        ? `${action.owner}/${action.name}` 
+        : 'unknown';
+      
       try {
         const result = await this.upsertAction(action);
         results.push({ success: true, action: `${action.owner}/${action.name}`, result });
       } catch (error) {
-        results.push({ success: false, action: `${action.owner}/${action.name}`, error: error.message });
+        results.push({ success: false, action: actionName, error: error.message });
       }
     }
 

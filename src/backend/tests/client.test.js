@@ -97,6 +97,27 @@ describe('ActionsMarketplaceClient', () => {
       expect(results[1].success).toBe(false);
       expect(results[1].error).toContain('Missing required field: owner');
     });
+
+    it('handles invalid action objects gracefully', async () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com'
+      });
+
+      const actions = [
+        null,
+        undefined,
+        {},
+        { owner: 'test' }
+      ];
+
+      const results = await client.batchUpsertActions(actions);
+
+      expect(results).toHaveLength(4);
+      results.forEach(result => {
+        expect(result.success).toBe(false);
+        expect(result.action).toBeDefined();
+      });
+    });
   });
 
   describe('table storage mode', () => {
