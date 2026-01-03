@@ -61,6 +61,9 @@ describe('Client Package Integration', () => {
       const result1 = await client.upsertAction(action);
       expect(result1.created).toBe(true);
 
+      // Small delay to ensure timestamp differs
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       // Modify and upsert again
       const modifiedAction = { ...action, description: 'Updated description' };
       const result2 = await client.upsertAction(modifiedAction);
