@@ -426,6 +426,65 @@ npm test
 npm run lint
 ```
 
+## Releasing a New Version
+
+This package is published to GitHub Packages. Releases are automated via GitHub Actions.
+
+### Prerequisites
+
+- Ensure all tests pass: `npm test`
+- Ensure linting passes: `npm run lint`
+- Update the version number in `package.json` following [semantic versioning](https://semver.org/)
+- Commit and push all changes to the main branch
+
+### Creating a Release
+
+#### Option 1: Via GitHub Releases (Recommended)
+
+1. Go to the [Releases page](https://github.com/devops-actions/alternative-github-actions-marketplace/releases)
+2. Click "Draft a new release"
+3. Create a new tag with format `vX.Y.Z` (e.g., `v0.2.1`)
+   - Must match the version in `package.json`
+   - Must include the `v` prefix
+4. Set the release title (e.g., "v0.2.1")
+5. Add release notes describing changes
+6. Click "Publish release"
+
+The `publish-npm.yml` workflow will automatically:
+- Check out the tagged commit
+- Install dependencies
+- Run tests and linter
+- Update the package version from the tag
+- Publish to GitHub Packages
+
+#### Option 2: Manual Workflow Dispatch
+
+If you need to republish a specific tag:
+
+1. Go to [Actions → Publish Package to GitHub Packages](https://github.com/devops-actions/alternative-github-actions-marketplace/actions/workflows/publish-npm.yml)
+2. Click "Run workflow"
+3. Enter the tag name (e.g., `v0.2.1`)
+4. Click "Run workflow"
+
+### Versioning Guidelines
+
+Follow [semantic versioning](https://semver.org/):
+
+- **Patch release** (0.2.0 → 0.2.1): Backward-compatible bug fixes
+- **Minor release** (0.2.1 → 0.3.0): New backward-compatible features
+- **Major release** (0.3.0 → 1.0.0): Breaking changes
+
+### Post-Release
+
+After publishing:
+
+1. Verify the package appears in [GitHub Packages](https://github.com/orgs/devops-actions/packages?repo_name=alternative-github-actions-marketplace)
+2. Test installation in a separate project:
+   ```bash
+   npm install @devops-actions/actions-marketplace-client@latest
+   ```
+3. Update any examples or documentation that reference the old version
+
 ## License
 
 CC0-1.0 (Public Domain)
