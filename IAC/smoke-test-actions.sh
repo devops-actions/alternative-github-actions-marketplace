@@ -26,7 +26,7 @@ trap 'rm -f "$response_file"' EXIT
 
 while [ "$attempt" -le "$max_attempts" ]; do
   curl_exit=0
-  http_status=$(curl -sS -w "%{http_code}" -o "$response_file" -X POST "https://${function_host}/api/actions?code=${function_key}" \
+  http_status=$(curl -sS -w "%{http_code}" -o "$response_file" -X POST "https://${function_host}/api/ActionsUpsert?code=${function_key}" \
     -H "Content-Type: application/json" \
     -d "$payload") || curl_exit=$?
 

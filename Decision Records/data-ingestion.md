@@ -14,7 +14,7 @@ Provide an HTTP API that accepts a single GitHub Actions record, stores it in Az
   - `PayloadJson`: compressed or raw JSON string for the record. Maintains the flexible schema without extra columns.
 
 ## Ingestion Workflow
-1. **Request**: Client `POST /api/actions` with JSON body matching the record schema.
+1. **Request**: Client `POST /api/ActionsUpsert` with JSON body matching the record schema.
 2. **Validation**: Function validates required fields (`owner`, `name`) and canonicalizes values (trim, lowercase for keys, ISO timestamps).
 3. **Lookup**: Use `TableClient.getEntity(partitionKey, rowKey)` to retrieve existing entry; handle 404 as "new record".
 4. **Change Detection**:
@@ -35,6 +35,6 @@ Provide an HTTP API that accepts a single GitHub Actions record, stores it in Az
 - **Latency**: Typical single-entity operations run sub-50ms; ensure the function returns early without writes when unchanged to reduce RU/s consumption.
 
 ## Future Enhancements
-- Batch API (`POST /api/actions/batch`) to handle up to 100 records per call using `TableTransactionAction` for grouped updates.
+- Batch API (`POST /api/ActionsUpsert/batch`) to handle up to 100 records per call using `TableTransactionAction` for grouped updates.
 - Secondary cache (Redis) to accelerate read-heavy search once the dataset grows beyond memory-friendly sizes.
 - Scheduled job to purge stale records or archive payload history to Blob Storage for audit trails.
