@@ -5,6 +5,7 @@ class ActionsMarketplaceClient {
   constructor(options = {}) {
     if (options.apiUrl) {
       this.apiUrl = options.apiUrl.replace(/\/$/, '');
+      this.functionKey = options.functionKey;
       this.useHttpApi = true;
     } else {
       this.tableClient = createTableClient(options);
@@ -25,7 +26,12 @@ class ActionsMarketplaceClient {
   async _upsertViaHttp(record) {
     const payload = record.toActionInfo(false);
     
-    const response = await fetch(`${this.apiUrl}/api/ActionsUpsert`, {
+    let url = `${this.apiUrl}/api/ActionsUpsert`;
+    if (this.functionKey) {
+      url += `?code=${encodeURIComponent(this.functionKey)}`;
+    }
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

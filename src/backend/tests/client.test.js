@@ -21,6 +21,17 @@ describe('ActionsMarketplaceClient', () => {
       expect(client.apiUrl).toBe('https://example.com/api');
     });
 
+    it('stores functionKey when provided', () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com/api',
+        functionKey: 'test-function-key'
+      });
+
+      expect(client.apiUrl).toBe('https://example.com/api');
+      expect(client.functionKey).toBe('test-function-key');
+      expect(client.useHttpApi).toBe(true);
+    });
+
     it('creates client in table mode when tableEndpoint is provided', () => {
       const mockTableClient = { name: 'mock' };
       const { createTableClient } = require('../lib/tableStorage');
@@ -43,6 +54,89 @@ describe('ActionsMarketplaceClient', () => {
 
       await expect(client.upsertAction({ name: 'test' })).rejects.toThrow('Missing required field: owner');
       await expect(client.upsertAction({ owner: 'test' })).rejects.toThrow('Missing required field: name');
+    });
+
+    it('sends HTTP request without code parameter when functionKey is not provided', async () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com'
+      });
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ updated: true, created: true, owner: 'test', name: 'action' })
+      });
+      global.fetch = mockFetch;
+
+      await client.upsertAction({
+        owner: 'test',
+        name: 'action',
+        description: 'Test action'
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://example.com/api/ActionsUpsert',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+      );
+    });
+
+    it('sends HTTP request with code parameter when functionKey is provided', async () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com',
+        functionKey: 'my-function-key-123'
+      });
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ updated: true, created: true, owner: 'test', name: 'action' })
+      });
+      global.fetch = mockFetch;
+
+      await client.upsertAction({
+        owner: 'test',
+        name: 'action',
+        description: 'Test action'
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://example.com/api/ActionsUpsert?code=my-function-key-123',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+      );
+    });
+
+    it('URL-encodes functionKey with special characters', async () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com',
+        functionKey: 'key+with/special=chars&more'
+      });
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ updated: true, created: true, owner: 'test', name: 'action' })
+      });
+      global.fetch = mockFetch;
+
+      await client.upsertAction({
+        owner: 'test',
+        name: 'action',
+        description: 'Test action'
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://example.com/api/ActionsUpsert?code=key%2Bwith%2Fspecial%3Dchars%26more',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+      );
     });
   });
 

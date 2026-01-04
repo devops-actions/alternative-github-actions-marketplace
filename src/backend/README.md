@@ -57,6 +57,31 @@ console.log(result);
 // { updated: true, created: true, owner: 'actions', name: 'checkout', lastSyncedUtc: '2026-01-03T...' }
 ```
 
+#### Using HTTP API with Function Key Authentication
+
+If your Azure Function is secured with a function key, you can pass it via the `functionKey` option:
+
+```javascript
+const { ActionsMarketplaceClient } = require('@devops-actions/actions-marketplace-client');
+
+// Create client with function key
+const client = new ActionsMarketplaceClient({
+  apiUrl: 'https://your-marketplace-api.azurewebsites.net',
+  functionKey: process.env.FUNCTION_KEY  // Azure Function key
+});
+
+// Upload a single action
+const result = await client.upsertAction({
+  owner: 'actions',
+  name: 'checkout',
+  description: 'Checkout code from a repository',
+  version: 'v4.0.0',
+  // ... additional metadata
+});
+```
+
+The function key is automatically appended as a `code` query parameter to API requests.
+
 ### Direct Table Storage Mode
 
 This mode requires Azure credentials and direct access to the storage account. It's more efficient for bulk operations but requires proper authentication setup.
@@ -319,6 +344,7 @@ Creates a new client instance.
 
 **Options for HTTP API mode:**
 - `apiUrl` (string): The base URL of the marketplace API
+- `functionKey` (string, optional): Azure Function key for authentication. When provided, it's automatically appended as `?code=<functionKey>` to API requests.
 
 **Options for Direct Table Storage mode:**
 - `tableEndpoint` (string): Azure Table Storage endpoint URL

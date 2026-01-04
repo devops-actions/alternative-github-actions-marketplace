@@ -32,6 +32,29 @@ async function main() {
     console.error('Failed to upload action:', error.message);
   }
 
+  // Example 1b: Using HTTP API mode with Function Key authentication
+  console.log('\n\nExample 1b: HTTP API Mode with Function Key\n');
+  
+  const httpClientWithKey = new ActionsMarketplaceClient({
+    apiUrl: process.env.API_URL || 'https://your-api-endpoint.azurewebsites.net',
+    functionKey: process.env.FUNCTION_KEY || 'your-function-key-here'
+  });
+
+  try {
+    const result = await httpClientWithKey.upsertAction({
+      owner: 'actions',
+      name: 'setup-python',
+      description: 'Setup Python environment',
+      version: 'v5.0.0',
+      icon: 'package',
+      color: 'yellow',
+    });
+
+    console.log('Upload result:', result);
+  } catch (error) {
+    console.error('Failed to upload action:', error.message);
+  }
+
   // Example 2: Using Direct Table Storage mode
   console.log('\n\nExample 2: Direct Table Storage Mode\n');
   
