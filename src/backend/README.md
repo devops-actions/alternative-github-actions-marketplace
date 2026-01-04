@@ -470,9 +470,9 @@ If you need to republish a specific tag:
 
 Follow [semantic versioning](https://semver.org/):
 
-- **Patch release** (0.2.0 → 0.2.1): Backward-compatible bug fixes
-- **Minor release** (0.2.1 → 0.3.0): New backward-compatible features
-- **Major release** (0.3.0 → 1.0.0): Breaking changes
+- **Patch release** (1.2.3 → 1.2.4): Backward-compatible bug fixes
+- **Minor release** (1.2.3 → 1.3.0): New backward-compatible features
+- **Major release** (1.2.3 → 2.0.0): Breaking changes
 
 ### Post-Release
 
