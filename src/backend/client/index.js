@@ -28,7 +28,7 @@ class ActionsMarketplaceClient {
     
     let url = `${this.apiUrl}/api/ActionsUpsert`;
     if (this.functionKey) {
-      url += `?code=${this.functionKey}`;
+      url += `?code=${encodeURIComponent(this.functionKey)}`;
     }
     
     const response = await fetch(url, {

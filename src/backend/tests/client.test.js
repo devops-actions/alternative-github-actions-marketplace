@@ -110,6 +110,34 @@ describe('ActionsMarketplaceClient', () => {
         })
       );
     });
+
+    it('URL-encodes functionKey with special characters', async () => {
+      const client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com',
+        functionKey: 'key+with/special=chars&more'
+      });
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ updated: true, created: true, owner: 'test', name: 'action' })
+      });
+      global.fetch = mockFetch;
+
+      await client.upsertAction({
+        owner: 'test',
+        name: 'action',
+        description: 'Test action'
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://example.com/api/ActionsUpsert?code=key%2Bwith%2Fspecial%3Dchars%26more',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+      );
+    });
   });
 
   describe('batchUpsertActions', () => {
