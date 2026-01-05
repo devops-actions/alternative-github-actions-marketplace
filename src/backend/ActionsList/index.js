@@ -42,7 +42,13 @@ module.exports = async function actionsList(context, req) {
 
   // Real Table Storage query for production
   try {
-    const queryOptions = owner ? { queryOptions: { filter: `PartitionKey eq '${owner.toLowerCase()}'` } } : {};
+    let queryOptions = {};
+    
+    if (owner) {
+      // Sanitize owner to prevent OData injection - escape single quotes
+      const sanitizedOwner = String(owner).toLowerCase().replace(/'/g, "''");
+      queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
+    }
     
     for await (const entity of tableClient.listEntities(queryOptions)) {
       entities.push(entity);

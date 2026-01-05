@@ -538,6 +538,22 @@ describe('ActionsMarketplaceClient', () => {
         });
       });
 
+      it('sanitizes owner parameter to prevent OData injection', async () => {
+        async function* mockListEntities() {
+          // Empty generator
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        // Attempt injection with single quotes
+        await client.listActions({ owner: "test' or '1'='1" });
+
+        // Verify that single quotes are escaped
+        expect(mockTableClient.listEntities).toHaveBeenCalledWith({
+          queryOptions: { filter: "PartitionKey eq 'test'' or ''1''=''1'" }
+        });
+      });
+
       it('returns empty array when no actions exist', async () => {
         async function* mockListEntities() {
           // Empty generator

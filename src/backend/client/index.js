@@ -178,9 +178,13 @@ class ActionsMarketplaceClient {
     const entities = [];
     
     try {
-      const queryOptions = owner 
-        ? { queryOptions: { filter: `PartitionKey eq '${owner.toLowerCase()}'` } }
-        : {};
+      let queryOptions = {};
+      
+      if (owner) {
+        // Sanitize owner to prevent OData injection - escape single quotes
+        const sanitizedOwner = String(owner).toLowerCase().replace(/'/g, "''");
+        queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
+      }
       
       for await (const entity of this.tableClient.listEntities(queryOptions)) {
         try {
