@@ -324,4 +324,287 @@ describe('ActionsMarketplaceClient', () => {
       expect(mockTableClient.updateEntity).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('listActions', () => {
+    describe('HTTP mode', () => {
+      it('fetches actions from HTTP API endpoint without owner filter', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockActions = [
+          { owner: 'actions', name: 'checkout', description: 'Checkout code' },
+          { owner: 'actions', name: 'setup-node', description: 'Setup Node.js' }
+        ];
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => mockActions
+        });
+        global.fetch = mockFetch;
+
+        const result = await client.listActions();
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list',
+          expect.objectContaining({
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+          })
+        );
+        expect(result).toEqual(mockActions);
+      });
+
+      it('fetches actions from HTTP API endpoint with owner filter', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockActions = [
+          { owner: 'actions', name: 'checkout', description: 'Checkout code' }
+        ];
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => mockActions
+        });
+        global.fetch = mockFetch;
+
+        const result = await client.listActions({ owner: 'actions' });
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list/actions',
+          expect.objectContaining({
+            method: 'GET'
+          })
+        );
+        expect(result).toEqual(mockActions);
+      });
+
+      it('appends function key when provided', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com',
+          functionKey: 'test-key-123'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => []
+        });
+        global.fetch = mockFetch;
+
+        await client.listActions();
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list?code=test-key-123',
+          expect.anything()
+        );
+      });
+
+      it('throws error on non-200 response', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          text: async () => 'Internal server error'
+        });
+        global.fetch = mockFetch;
+
+        await expect(client.listActions()).rejects.toThrow(
+          'Failed to list actions via HTTP API: 500 Internal server error'
+        );
+      });
+
+      it('throws error when response is not an array', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ error: 'not an array' })
+        });
+        global.fetch = mockFetch;
+
+        await expect(client.listActions()).rejects.toThrow(
+          'Invalid response format: expected an array of actions'
+        );
+      });
+
+      it('returns empty array when no actions exist', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => []
+        });
+        global.fetch = mockFetch;
+
+        const result = await client.listActions();
+
+        expect(result).toEqual([]);
+      });
+    });
+
+    describe('Table Storage mode', () => {
+      let mockTableClient;
+      let client;
+
+      beforeEach(() => {
+        mockTableClient = {
+          getEntity: jest.fn(),
+          createEntity: jest.fn(),
+          updateEntity: jest.fn(),
+          listEntities: jest.fn()
+        };
+
+        const { createTableClient } = require('../lib/tableStorage');
+        createTableClient.mockReturnValue(mockTableClient);
+
+        client = new ActionsMarketplaceClient({
+          tableEndpoint: 'https://account.table.core.windows.net'
+        });
+      });
+
+      afterEach(() => {
+        jest.clearAllMocks();
+      });
+
+      it('lists all actions from table storage', async () => {
+        const entity1 = ActionRecord.fromRequest({
+          owner: 'actions',
+          name: 'checkout',
+          description: 'Checkout code'
+        }).toEntity();
+        entity1.etag = 'etag1';
+        entity1.partitionKey = 'actions';
+        entity1.rowKey = 'checkout';
+
+        const entity2 = ActionRecord.fromRequest({
+          owner: 'actions',
+          name: 'setup-node',
+          description: 'Setup Node.js'
+        }).toEntity();
+        entity2.etag = 'etag2';
+        entity2.partitionKey = 'actions';
+        entity2.rowKey = 'setup-node';
+
+        async function* mockListEntities() {
+          yield entity1;
+          yield entity2;
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        const result = await client.listActions();
+
+        expect(result).toHaveLength(2);
+        expect(result[0].owner).toBe('actions');
+        expect(result[0].name).toBe('checkout');
+        expect(result[1].owner).toBe('actions');
+        expect(result[1].name).toBe('setup-node');
+        expect(mockTableClient.listEntities).toHaveBeenCalledWith({});
+      });
+
+      it('filters actions by owner', async () => {
+        const entity = ActionRecord.fromRequest({
+          owner: 'github',
+          name: 'action',
+          description: 'Test'
+        }).toEntity();
+        entity.etag = 'etag1';
+        entity.partitionKey = 'github';
+        entity.rowKey = 'action';
+
+        async function* mockListEntities() {
+          yield entity;
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        const result = await client.listActions({ owner: 'github' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].owner).toBe('github');
+        expect(mockTableClient.listEntities).toHaveBeenCalledWith({
+          queryOptions: { filter: "PartitionKey eq 'github'" }
+        });
+      });
+
+      it('sanitizes owner parameter to prevent OData injection', async () => {
+        async function* mockListEntities() {
+          // Empty generator
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        // Attempt injection with single quotes
+        await client.listActions({ owner: "test' or '1'='1" });
+
+        // Verify that single quotes are escaped
+        expect(mockTableClient.listEntities).toHaveBeenCalledWith({
+          queryOptions: { filter: "PartitionKey eq 'test'' or ''1''=''1'" }
+        });
+      });
+
+      it('returns empty array when no actions exist', async () => {
+        async function* mockListEntities() {
+          // Empty generator
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        const result = await client.listActions();
+
+        expect(result).toEqual([]);
+      });
+
+      it('skips malformed entities and continues', async () => {
+        const validEntity = ActionRecord.fromRequest({
+          owner: 'actions',
+          name: 'checkout',
+          description: 'Checkout code'
+        }).toEntity();
+        validEntity.etag = 'etag1';
+        validEntity.partitionKey = 'actions';
+        validEntity.rowKey = 'checkout';
+
+        const malformedEntity = {
+          partitionKey: 'bad',
+          rowKey: 'entity',
+          PayloadJson: 'invalid json'
+        };
+
+        async function* mockListEntities() {
+          yield malformedEntity;
+          yield validEntity;
+        }
+
+        mockTableClient.listEntities.mockReturnValue(mockListEntities());
+
+        const result = await client.listActions();
+
+        expect(result).toHaveLength(1);
+        expect(result[0].owner).toBe('actions');
+        expect(result[0].name).toBe('checkout');
+      });
+
+      it('throws error on table storage failure', async () => {
+        mockTableClient.listEntities.mockImplementation(() => {
+          throw new Error('Table storage connection failed');
+        });
+
+        await expect(client.listActions()).rejects.toThrow(
+          'Failed to list actions from table storage: Table storage connection failed'
+        );
+      });
+    });
+  });
 });

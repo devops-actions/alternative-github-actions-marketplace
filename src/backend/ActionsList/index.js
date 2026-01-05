@@ -40,9 +40,40 @@ module.exports = async function actionsList(context, req) {
     return;
   }
 
-  // TODO: Implement real Table Storage query for production
-  context.res = {
-    status: 501,
-    body: { error: 'Not implemented for real Table Storage yet.' }
-  };
+  // Real Table Storage query for production
+  try {
+    let queryOptions = {};
+    
+    if (owner) {
+      // Sanitize owner to prevent OData injection - escape single quotes first, then normalize case
+      const sanitizedOwner = String(owner).replace(/'/g, "''").toLowerCase();
+      queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
+    }
+    
+    for await (const entity of tableClient.listEntities(queryOptions)) {
+      entities.push(entity);
+    }
+
+    context.res = {
+      status: 200,
+      body: entities.map(e => {
+        try {
+          return ActionRecord.fromEntity(e).toActionInfo(true, {
+            etag: e.etag,
+            lastSyncedUtc: e.LastSyncedUtc,
+            partitionKey: e.partitionKey,
+            rowKey: e.rowKey
+          });
+        } catch {
+          return null;
+        }
+      }).filter(Boolean)
+    };
+  } catch (error) {
+    context.log.error('Error querying actions table:', error);
+    context.res = {
+      status: 500,
+      body: { error: 'Failed to query actions from table storage.' }
+    };
+  }
 };

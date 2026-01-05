@@ -23,7 +23,7 @@ npm install @devops-actions/actions-marketplace-client
 
 ## Quick Start
 
-See the [examples/upload-actions.js](examples/upload-actions.js) file for a complete working example.
+See the [examples/upload-actions.js](examples/upload-actions.js) file for uploading actions and the [examples/list-actions.js](examples/list-actions.js) file for listing actions.
 
 ## Usage
 
@@ -392,6 +392,77 @@ Uploads or updates multiple actions.
   }
 ]
 ```
+
+### `client.listActions(options?)`
+
+Returns an array of actions from the marketplace. Works in both HTTP API and Direct Table Storage modes.
+
+**Parameters:**
+- `options` (object, optional):
+  - `owner` (string, optional): Filter actions by owner/organization name
+
+**Returns:** Promise resolving to array of action objects:
+```javascript
+[
+  {
+    owner: 'actions',
+    name: 'checkout',
+    description: 'Checkout code from a repository',
+    version: 'v4.0.0',
+    // ... additional metadata fields
+    _metadata: {
+      partitionKey: 'actions',
+      rowKey: 'checkout',
+      payloadHash: 'abc123...',
+      etag: 'W/"datetime\'2026-01-05T..."',
+      lastSyncedUtc: '2026-01-05T12:34:56Z'
+    }
+  },
+  // ... more actions
+]
+```
+
+**Example usage with HTTP API mode:**
+```javascript
+const { ActionsMarketplaceClient } = require('@devops-actions/actions-marketplace-client');
+
+// Create client pointing to the API
+const client = new ActionsMarketplaceClient({
+  apiUrl: 'https://your-marketplace-api.azurewebsites.net',
+  functionKey: process.env.FUNCTION_KEY  // Optional: if API is secured
+});
+
+// List all actions
+const allActions = await client.listActions();
+console.log(`Found ${allActions.length} actions`);
+
+// List actions for a specific owner
+const actionsOrgActions = await client.listActions({ owner: 'actions' });
+console.log(`Found ${actionsOrgActions.length} actions from 'actions' organization`);
+
+actionsOrgActions.forEach(action => {
+  console.log(`- ${action.owner}/${action.name}: ${action.description}`);
+});
+```
+
+**Example usage with Direct Table Storage mode:**
+```javascript
+const { ActionsMarketplaceClient } = require('@devops-actions/actions-marketplace-client');
+const { DefaultAzureCredential } = require('@azure/identity');
+
+const client = new ActionsMarketplaceClient({
+  tableEndpoint: 'https://youraccount.table.core.windows.net',
+  tableName: 'actions',
+  credential: new DefaultAzureCredential()
+});
+
+// List all actions
+const actions = await client.listActions();
+
+// List actions by owner
+const ownerActions = await client.listActions({ owner: 'github' });
+```
+
 
 ## Error Handling
 
