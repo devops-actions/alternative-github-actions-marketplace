@@ -738,13 +738,17 @@ describe('ActionsMarketplaceClient', () => {
       });
       global.fetch = mockFetch;
 
+      let caughtError;
       try {
         await client.upsertAction({ owner: 'test', name: 'action' });
       } catch (error) {
-        const errorString = error.toString();
-        expect(errorString).toContain('VALIDATION_FAILED');
-        expect(errorString).toContain('test-123');
+        caughtError = error;
       }
+
+      expect(caughtError).toBeInstanceOf(MarketplaceApiError);
+      const errorString = caughtError.toString();
+      expect(errorString).toContain('VALIDATION_FAILED');
+      expect(errorString).toContain('test-123');
     });
 
     it('provides structured error in toJSON', async () => {
@@ -760,16 +764,20 @@ describe('ActionsMarketplaceClient', () => {
       });
       global.fetch = mockFetch;
 
+      let caughtError;
       try {
         await client.upsertAction({ owner: 'test', name: 'action' });
       } catch (error) {
-        const json = error.toJSON();
-        expect(json.name).toBe('MarketplaceApiError');
-        expect(json.code).toBe('VALIDATION_FAILED');
-        expect(json.message).toBe('Field validation failed');
-        expect(json.correlationId).toBe('correlation-456');
-        expect(json.statusCode).toBe(400);
+        caughtError = error;
       }
+
+      expect(caughtError).toBeInstanceOf(MarketplaceApiError);
+      const json = caughtError.toJSON();
+      expect(json.name).toBe('MarketplaceApiError');
+      expect(json.code).toBe('VALIDATION_FAILED');
+      expect(json.message).toBe('Field validation failed');
+      expect(json.correlationId).toBe('correlation-456');
+      expect(json.statusCode).toBe(400);
     });
   });
 });
