@@ -45,8 +45,8 @@ module.exports = async function actionsList(context, req) {
     let queryOptions = {};
     
     if (owner) {
-      // Sanitize owner to prevent OData injection - escape single quotes
-      const sanitizedOwner = String(owner).toLowerCase().replace(/'/g, "''");
+      // Sanitize owner to prevent OData injection - escape single quotes first, then normalize case
+      const sanitizedOwner = String(owner).replace(/'/g, "''").toLowerCase();
       queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
     }
     
