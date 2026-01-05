@@ -30,6 +30,15 @@ async function main() {
     console.log('Upload result:', result);
   } catch (error) {
     console.error('Failed to upload action:', error.message);
+    if (error.code) {
+      console.error('Error code:', error.code);
+    }
+    if (error.correlationId) {
+      console.error('Correlation ID:', error.correlationId);
+    }
+    if (error.details) {
+      console.error('Error details:', JSON.stringify(error.details, null, 2));
+    }
   }
 
   // Example 1b: Using HTTP API mode with Function Key authentication

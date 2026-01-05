@@ -1,5 +1,4 @@
 const actionsUpsert = require('../ActionsUpsert/index');
-const { ActionRecord } = require('../lib/actionRecord');
 const { ErrorCodes } = require('../lib/errorResponse');
 
 jest.mock('../lib/tableStorage');
