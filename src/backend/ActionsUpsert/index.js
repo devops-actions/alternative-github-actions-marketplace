@@ -55,7 +55,7 @@ module.exports = async function actionsUpsert(context, req) {
     const errorResponse = createErrorResponse(
       ErrorCodes.VALIDATION_FAILED,
       error.message,
-      { field: error.field || 'unknown', value: error.value || 'unknown' },
+      null,  // Details will be added only if available from the error
       400
     );
     logErrorDetails(context, error, errorResponse.correlationId);

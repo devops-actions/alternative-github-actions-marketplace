@@ -14,14 +14,19 @@ function generateCorrelationId() {
 function createErrorResponse(errorCode, message, details = null, statusCode = 500) {
   const correlationId = generateCorrelationId();
   
+  const body = {
+    errorCode,
+    message,
+    correlationId
+  };
+
+  if (details) {
+    body.details = details;
+  }
+  
   return {
     statusCode,
-    body: {
-      errorCode,
-      message,
-      details: details || undefined,
-      correlationId
-    },
+    body,
     correlationId
   };
 }
