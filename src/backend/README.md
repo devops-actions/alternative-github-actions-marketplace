@@ -23,7 +23,7 @@ npm install @devops-actions/actions-marketplace-client
 
 ## Quick Start
 
-See the [examples/upload-actions.js](examples/upload-actions.js) file for a complete working example.
+See the [examples/upload-actions.js](examples/upload-actions.js) file for uploading actions and the [examples/list-actions.js](examples/list-actions.js) file for listing actions.
 
 ## Usage
 
