@@ -1,5 +1,6 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { getTableClient, getActionEntity } = require('../lib/tableStorage');
+const { ErrorCodes, createErrorResponse, extractErrorDetails, logErrorDetails } = require('../lib/errorResponse');
 
 async function fetchExisting(tableClient, partitionKey, rowKey) {
   return getActionEntity(partitionKey, rowKey, { tableClient });
@@ -50,10 +51,17 @@ module.exports = async function actionsUpsert(context, req) {
   try {
     record = ActionRecord.fromRequest(req.body);
   } catch (error) {
-    context.log.warn('Failed to parse request body: %s', error.message);
+    context.log.warn('Validation failed: %s', error.message);
+    const errorResponse = createErrorResponse(
+      ErrorCodes.VALIDATION_FAILED,
+      error.message,
+      { field: error.field || 'unknown', value: error.value || 'unknown' },
+      400
+    );
+    logErrorDetails(context, error, errorResponse.correlationId);
     context.res = {
-      status: 400,
-      body: { error: error.message }
+      status: errorResponse.statusCode,
+      body: errorResponse.body
     };
     return;
   }
@@ -88,12 +96,17 @@ module.exports = async function actionsUpsert(context, req) {
       }
     };
   } catch (error) {
-    context.log.error('Failed to upsert record: %s', error.message);
+    const errorDetails = extractErrorDetails(error);
+    const errorResponse = createErrorResponse(
+      ErrorCodes.PERSISTENCE_FAILED,
+      'Failed to persist action record.',
+      errorDetails,
+      500
+    );
+    logErrorDetails(context, error, errorResponse.correlationId);
     context.res = {
-      status: 500,
-      body: {
-        error: 'Failed to persist action record.'
-      }
+      status: errorResponse.statusCode,
+      body: errorResponse.body
     };
   }
 };

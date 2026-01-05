@@ -1,4 +1,4 @@
-const { ActionsMarketplaceClient, ActionRecord } = require('../client/index');
+const { ActionsMarketplaceClient, ActionRecord, MarketplaceApiError } = require('../client/index');
 
 jest.mock('../lib/tableStorage');
 
@@ -605,6 +605,171 @@ describe('ActionsMarketplaceClient', () => {
           'Failed to list actions from table storage: Table storage connection failed'
         );
       });
+    });
+  });
+
+  describe('enhanced error handling for HTTP API mode', () => {
+    let client;
+
+    beforeEach(() => {
+      client = new ActionsMarketplaceClient({
+        apiUrl: 'https://example.com'
+      });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('throws MarketplaceApiError with structured error details', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          errorCode: 'VALIDATION_FAILED',
+          message: 'Missing required field: owner',
+          details: { field: 'owner', value: 'unknown' },
+          correlationId: 'abc123'
+        })
+      });
+      global.fetch = mockFetch;
+
+      await expect(
+        client.upsertAction({ owner: 'test', name: 'test-action' })
+      ).rejects.toThrow(MarketplaceApiError);
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'test-action' });
+      } catch (error) {
+        expect(error.code).toBe('VALIDATION_FAILED');
+        expect(error.message).toBe('Missing required field: owner');
+        expect(error.details).toEqual({ field: 'owner', value: 'unknown' });
+        expect(error.correlationId).toBe('abc123');
+        expect(error.statusCode).toBe(400);
+      }
+    });
+
+    it('throws MarketplaceApiError for persistence failures', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({
+          errorCode: 'PERSISTENCE_FAILED',
+          message: 'Failed to persist action record.',
+          details: {
+            message: 'Table storage connection failed',
+            statusCode: 503
+          },
+          correlationId: 'xyz789'
+        })
+      });
+      global.fetch = mockFetch;
+
+      await expect(
+        client.upsertAction({ owner: 'test', name: 'action' })
+      ).rejects.toThrow(MarketplaceApiError);
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'action' });
+      } catch (error) {
+        expect(error.code).toBe('PERSISTENCE_FAILED');
+        expect(error.message).toBe('Failed to persist action record.');
+        expect(error.correlationId).toBe('xyz789');
+        expect(error.statusCode).toBe(500);
+        expect(error.details).toBeDefined();
+        expect(error.details.statusCode).toBe(503);
+      }
+    });
+
+    it('handles legacy error format without structured fields', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({
+          error: 'Failed to persist action record.'
+        })
+      });
+      global.fetch = mockFetch;
+
+      await expect(
+        client.upsertAction({ owner: 'test', name: 'action' })
+      ).rejects.toThrow(MarketplaceApiError);
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'action' });
+      } catch (error) {
+        expect(error.message).toBe('Failed to persist action record.');
+        expect(error.statusCode).toBe(500);
+      }
+    });
+
+    it('handles non-JSON error responses', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error('Invalid JSON');
+        },
+        text: async () => 'Internal Server Error'
+      });
+      global.fetch = mockFetch;
+
+      await expect(
+        client.upsertAction({ owner: 'test', name: 'action' })
+      ).rejects.toThrow(MarketplaceApiError);
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'action' });
+      } catch (error) {
+        expect(error.message).toContain('Internal Server Error');
+        expect(error.statusCode).toBe(500);
+      }
+    });
+
+    it('includes error details in toString output', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          errorCode: 'VALIDATION_FAILED',
+          message: 'Validation error',
+          correlationId: 'test-123'
+        })
+      });
+      global.fetch = mockFetch;
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'action' });
+      } catch (error) {
+        const errorString = error.toString();
+        expect(errorString).toContain('VALIDATION_FAILED');
+        expect(errorString).toContain('test-123');
+      }
+    });
+
+    it('provides structured error in toJSON', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          errorCode: 'VALIDATION_FAILED',
+          message: 'Field validation failed',
+          details: { field: 'repoInfo.updated_at' },
+          correlationId: 'correlation-456'
+        })
+      });
+      global.fetch = mockFetch;
+
+      try {
+        await client.upsertAction({ owner: 'test', name: 'action' });
+      } catch (error) {
+        const json = error.toJSON();
+        expect(json.name).toBe('MarketplaceApiError');
+        expect(json.code).toBe('VALIDATION_FAILED');
+        expect(json.message).toBe('Field validation failed');
+        expect(json.correlationId).toBe('correlation-456');
+        expect(json.statusCode).toBe(400);
+      }
     });
   });
 });
