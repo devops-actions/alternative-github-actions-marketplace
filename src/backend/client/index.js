@@ -131,6 +131,78 @@ class ActionsMarketplaceClient {
 
     return results;
   }
+
+  async listActions(options = {}) {
+    if (this.useHttpApi) {
+      return this._listViaHttp(options);
+    }
+
+    return this._listViaTable(options);
+  }
+
+  async _listViaHttp(options = {}) {
+    const owner = options.owner;
+    let url = `${this.apiUrl}/api/actions/list`;
+    
+    if (owner) {
+      url += `/${encodeURIComponent(owner)}`;
+    }
+    
+    if (this.functionKey) {
+      url += `?code=${encodeURIComponent(this.functionKey)}`;
+    }
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Failed to list actions via HTTP API: ${response.status} ${errorBody}`);
+    }
+
+    const body = await response.json();
+    
+    if (!Array.isArray(body)) {
+      throw new Error('Invalid response format: expected an array of actions');
+    }
+
+    return body;
+  }
+
+  async _listViaTable(options = {}) {
+    const owner = options.owner;
+    const entities = [];
+    
+    try {
+      const queryOptions = owner 
+        ? { queryOptions: { filter: `PartitionKey eq '${owner.toLowerCase()}'` } }
+        : {};
+      
+      for await (const entity of this.tableClient.listEntities(queryOptions)) {
+        try {
+          const record = ActionRecord.fromEntity(entity);
+          const actionInfo = record.toActionInfo(true, {
+            etag: entity.etag,
+            lastSyncedUtc: entity.LastSyncedUtc,
+            partitionKey: entity.partitionKey,
+            rowKey: entity.rowKey
+          });
+          entities.push(actionInfo);
+        } catch (error) {
+          // Skip entities that can't be parsed
+          continue;
+        }
+      }
+      
+      return entities;
+    } catch (error) {
+      throw new Error(`Failed to list actions from table storage: ${error.message}`);
+    }
+  }
 }
 
 module.exports = {
