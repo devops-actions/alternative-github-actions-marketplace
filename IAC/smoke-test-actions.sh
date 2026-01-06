@@ -36,7 +36,7 @@ while [ "$attempt" -le "$max_attempts" ]; do
 
   owner_value=""
   if [ "$curl_exit" -eq 0 ]; then
-    owner_value=$(python3 - <<'PY'
+    owner_value=$(python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -46,12 +46,12 @@ try:
 except Exception:
     pass
 PY
-"$response_file")
+)
   fi
 
   if [ "$curl_exit" -eq 0 ] && { [ "$http_status" = "200" ] || [ "$http_status" = "201" ]; } && [ "$owner_value" = "smoke-test" ]; then
     echo "Smoke test succeeded with status $http_status."
-    python3 - <<'PY'
+    python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -59,7 +59,6 @@ with path.open('r', encoding='utf-8') as infile:
     json.dump(json.load(infile), sys.stdout, indent=2)
     sys.stdout.write('\n')
 PY
-"$response_file"
     exit 0
   fi
 
