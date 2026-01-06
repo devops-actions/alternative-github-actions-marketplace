@@ -1,5 +1,6 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { createTableClient } = require('../lib/tableStorage');
+const { MarketplaceApiError } = require('../lib/errors');
 
 class ActionsMarketplaceClient {
   constructor(options = {}) {
@@ -40,8 +41,39 @@ class ActionsMarketplaceClient {
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Failed to upsert action via HTTP API: ${response.status} ${errorBody}`);
+      let errorBody;
+      try {
+        errorBody = await response.json();
+      } catch (jsonError) {
+        const textBody = await response.text();
+        throw new MarketplaceApiError(
+          `Failed to upsert action via HTTP API: ${response.status} ${textBody}`,
+          {
+            statusCode: response.status,
+            details: { responseBody: textBody }
+          }
+        );
+      }
+
+      if (errorBody.errorCode && errorBody.message) {
+        throw new MarketplaceApiError(
+          errorBody.message,
+          {
+            code: errorBody.errorCode,
+            details: errorBody.details,
+            correlationId: errorBody.correlationId,
+            statusCode: response.status
+          }
+        );
+      }
+
+      throw new MarketplaceApiError(
+        errorBody.error || `Failed to upsert action via HTTP API: ${response.status}`,
+        {
+          statusCode: response.status,
+          details: errorBody
+        }
+      );
     }
 
     return response.json();
@@ -211,5 +243,6 @@ class ActionsMarketplaceClient {
 
 module.exports = {
   ActionsMarketplaceClient,
-  ActionRecord
+  ActionRecord,
+  MarketplaceApiError
 };

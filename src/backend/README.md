@@ -338,6 +338,16 @@ The library automatically:
 
 ## API Reference
 
+### Exports
+
+```javascript
+const { 
+  ActionsMarketplaceClient,  // Main client class
+  ActionRecord,              // Internal record class (advanced use)
+  MarketplaceApiError        // Error class for HTTP API mode
+} = require('@devops-actions/actions-marketplace-client');
+```
+
 ### `new ActionsMarketplaceClient(options)`
 
 Creates a new client instance.
@@ -369,6 +379,10 @@ Uploads or updates a single action.
   lastSyncedUtc: string // ISO timestamp of last sync
 }
 ```
+
+**Throws:** 
+- `MarketplaceApiError` (HTTP API mode): Enhanced error with `code`, `details`, `correlationId`, and `statusCode` properties
+- `Error` (Direct Table Storage mode): Standard Error object
 
 ### `client.batchUpsertActions(actions)`
 
@@ -480,8 +494,64 @@ try {
   console.log('Success:', result);
 } catch (error) {
   console.error('Failed to upload action:', error.message);
+  
+  // Enhanced error handling (HTTP API mode)
+  if (error.code) {
+    console.error('Error code:', error.code);
+    // Possible error codes:
+    // - VALIDATION_FAILED: Invalid or missing required fields
+    // - PERSISTENCE_FAILED: Database/storage operation failed
+    // - INTERNAL_ERROR: Unexpected server error
+  }
+  
+  if (error.correlationId) {
+    console.error('Correlation ID:', error.correlationId);
+    // Use this ID when reporting issues to help with debugging
+  }
+  
+  if (error.details) {
+    console.error('Error details:', JSON.stringify(error.details, null, 2));
+    // Contains specific information about what went wrong
+  }
 }
 ```
+
+### Enhanced Error Response (HTTP API Mode)
+
+When using the HTTP API mode, errors thrown by `upsertAction` are instances of `MarketplaceApiError` with the following properties:
+
+- `message` (string): Human-readable error message
+- `code` (string): Machine-readable error code (e.g., `VALIDATION_FAILED`, `PERSISTENCE_FAILED`)
+- `details` (object|null): Additional context about the error (field names, constraint violations, etc.)
+- `correlationId` (string|null): Unique identifier for this error instance, logged server-side for debugging
+- `statusCode` (number): HTTP status code (400 for validation errors, 500 for server errors)
+
+**Example error scenarios:**
+
+```javascript
+// Validation error (missing field)
+try {
+  await client.upsertAction({ name: 'my-action' }); // Missing 'owner'
+} catch (error) {
+  console.log(error.code);          // "VALIDATION_FAILED"
+  console.log(error.statusCode);    // 400
+  console.log(error.message);       // "Missing required field: owner"
+  console.log(error.correlationId); // "abc123..."
+}
+
+// Persistence error (database issue)
+try {
+  await client.upsertAction({ owner: 'test', name: 'action', ... });
+} catch (error) {
+  console.log(error.code);          // "PERSISTENCE_FAILED"
+  console.log(error.statusCode);    // 500
+  console.log(error.message);       // "Failed to persist action record."
+  console.log(error.details);       // { statusCode: 503, code: 'ServiceUnavailable', ... }
+  console.log(error.correlationId); // "xyz789..."
+}
+```
+
+The `correlationId` is particularly useful when working with support or reviewing server logs, as it allows tracing the exact error instance across systems.
 
 ## Development
 
