@@ -6,10 +6,7 @@ let appInsights: ApplicationInsights | null = null;
 
 if (connectionString) {
   const config: IConfiguration = {
-    connectionString,
-    disableAjaxTracking: false,
-    disableFetchTracking: false,
-    autoTrackPageVisitTime: true
+    connectionString
   };
 
   appInsights = new ApplicationInsights({ config });
