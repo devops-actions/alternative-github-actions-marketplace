@@ -1,0 +1,77 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      #- main
+    paths:
+      - 'src/frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+
+env:
+  AZURE_CORE_ONLY_SHOW_ERRORS: true
+  AZURE_CORE_ERROR_RECOMMENDATION: false
+  AZURE_CORE_COLLECT_TELEMETRY: false
+  AZURE_LOGGING_ENABLE_LOG_FILE: false
+  AZURE_CORE_SURVEY_MESSAGE: false
+  AZURE_AUTO_UPGRADE_ENABLE: false
+  AZURE_CORE_NO_COLOR: true
+  AZURE_EXTENSION_USE_DYNAMIC_INSTALL: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: src/frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: src/frontend
+        env:
+          VITE_API_BASE_URL: https://${{ vars.FUNCTION_APP_HOSTNAME }}/api
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Static Web App deployment token
+        id: swa-token
+        run: |
+          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
+          if [ -z "$swaName" ]; then
+            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+          echo "SWA_NAME=$swaName" >> $GITHUB_ENV
+          token=$(az staticwebapp secrets list --name "$swaName" --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$token"
+          echo "deployment_token=$token" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.deployment_token }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: 'src/frontend'
+          output_location: 'dist'
+          skip_api_build: true
