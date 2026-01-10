@@ -47,13 +47,23 @@ jobs:
             exit 1
           fi
 
-          outboundIps=$(az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" --query "outboundIpAddresses" -o tsv)
-          if [ -z "$outboundIps" ]; then
-            echo "::error::No outbound IP addresses returned for static web app $swaName"
-            exit 1
+          if [ -n "${{ vars.FUNCTION_ALLOWED_IP_CIDRS }}" ]; then
+            outboundIps="${{ vars.FUNCTION_ALLOWED_IP_CIDRS }}"
+            echo "Using FUNCTION_ALLOWED_IP_CIDRS override from environment."
+          else
+            outboundIps=$(az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" --query "outboundIpAddresses" -o tsv)
+            if [ -z "$outboundIps" ]; then
+              outboundIps=$(az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" --query "properties.outboundIpAddresses" -o tsv)
+            fi
           fi
 
-          outboundIpsJson=$(echo "$outboundIps" | jq -R 'split(",")')
+          if [ -z "$outboundIps" ]; then
+            echo "::warning::No outbound IPs found for $swaName; functionAllowedIpCidrs will be empty (no IP restriction applied)."
+            outboundIpsJson="[]"
+          else
+            outboundIpsJson=$(echo "$outboundIps" | jq -R 'split(",")')
+          fi
+
           echo "swa_name=$swaName" >> $GITHUB_OUTPUT
           echo "outbound_ips=$outboundIps" >> $GITHUB_OUTPUT
           echo "outbound_ips_json=$outboundIpsJson" >> $GITHUB_OUTPUT
