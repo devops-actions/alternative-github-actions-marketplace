@@ -12,6 +12,9 @@
   "author": "",
   "license": "CC0-1.0",
   "description": "Frontend for the alternative GitHub Actions marketplace",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@microsoft/applicationinsights-web": "^3.0.6",
     "react": "^19.2.3",
