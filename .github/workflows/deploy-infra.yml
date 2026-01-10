@@ -23,6 +23,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    name: Deploy Infrastructure
     environment: prod
     permissions:
       id-token: write
