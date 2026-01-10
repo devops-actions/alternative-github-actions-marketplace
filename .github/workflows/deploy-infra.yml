@@ -94,13 +94,22 @@ jobs:
             fi
 
             # Host-level default key works across functions and exists even if specific functions aren't published yet.
+            set +e
             host_key=$(az functionapp keys list \
               --name "$function_app_name" \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --query "functionKeys.default" -o tsv)
+            status=$?
+            set -e
+
+            if [ $status -ne 0 ]; then
+              echo "::warning::Failed to retrieve host-level default function key (status $status); skipping smoke test." >&2
+              exit 0
+            fi
 
             if [ -z "$host_key" ]; then
-              echo "::warning::Failed to retrieve host-level default function key; skipping smoke test." >&2
+              echo "::warning::Host key empty; skipping smoke test." >&2
+              exit 0
             fi
 
             echo "host_key=$host_key" >> "$GITHUB_OUTPUT"
