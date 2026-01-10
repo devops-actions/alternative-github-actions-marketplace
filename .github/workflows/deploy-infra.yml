@@ -3,7 +3,7 @@ name: Deploy IaC
 on:
   workflow_dispatch:
   push:
-    branches:
+    #branches:
       #- main
     paths:
       - 'IAC/**'
