@@ -13,6 +13,9 @@ param tableName string = 'actions'
 @description('Assign Storage Table Data Contributor role to the function app managed identity. Requires role assignment permissions on the storage account scope.')
 param assignTableDataContributor bool = false
 
+@description('IP CIDRs allowed to reach the Function App (e.g., Static Web Apps outbound IPs). Leave empty to allow all.')
+param functionAllowedIpCidrs array = []
+
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -125,6 +128,15 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           value: '1'
         }
       ]
+      ipSecurityRestrictions: [for (cidr, i) in functionAllowedIpCidrs: {
+        name: 'AllowSWA${i}'
+        ipAddress: cidr
+        action: 'Allow'
+        priority: 100 + i
+        description: 'Static Web Apps outbound IP'
+      }]
+      ipSecurityRestrictionsDefaultAction: length(functionAllowedIpCidrs) > 0 ? 'Deny' : 'Allow'
+      scmIpSecurityRestrictionsUseMain: false
     }
   }
   identity: {
