@@ -38,17 +38,42 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Ensure Application Insights CLI extension
+      - name: Resolve Static Web App name and suffix
+        id: swa
         run: |
-          az extension add --name application-insights --yes || az extension update --name application-insights
+          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
+          if [ -z "$swaName" ]; then
+            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+          suffix=${swaName#swa-}
+          echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+          echo "suffix=$suffix" >> $GITHUB_OUTPUT
+          echo "SWA_NAME=$swaName" >> $GITHUB_ENV
 
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
-          connection=$(az resource list \
+          suffix="${{ steps.swa.outputs.suffix }}"
+          if [ -z "$suffix" ]; then
+            echo "::error::Missing Static Web App suffix; cannot resolve App Insights name"
+            exit 1
+          fi
+
+          appiName="appi-$suffix"
+          connection=$(az resource show \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --resource-type "microsoft.insights/components" \
-            --query "[0].properties.ConnectionString" -o tsv)
+            --name "$appiName" \
+            --query "properties.ConnectionString" -o tsv)
+
+          if [ -z "$connection" ]; then
+            # Fallback to first component in case naming diverged
+            connection=$(az resource list \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --resource-type "microsoft.insights/components" \
+              --query "[0].properties.ConnectionString" -o tsv)
+          fi
           if [ -z "$connection" ]; then
             echo "::error::No Application Insights resource found in RG ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
@@ -74,12 +99,11 @@ jobs:
       - name: Get Static Web App deployment token
         id: swa-token
         run: |
-          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
+          swaName="${{ steps.swa.outputs.swa_name }}"
           if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            echo "::error::No static web app name available"
             exit 1
           fi
-          echo "SWA_NAME=$swaName" >> $GITHUB_ENV
           token=$(az staticwebapp secrets list --name "$swaName" --query "properties.apiKey" -o tsv)
           echo "::add-mask::$token"
           echo "deployment_token=$token" >> $GITHUB_OUTPUT
