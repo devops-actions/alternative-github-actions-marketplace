@@ -12,6 +12,9 @@ yarn-error.log*
 .env.local
 local.settings.json
 
+# Local storage emulator
+.azurite/
+
 # Editor and tooling
 .vscode/
 .vs/

@@ -5,6 +5,8 @@
   "main": "client/index.js",
   "scripts": {
     "start": "func start",
+    "init-storage": "node scripts/init-local-storage.js",
+    "seed-data": "node scripts/seed-test-data.js",
     "lint": "eslint .",
     "test": "jest",
     "integration": "cucumber-js \"integration/features/**/*.feature\" --require \"integration/features/step_definitions/**/*.js\" --require \"integration/support/**/*.js\" --format pretty --format summary",

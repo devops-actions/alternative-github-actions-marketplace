@@ -151,8 +151,7 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   }
   properties: {
     buildProperties: {
-      appLocation: 'web'
-      apiLocation: 'api'
+      appLocation: 'src/frontend'
       outputLocation: 'dist'
     }
   }
