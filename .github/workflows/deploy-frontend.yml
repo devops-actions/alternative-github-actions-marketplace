@@ -31,6 +31,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve App Insights connection string
+        id: appinsights
+        run: |
+          connection=$(az monitor app-insights component list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].connectionString" -o tsv)
+          if [ -z "$connection" ]; then
+            echo "::error::No Application Insights resource found in RG ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+          echo "connection_string=$connection" >> $GITHUB_OUTPUT
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,13 +62,7 @@ jobs:
         working-directory: src/frontend
         env:
           VITE_API_BASE_URL: https://${{ vars.FUNCTION_APP_HOSTNAME }}/api
-
-      - name: Log in to Azure (OIDC)
-        uses: azure/login@v2.3.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          VITE_APPINSIGHTS_CONNECTION_STRING: ${{ steps.appinsights.outputs.connection_string }}
 
       - name: Get Static Web App deployment token
         id: swa-token

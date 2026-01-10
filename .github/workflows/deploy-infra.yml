@@ -38,6 +38,26 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Discover Static Web App outbound IPs
+        id: swa-ips
+        run: |
+          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
+          if [ -z "$swaName" ]; then
+            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+
+          outboundIps=$(az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" --query "outboundIpAddresses" -o tsv)
+          if [ -z "$outboundIps" ]; then
+            echo "::error::No outbound IP addresses returned for static web app $swaName"
+            exit 1
+          fi
+
+          outboundIpsJson=$(echo "$outboundIps" | jq -R 'split(",")')
+          echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+          echo "outbound_ips=$outboundIps" >> $GITHUB_OUTPUT
+          echo "outbound_ips_json=$outboundIpsJson" >> $GITHUB_OUTPUT
+
       - name: Deploy Bicep template
         id: deploy
         uses: azure/arm-deploy@v2
@@ -49,6 +69,7 @@ jobs:
             environment=${{ vars.DEPLOY_ENVIRONMENT }}
             location=${{ vars.DEPLOY_LOCATION }}
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
+            functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
           failOnStdErr: false
 
       - name: Retrieve ActionsUpsert function key
