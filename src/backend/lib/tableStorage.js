@@ -13,9 +13,14 @@ function createTableClient(options = {}) {
   const endpoint = Object.prototype.hasOwnProperty.call(options, 'tableEndpoint')
     ? options.tableEndpoint
     : tableEndpoint;
+  const clientOptions = {};
+  
+  if (options.allowInsecureConnection !== undefined) {
+    clientOptions.allowInsecureConnection = options.allowInsecureConnection;
+  }
 
   if (connectionString) {
-    return TableClient.fromConnectionString(connectionString, tableName);
+    return TableClient.fromConnectionString(connectionString, tableName, clientOptions);
   }
 
   if (!endpoint) {
@@ -23,7 +28,7 @@ function createTableClient(options = {}) {
   }
 
   const credential = options.credential || new DefaultAzureCredential();
-  return new TableClient(endpoint, tableName, credential);
+  return new TableClient(endpoint, tableName, credential, clientOptions);
 }
 
 let cachedClient;

@@ -93,6 +93,11 @@ export const DetailPage: React.FC = () => {
 
   return (
     <div className="app">
+      <div className="header">
+        <h1>Alternative GitHub Actions Marketplace</h1>
+        <p>Browse and search through GitHub Actions</p>
+      </div>
+
       <button className="back-button" onClick={() => navigate('/')}>
         ← Back to Overview
       </button>

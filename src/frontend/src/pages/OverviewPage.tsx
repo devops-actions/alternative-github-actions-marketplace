@@ -8,6 +8,8 @@ export const OverviewPage: React.FC = () => {
   const [filteredActions, setFilteredActions] = useState<Action[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>('All');
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'updated' | 'dependents'>('updated');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -55,9 +57,26 @@ export const OverviewPage: React.FC = () => {
         action => action.actionType.actionType === typeFilter
       );
     }
+    if (showVerifiedOnly) {
+      filtered = filtered.filter(action => action.verified === true);
+    }
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      if (sortBy === 'dependents') {
+        const aDeps = parseInt(a.dependents.dependents) || 0;
+        const bDeps = parseInt(b.dependents.dependents) || 0;
+        return bDeps - aDeps; // Descending
+      } else {
+        // Sort by updated date
+        const aDate = new Date(a.repoInfo.updated_at).getTime();
+        const bDate = new Date(b.repoInfo.updated_at).getTime();
+        return bDate - aDate; // Descending (most recent first)
+      }
+    });
 
     setFilteredActions(filtered);
-  }, [actions, searchQuery, typeFilter]);
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
 
   const stats = actionsService.getStats();
 
@@ -125,30 +144,56 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         <div className="filter-group">
+          <label>Sort by:</label>
+          <button
+            className={sortBy === 'updated' ? 'active' : ''}
+            onClick={() => setSortBy('updated')}
+          >
+            Last Updated
+          </button>
+          <button
+            className={sortBy === 'dependents' ? 'active' : ''}
+            onClick={() => setSortBy('dependents')}
+          >
+            Dependents
+          </button>
+        </div>
+
+        <div className="filter-group">
           <label>Type:</label>
           <button
             className={typeFilter === 'All' ? 'active' : ''}
-            onClick={() => setTypeFilter('All')}
+            onClick={() => {
+              setTypeFilter('All');
+              setShowVerifiedOnly(false);
+            }}
           >
             All
           </button>
           <button
             className={typeFilter === 'Node' ? 'active' : ''}
-            onClick={() => setTypeFilter('Node')}
+            onClick={() => setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node')}
           >
             Node/JS
           </button>
           <button
             className={typeFilter === 'Docker' ? 'active' : ''}
-            onClick={() => setTypeFilter('Docker')}
+            onClick={() => setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker')}
           >
             Docker
           </button>
           <button
             className={typeFilter === 'Composite' ? 'active' : ''}
-            onClick={() => setTypeFilter('Composite')}
+            onClick={() => setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite')}
           >
             Composite
+          </button>
+          <button
+            className={showVerifiedOnly ? 'active' : ''}
+            style={{ marginLeft: '20px' }}
+            onClick={() => setShowVerifiedOnly(v => !v)}
+          >
+            Verified only
           </button>
         </div>
       </div>
@@ -207,6 +252,10 @@ export const OverviewPage: React.FC = () => {
                   <div className="meta-item">
                     <span>🏷️</span>
                     <span>Latest: {action.releaseInfo[0]}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span>🕐</span>
+                    <span>Updated: {new Date(action.repoInfo.updated_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               )}
