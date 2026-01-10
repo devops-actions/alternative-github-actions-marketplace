@@ -45,7 +45,10 @@ jobs:
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
-          connection=$(az monitor app-insights component list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].connectionString" -o tsv)
+          connection=$(az resource list \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --resource-type "microsoft.insights/components" \
+            --query "[0].properties.ConnectionString" -o tsv)
           if [ -z "$connection" ]; then
             echo "::error::No Application Insights resource found in RG ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
