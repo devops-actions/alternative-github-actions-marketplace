@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Action, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 
+const PAGE_SIZE = 12;
+
 export const OverviewPage: React.FC = () => {
   const [actions, setActions] = useState<Action[]>([]);
   const [filteredActions, setFilteredActions] = useState<Action[]>([]);
@@ -10,6 +12,7 @@ export const OverviewPage: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>('All');
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'updated' | 'dependents'>('updated');
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -76,9 +79,24 @@ export const OverviewPage: React.FC = () => {
     });
 
     setFilteredActions(filtered);
+    setCurrentPage(1);
   }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
 
   const stats = actionsService.getStats();
+
+  const totalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
+  const pagedActions = filteredActions.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    setCurrentPage(nextPage);
+  };
+
+  const showingFrom = filteredActions.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const showingTo = Math.min(currentPage * PAGE_SIZE, filteredActions.length);
 
   const handleActionClick = (action: Action) => {
     navigate(`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`);
@@ -155,7 +173,7 @@ export const OverviewPage: React.FC = () => {
             className={sortBy === 'dependents' ? 'active' : ''}
             onClick={() => setSortBy('dependents')}
           >
-            Dependents
+            Used by
           </button>
         </div>
 
@@ -204,64 +222,87 @@ export const OverviewPage: React.FC = () => {
           <p>Try adjusting your search or filters</p>
         </div>
       ) : (
-        <div className="actions-grid">
-          {filteredActions.map(action => (
-            <div
-              key={`${action.owner}/${action.name}`}
-              className="action-card"
-              onClick={() => handleActionClick(action)}
-            >
-              <div className="action-header">
-                <div className="action-title">
-                  <div className="action-owner">{action.owner}</div>
-                  <div className="action-name">{action.name}</div>
-                </div>
-                <span
-                  className={`action-badge ${getActionTypeBadgeClass(
-                    action.actionType.actionType
-                  )}`}
-                >
-                  {action.actionType.actionType}
-                </span>
-              </div>
-
-              <div className="action-meta">
-                <div className="meta-item">
-                  <span>👥</span>
-                  <strong className="dependents-highlight">
-                    {parseInt(action.dependents.dependents).toLocaleString()}
-                  </strong>
-                  <span>dependents</span>
-                </div>
-                {action.verified && (
-                  <div className="meta-item">
-                    <span>✓</span>
-                    <span>Verified</span>
+        <>
+          <div className="actions-grid">
+            {pagedActions.map(action => (
+              <div
+                key={`${action.owner}/${action.name}`}
+                className="action-card"
+                onClick={() => handleActionClick(action)}
+              >
+                <div className="action-header">
+                  <div className="action-title">
+                    <div className="action-owner">{action.owner}</div>
+                    <div className="action-name">{action.name}</div>
                   </div>
-                )}
-                {action.repoInfo.archived && (
-                  <div className="meta-item">
-                    <span>📦</span>
-                    <span>Archived</span>
-                  </div>
-                )}
-              </div>
+                  <span
+                    className={`action-badge ${getActionTypeBadgeClass(
+                      action.actionType.actionType
+                    )}`}
+                  >
+                    {action.actionType.actionType}
+                  </span>
+                </div>
 
-              {action.releaseInfo && action.releaseInfo.length > 0 && (
                 <div className="action-meta">
                   <div className="meta-item">
-                    <span>🏷️</span>
-                    <span>Latest: {action.releaseInfo[0]}</span>
+                    <span>👥</span>
+                    <strong className="dependents-highlight">
+                      {parseInt(action.dependents.dependents).toLocaleString()}
+                    </strong>
+                    <span>Used by</span>
                   </div>
-                  <div className="meta-item">
-                    <span>🕐</span>
-                    <span>Updated: {new Date(action.repoInfo.updated_at).toLocaleDateString()}</span>
-                  </div>
+                  {action.verified && (
+                    <div className="meta-item">
+                      <span>✓</span>
+                      <span>Verified</span>
+                    </div>
+                  )}
+                  {action.repoInfo.archived && (
+                    <div className="meta-item">
+                      <span>📦</span>
+                      <span>Archived</span>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {action.releaseInfo && action.releaseInfo.length > 0 && (
+                  <div className="action-meta">
+                    <div className="meta-item">
+                      <span>🏷️</span>
+                      <span>Latest: {action.releaseInfo[0]}</span>
+                    </div>
+                    <div className="meta-item">
+                      <span>🕐</span>
+                      <span>Updated: {new Date(action.repoInfo.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="pagination">
+            <div className="pagination-summary">
+              Showing {showingFrom}-{showingTo} of {filteredActions.length.toLocaleString()} actions
             </div>
-          ))}
-        </div>
+            <div className="pagination-controls">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="pagination-page">Page {currentPage} of {totalPages}</span>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

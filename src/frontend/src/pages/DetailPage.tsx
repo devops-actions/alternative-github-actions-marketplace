@@ -112,7 +112,9 @@ export const DetailPage: React.FC = () => {
                 action.actionType.actionType
               )}`}
             >
-              {action.actionType.actionType}
+              {action.actionType.actionType === 'Node' && action.actionType.nodeVersion
+                ? `Node ${action.actionType.nodeVersion}`
+                : action.actionType.actionType}
             </span>
             {action.verified && (
               <span className="verified-badge">✓ Verified</span>
@@ -125,7 +127,7 @@ export const DetailPage: React.FC = () => {
 
         <div className="info-grid">
           <div className="info-card">
-            <h3>Dependents</h3>
+            <h3>Used by</h3>
             <div className="value dependents-highlight">
               {dependentsCount.toLocaleString()}
             </div>
@@ -166,24 +168,6 @@ export const DetailPage: React.FC = () => {
               {action.actionType.actionDockerType && (
                 <div>Docker: {action.actionType.actionDockerType}</div>
               )}
-            </div>
-          </div>
-
-          <div className="info-card">
-            <h3>Security</h3>
-            <div className="value" style={{ fontSize: '14px' }}>
-              {action.secretScanningEnabled ? '✓' : '✗'} Secret Scanning
-              <br />
-              {action.dependabotEnabled ? '✓' : '✗'} Dependabot
-            </div>
-          </div>
-
-          <div className="info-card">
-            <h3>Vulnerabilities</h3>
-            <div className="value" style={{ fontSize: '14px' }}>
-              Critical: {action.vulnerabilityStatus.critical}
-              <br />
-              High: {action.vulnerabilityStatus.high}
             </div>
           </div>
 
