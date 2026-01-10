@@ -59,12 +59,17 @@ jobs:
 
       - name: Resolve Function App name
         run: |
-          appName=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[?contains(kind, 'functionapp')].[name]" -o tsv)
+          appName=$(az functionapp list \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
+
           if [ -z "$appName" ]; then
             echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
-          echo "FUNCTION_APP_NAME=$appName" >> $GITHUB_ENV
+
+          echo "FUNCTION_APP_NAME=$appName" >> "$GITHUB_ENV"
+          echo "Resolved Function App: $appName"
 
       - name: Package function app
         working-directory: src/backend
