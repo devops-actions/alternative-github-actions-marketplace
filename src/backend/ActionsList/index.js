@@ -13,6 +13,7 @@ module.exports = async function actionsList(context, req) {
 
   const owner = context.bindingData && context.bindingData.owner;
   const tableClient = getTableClient();
+  const tableUrl = tableClient && tableClient.url ? tableClient.url.split('?')[0] : 'unknown';
   let entities = [];
 
   // For now, only support in-memory/fake client for integration tests
@@ -22,20 +23,28 @@ module.exports = async function actionsList(context, req) {
       const entityOwner = e.Owner || (e.PayloadJson && JSON.parse(e.PayloadJson).owner);
       return owner ? entityOwner === owner : true;
     });
+    const results = entities.map(e => {
+      try {
+        return ActionRecord.fromEntity(e).toActionInfo(true, {
+          etag: e.etag,
+          lastSyncedUtc: e.LastSyncedUtc,
+          partitionKey: e.partitionKey || e.PartitionKey,
+          rowKey: e.rowKey || e.RowKey
+        });
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    context.log(`ActionsList: returning ${results.length} entities (fake client), table ${tableUrl}`);
+
     context.res = {
       status: 200,
-      body: entities.map(e => {
-        try {
-          return ActionRecord.fromEntity(e).toActionInfo(true, {
-            etag: e.etag,
-            lastSyncedUtc: e.LastSyncedUtc,
-            partitionKey: e.partitionKey || e.PartitionKey,
-            rowKey: e.rowKey || e.RowKey
-          });
-        } catch {
-          return null;
-        }
-      }).filter(Boolean)
+      headers: {
+        'X-Actions-Count': results.length,
+        'X-Table-Endpoint': tableUrl
+      },
+      body: results
     };
     return;
   }
@@ -54,20 +63,28 @@ module.exports = async function actionsList(context, req) {
       entities.push(entity);
     }
 
+    const results = entities.map(e => {
+      try {
+        return ActionRecord.fromEntity(e).toActionInfo(true, {
+          etag: e.etag,
+          lastSyncedUtc: e.LastSyncedUtc,
+          partitionKey: e.partitionKey,
+          rowKey: e.rowKey
+        });
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    context.log(`ActionsList: returning ${results.length} entities, table ${tableUrl}`);
+
     context.res = {
       status: 200,
-      body: entities.map(e => {
-        try {
-          return ActionRecord.fromEntity(e).toActionInfo(true, {
-            etag: e.etag,
-            lastSyncedUtc: e.LastSyncedUtc,
-            partitionKey: e.partitionKey,
-            rowKey: e.rowKey
-          });
-        } catch {
-          return null;
-        }
-      }).filter(Boolean)
+      headers: {
+        'X-Actions-Count': results.length,
+        'X-Table-Endpoint': tableUrl
+      },
+      body: results
     };
   } catch (error) {
     context.log.error('Error querying actions table:', error);
