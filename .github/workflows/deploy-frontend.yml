@@ -52,6 +52,16 @@ jobs:
           echo "suffix=$suffix" >> $GITHUB_OUTPUT
           echo "SWA_NAME=$swaName" >> $GITHUB_ENV
 
+      - name: Resolve Function App host
+        id: functionapp
+        run: |
+          funcHost=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].defaultHostName" -o tsv)
+          if [ -z "$funcHost" ]; then
+            echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+          echo "function_host=$funcHost" >> $GITHUB_OUTPUT
+
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
@@ -94,7 +104,7 @@ jobs:
         run: npm run build
         working-directory: src/frontend
         env:
-          VITE_API_BASE_URL: https://${{ vars.FUNCTION_APP_HOSTNAME }}/api
+          VITE_API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
           VITE_APPINSIGHTS_CONNECTION_STRING: ${{ steps.appinsights.outputs.connection_string }}
 
       - name: Get Static Web App deployment token
