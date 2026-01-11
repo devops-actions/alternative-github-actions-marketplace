@@ -46,7 +46,8 @@ module.exports = async function actionsStats(context, req) {
       headers: {
         'X-Actions-Count': total,
         'X-Verified-Count': verified,
-        'X-Table-Endpoint': tableUrl
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json'
       },
       body: {
         total,

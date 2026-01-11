@@ -42,7 +42,8 @@ module.exports = async function actionsList(context, req) {
       status: 200,
       headers: {
         'X-Actions-Count': results.length,
-        'X-Table-Endpoint': tableUrl
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json'
       },
       body: results
     };
@@ -82,7 +83,8 @@ module.exports = async function actionsList(context, req) {
       status: 200,
       headers: {
         'X-Actions-Count': results.length,
-        'X-Table-Endpoint': tableUrl
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json'
       },
       body: results
     };
