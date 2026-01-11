@@ -1,4 +1,4 @@
-import { Action } from '../types/Action';
+import { Action, ActionStats } from '../types/Action';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -9,6 +9,7 @@ class ActionsService {
   private lastFetch: number = 0;
   private listeners: Array<() => void> = [];
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private stats: ActionStats = { total: 0, byType: {}, verified: 0 };
 
   constructor() {
     this.startAutoRefresh();
@@ -67,6 +68,28 @@ class ActionsService {
     }
   }
 
+  async fetchStats(): Promise<ActionStats> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/actions/stats`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stats: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const stats: ActionStats = {
+        total: Number(data?.total) || 0,
+        byType: data?.byType || {},
+        verified: Number(data?.verified) || 0
+      };
+      this.stats = stats;
+      this.notify();
+      return stats;
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      throw error;
+    }
+  }
+
   getActions(): Action[] {
     return this.actions;
   }
@@ -99,16 +122,7 @@ class ActionsService {
   }
 
   getStats() {
-    const typeStats = this.actions.reduce((acc, action) => {
-      const type = action.actionType.actionType;
-      acc[type] = (acc[type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return {
-      total: this.actions.length,
-      byType: typeStats
-    };
+    return this.stats;
   }
 
   destroy() {

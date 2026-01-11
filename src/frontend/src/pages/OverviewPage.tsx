@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Action, ActionTypeFilter } from '../types/Action';
+import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 
 const PAGE_SIZE = 12;
@@ -15,6 +15,7 @@ export const OverviewPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<ActionStats>({ total: 0, byType: {}, verified: 0 });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,18 +23,22 @@ export const OverviewPage: React.FC = () => {
       setActions(actionsService.getActions());
     });
 
-    loadActions();
+    loadData();
 
     return () => {
       unsubscribe();
     };
   }, []);
 
-  const loadActions = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const data = await actionsService.fetchActions();
-      setActions(data);
+      const [statsData, actionsData] = await Promise.all([
+        actionsService.fetchStats(),
+        actionsService.fetchActions()
+      ]);
+      setStats(statsData);
+      setActions(actionsData);
       setError(null);
     } catch (err) {
       setError('Failed to load actions. Please try again later.');
@@ -81,8 +86,6 @@ export const OverviewPage: React.FC = () => {
     setFilteredActions(filtered);
     setCurrentPage(1);
   }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
-
-  const stats = actionsService.getStats();
 
   const totalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
   const pagedActions = filteredActions.slice(
