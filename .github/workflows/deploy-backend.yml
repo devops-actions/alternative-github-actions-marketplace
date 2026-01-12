@@ -104,14 +104,105 @@ jobs:
           app-name: ${{ env.FUNCTION_APP_NAME }}
           package: functionapp.zip
 
+      - name: Temporarily allow GitHub runner IP (for smoke tests)
+        run: |
+          set -e
+          runnerIp=$(curl -s https://api.ipify.org)
+          if [ -z "$runnerIp" ]; then
+            echo "::error::Failed to determine runner public IP"
+            exit 1
+          fi
+
+          echo "Runner public IP: $runnerIp"
+
+          # Allow this runner IP so smoke tests can reach the app when access restrictions are locked down to SWA IPs.
+          az functionapp config access-restriction add \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.FUNCTION_APP_NAME }}" \
+            --rule-name "AllowGitHubRunnerSmokeTest" \
+            --action Allow \
+            --ip-address "$runnerIp/32" \
+            --priority 89 \
+            --description "Temporary allow for GitHub Actions smoke tests"
+
+          # Propagation delay for access restriction rules.
+          sleep 10
+
+          echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
+
+      - name: Initialize smoke test error counter
+        run: |
+          echo "SMOKE_TEST_ERRORS=0" >> "$GITHUB_ENV"
+
       - name: Smoke test via client (list actions)
         working-directory: src/backend
         env:
           API_URL: https://${{ env.FUNCTION_APP_HOSTNAME }}/api
-        run: node examples/list-actions.js
+        run: |
+          set +e
+          output=$(node examples/list-actions.js 2>&1)
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+
+          errorCount=$(printf '%s\n' "$output" | grep -c '^::error::' || true)
+          if [ $status -ne 0 ] && [ "$errorCount" -eq 0 ]; then
+            errorCount=1
+          fi
+
+          if [ "$errorCount" -gt 0 ]; then
+            current=${SMOKE_TEST_ERRORS:-0}
+            next=$((current + errorCount))
+            echo "SMOKE_TEST_ERRORS=$next" >> "$GITHUB_ENV"
+          fi
+
+          exit 0
 
       - name: Smoke test via client (stats)
         working-directory: src/backend
         env:
           API_URL: https://${{ env.FUNCTION_APP_HOSTNAME }}/api
-        run: node -e "require('./examples/list-actions.js').statsExample()"
+        run: |
+          set +e
+          output=$(node -e "require('./examples/list-actions.js').statsExample()" 2>&1)
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+
+          errorCount=$(printf '%s\n' "$output" | grep -c '^::error::' || true)
+          if [ $status -ne 0 ] && [ "$errorCount" -eq 0 ]; then
+            errorCount=1
+          fi
+
+          if [ "$errorCount" -gt 0 ]; then
+            current=${SMOKE_TEST_ERRORS:-0}
+            next=$((current + errorCount))
+            echo "SMOKE_TEST_ERRORS=$next" >> "$GITHUB_ENV"
+          fi
+
+          exit 0
+
+      - name: Remove temporary GitHub runner allow rule
+        if: ${{ always() }}
+        run: |
+          set +e
+          az functionapp config access-restriction remove \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.FUNCTION_APP_NAME }}" \
+            --rule-name "AllowGitHubRunnerSmokeTest"
+          exit 0
+
+      - name: Report smoke test errors
+        if: ${{ always() }}
+        run: |
+          errors=${SMOKE_TEST_ERRORS:-0}
+          if [ "$errors" -gt 0 ]; then
+            {
+              echo "### Backend smoke tests reported errors"
+              echo
+              echo "- Total errors: $errors"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

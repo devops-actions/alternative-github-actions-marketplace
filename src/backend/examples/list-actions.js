@@ -8,12 +8,69 @@
 const { ActionsMarketplaceClient } = require('../client/index');
 const { DefaultAzureCredential } = require('@azure/identity');
 
+function normalizeApiUrl(apiUrl) {
+  const cleaned = String(apiUrl || '').trim().replace(/\/+$/, '');
+  if (!cleaned) {
+    return {
+      apiHost: 'https://your-api-endpoint.azurewebsites.net',
+      apiBase: 'https://your-api-endpoint.azurewebsites.net/api'
+    };
+  }
+
+  if (cleaned.endsWith('/api')) {
+    return {
+      apiHost: cleaned.slice(0, -4),
+      apiBase: cleaned
+    };
+  }
+
+  return {
+    apiHost: cleaned,
+    apiBase: `${cleaned}/api`
+  };
+}
+
+function statsExample() {
+  const { apiBase } = normalizeApiUrl(process.env.API_URL);
+  const url = `${apiBase}/actions/stats`;
+
+  console.log('Smoke test: Actions Stats (HTTP API Mode)');
+  console.log(`GET ${url}`);
+
+  return fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
+    .then(async response => {
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Failed to fetch stats: ${response.status} ${body}`);
+      }
+      return response.json();
+    })
+    .then(stats => {
+      const total = Number(stats?.total) || 0;
+      const verified = Number(stats?.verified) || 0;
+      console.log(`OK: total=${total}, verified=${verified}`);
+      return stats;
+    })
+    .catch(error => {
+      console.error(`::error::Stats smoke test failed for ${url}: ${error.message}`);
+      process.exitCode = 1;
+    });
+}
+
 async function main() {
+  const { apiHost } = normalizeApiUrl(process.env.API_URL);
+  let hadError = false;
+
   // Example 1: List all actions using HTTP API mode
   console.log('Example 1: List All Actions (HTTP API Mode)\n');
   
   const httpClient = new ActionsMarketplaceClient({
-    apiUrl: process.env.API_URL || 'https://your-api-endpoint.azurewebsites.net',
+    apiUrl: apiHost,
     functionKey: process.env.FUNCTION_KEY  // Optional, if API is secured
   });
 
@@ -22,7 +79,8 @@ async function main() {
     
     console.log(`Found ${actions.length} actions in total\n`);
     
-    // Display first 5 actions as examples
+    console.error(`::error::Failed to list actions: ${error.message}`);
+    hadError = true;
     const displayCount = Math.min(5, actions.length);
     if (displayCount > 0) {
       console.log(`First ${displayCount} actions:`);
@@ -56,65 +114,80 @@ async function main() {
       }
     });
   } catch (error) {
-    console.error('Failed to list actions by owner:', error.message);
+    console.error(`::error::Failed to list actions by owner: ${error.message}`);
+    hadError = true;
   }
 
   // Example 3: Using Direct Table Storage mode
   console.log('\n\nExample 3: List Actions (Direct Table Storage Mode)\n');
-  
-  const tableClient = new ActionsMarketplaceClient({
-    tableEndpoint: process.env.AZURE_TABLE_ENDPOINT || 'https://your-account.table.core.windows.net',
-    tableName: process.env.AZURE_TABLE_NAME || 'actions',
-    credential: new DefaultAzureCredential()
-  });
 
-  try {
-    const actions = await tableClient.listActions();
-    
-    console.log(`Found ${actions.length} actions in table storage\n`);
-    
-    // Group actions by owner
-    const actionsByOwner = {};
-    actions.forEach(action => {
-      if (!actionsByOwner[action.owner]) {
-        actionsByOwner[action.owner] = [];
-      }
-      actionsByOwner[action.owner].push(action.name);
+  const tableEndpoint = process.env.AZURE_TABLE_ENDPOINT || process.env.TABLE_ENDPOINT;
+  const tableName = process.env.AZURE_TABLE_NAME || process.env.TABLE_NAME || 'actions';
+
+  if (!tableEndpoint) {
+    console.log('Skipping Direct Table Storage examples (no AZURE_TABLE_ENDPOINT set).');
+  } else {
+  
+    const tableClient = new ActionsMarketplaceClient({
+      tableEndpoint,
+      tableName,
+      credential: new DefaultAzureCredential()
     });
-    
-    console.log('Actions grouped by owner:');
-    Object.entries(actionsByOwner)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(0, 5)  // Show first 5 owners
-      .forEach(([owner, names]) => {
-        console.log(`  ${owner}: ${names.length} action(s)`);
-        names.slice(0, 3).forEach(name => {
-          console.log(`    - ${name}`);
+
+    try {
+      const actions = await tableClient.listActions();
+      
+      console.log(`Found ${actions.length} actions in table storage\n`);
+      
+      // Group actions by owner
+      const actionsByOwner = {};
+      actions.forEach(action => {
+        if (!actionsByOwner[action.owner]) {
+          actionsByOwner[action.owner] = [];
+        }
+        actionsByOwner[action.owner].push(action.name);
+      });
+      
+      console.log('Actions grouped by owner:');
+      Object.entries(actionsByOwner)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(0, 5)  // Show first 5 owners
+        .forEach(([owner, names]) => {
+          console.log(`  ${owner}: ${names.length} action(s)`);
+          names.slice(0, 3).forEach(name => {
+            console.log(`    - ${name}`);
+          });
+          if (names.length > 3) {
+            console.log(`    ... and ${names.length - 3} more`);
+          }
         });
-        if (names.length > 3) {
-          console.log(`    ... and ${names.length - 3} more`);
+    } catch (error) {
+      console.error(`::error::Failed to list actions from table storage: ${error.message}`);
+      hadError = true;
+    }
+
+    // Example 4: Filter actions by owner using Table Storage
+    console.log('\n\nExample 4: Filter by Owner (Direct Table Storage Mode)\n');
+    
+    try {
+      const githubActions = await tableClient.listActions({ owner: 'github' });
+      
+      console.log(`Found ${githubActions.length} actions from 'github' organization\n`);
+      
+      githubActions.forEach(action => {
+        console.log(`  - ${action.name}`);
+        if (action.version) {
+          console.log(`    Current version: ${action.version}`);
         }
       });
-  } catch (error) {
-    console.error('Failed to list actions from table storage:', error.message);
+    } catch (error) {
+      console.error(`::error::Failed to filter actions: ${error.message}`);
+      hadError = true;
+    }
   }
 
-  // Example 4: Filter actions by owner using Table Storage
-  console.log('\n\nExample 4: Filter by Owner (Direct Table Storage Mode)\n');
-  
-  try {
-    const githubActions = await tableClient.listActions({ owner: 'github' });
-    
-    console.log(`Found ${githubActions.length} actions from 'github' organization\n`);
-    
-    githubActions.forEach(action => {
-      console.log(`  - ${action.name}`);
-      if (action.version) {
-        console.log(`    Current version: ${action.version}`);
-      }
-    });
-  } catch (error) {
-    console.error('Failed to filter actions:', error.message);
+  if (hadError) {
+    process.exitCode = 1;
   }
 }
 
@@ -126,4 +199,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, statsExample };
