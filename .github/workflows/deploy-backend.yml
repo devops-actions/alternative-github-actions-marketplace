@@ -7,7 +7,7 @@ on:
       #- main
     paths:
       - 'src/backend/**'
-      - '.github/workflows/deploy-functions.yml'
+      - '.github/workflows/deploy-backend.yml'
 
 env:
   # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
