@@ -173,8 +173,8 @@ export const OverviewPage: React.FC = () => {
       filtered = filtered.filter(action => action.verified === true);
     }
 
-    if (!includeArchived) {
-      filtered = filtered.filter(action => action?.repoInfo?.archived !== true);
+    if (includeArchived) {
+      filtered = filtered.filter(action => action?.repoInfo?.archived === true);
     }
 
     // Apply sorting

@@ -124,6 +124,19 @@ async function assertAtLeastOneArchivedCardVisible(page: Page) {
   await expect(page.locator('.action-card').getByText('Archived')).toBeVisible({ timeout: 45000 });
 }
 
+async function assertCardsAreArchived(page: Page) {
+  const cards = page.locator('.action-card');
+  const count = await cards.count();
+  const sample = Math.min(count, 5);
+  if (sample === 0) {
+    throw new Error('Expected at least one action-card to be visible');
+  }
+
+  for (let i = 0; i < sample; i += 1) {
+    await expect(cards.nth(i).getByText('Archived')).toBeVisible();
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await goHome(page);
   await clearPersistedOverviewState(page);
@@ -207,7 +220,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
         test.skip(true, 'No archived actions available to validate archived toggle');
       }
       await assertArchivedToggleActive(page, true);
-      await assertAtLeastOneArchivedCardVisible(page);
+      await assertCardsAreArchived(page);
     }
   });
 
@@ -304,6 +317,6 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
 
     await assertArchivedToggleActive(page, true);
-    await assertAtLeastOneArchivedCardVisible(page);
+    await assertCardsAreArchived(page);
   });
 });
