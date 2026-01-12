@@ -41,19 +41,18 @@ module.exports = async function actionsStats(context, req) {
 
     context.log(`ActionsStats: total=${total}, verified=${verified}, table=${tableUrl}`);
 
+    const payload = { total, byType, verified };
+
     context.res = {
       status: 200,
+      isRaw: true,
       headers: {
         'X-Actions-Count': total,
         'X-Verified-Count': verified,
         'X-Table-Endpoint': tableUrl,
         'Content-Type': 'application/json'
       },
-      body: {
-        total,
-        byType,
-        verified
-      }
+      body: JSON.stringify(payload)
     };
   } catch (error) {
     context.log.error('Error computing stats:', error);
