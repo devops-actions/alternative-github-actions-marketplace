@@ -32,22 +32,23 @@ var hostingPlanName = 'plan-${uniqueSuffix}'
 var insightsName = 'appi-${uniqueSuffix}'
 var fileShareName = toLower('func${uniqueSuffix}')
 
-var functionIpSecurityRestrictions = concat(
-  [for (cidr, i) in functionDebugAllowedIpCidrs: {
-    name: 'AllowDebug${i}'
-    ipAddress: cidr
-    action: 'Allow'
-    priority: 90 + i
-    description: 'Temporary debug access (e.g., Azure Portal Test/Run)'
-  }],
-  [for (cidr, i) in functionAllowedIpCidrs: {
-    name: 'AllowSWA${i}'
-    ipAddress: cidr
-    action: 'Allow'
-    priority: 100 + i
-    description: 'Static Web Apps outbound IP'
-  }]
-)
+var functionDebugIpSecurityRestrictions = [for (cidr, i) in functionDebugAllowedIpCidrs: {
+  name: 'AllowDebug${i}'
+  ipAddress: cidr
+  action: 'Allow'
+  priority: 90 + i
+  description: 'Temporary debug access (e.g., Azure Portal Test/Run)'
+}]
+
+var functionSwaIpSecurityRestrictions = [for (cidr, i) in functionAllowedIpCidrs: {
+  name: 'AllowSWA${i}'
+  ipAddress: cidr
+  action: 'Allow'
+  priority: 100 + i
+  description: 'Static Web Apps outbound IP'
+}]
+
+var functionIpSecurityRestrictions = concat(functionDebugIpSecurityRestrictions, functionSwaIpSecurityRestrictions)
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
