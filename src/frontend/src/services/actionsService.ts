@@ -3,6 +3,54 @@ import { Action, ActionStats } from '../types/Action';
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string') {
+      result.push(item);
+      continue;
+    }
+
+    if (item && typeof item === 'object') {
+      const tagName = (item as { tag_name?: unknown }).tag_name;
+      if (typeof tagName === 'string' && tagName.trim()) {
+        result.push(tagName);
+        continue;
+      }
+    }
+  }
+
+  return result;
+}
+
+function normalizeAction(raw: unknown): Action {
+  const action = (raw && typeof raw === 'object') ? (raw as any) : {};
+
+  // The production dataset can contain GitHub release objects; UI expects strings.
+  const releaseInfo = normalizeStringArray(action.releaseInfo);
+  const tagInfo = normalizeStringArray(action.tagInfo);
+
+  // Be defensive with a couple of frequently read fields.
+  const dependents = action.dependents && typeof action.dependents === 'object'
+    ? action.dependents
+    : { dependents: '0', dependentsLastUpdated: '' };
+
+  if (dependents && typeof dependents.dependents === 'number') {
+    dependents.dependents = String(dependents.dependents);
+  }
+
+  return {
+    ...action,
+    releaseInfo,
+    tagInfo,
+    dependents
+  } as Action;
+}
+
 class ActionsService {
   private actions: Action[] = [];
   private loading: boolean = false;
@@ -62,7 +110,7 @@ class ActionsService {
         ? data
         : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.value) ? data.value : []));
 
-      this.actions = items;
+      this.actions = items.map(normalizeAction);
       this.lastFetch = now;
       this.notify();
       
@@ -117,7 +165,9 @@ class ActionsService {
         }
         throw new Error(`Failed to fetch action detail: ${response.statusText}`);
       }
-      return await response.json();
+
+      const data = await response.json();
+      return normalizeAction(data);
     } catch (error) {
       console.error('Error fetching action detail:', error);
       throw error;
