@@ -62,7 +62,7 @@ export const OverviewPage: React.FC = () => {
 
     if (typeFilter !== 'All') {
       filtered = filtered.filter(
-        action => action.actionType.actionType === typeFilter
+        action => action?.actionType?.actionType === typeFilter
       );
     }
     if (showVerifiedOnly) {
@@ -72,13 +72,13 @@ export const OverviewPage: React.FC = () => {
     // Apply sorting
     filtered = [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
-        const aDeps = parseInt(a.dependents.dependents) || 0;
-        const bDeps = parseInt(b.dependents.dependents) || 0;
+        const aDeps = parseInt(a?.dependents?.dependents || '') || 0;
+        const bDeps = parseInt(b?.dependents?.dependents || '') || 0;
         return bDeps - aDeps; // Descending
       } else {
         // Sort by updated date
-        const aDate = new Date(a.repoInfo.updated_at).getTime();
-        const bDate = new Date(b.repoInfo.updated_at).getTime();
+        const aDate = new Date(a?.repoInfo?.updated_at || 0).getTime();
+        const bDate = new Date(b?.repoInfo?.updated_at || 0).getTime();
         return bDate - aDate; // Descending (most recent first)
       }
     });
@@ -240,10 +240,10 @@ export const OverviewPage: React.FC = () => {
                   </div>
                   <span
                     className={`action-badge ${getActionTypeBadgeClass(
-                      action.actionType.actionType
+                      action?.actionType?.actionType
                     )}`}
                   >
-                    {action.actionType.actionType}
+                    {action?.actionType?.actionType || 'Unknown'}
                   </span>
                 </div>
 
@@ -251,7 +251,7 @@ export const OverviewPage: React.FC = () => {
                   <div className="meta-item">
                     <span>👥</span>
                     <strong className="dependents-highlight">
-                      {parseInt(action.dependents.dependents).toLocaleString()}
+                      {(parseInt(action?.dependents?.dependents || '') || 0).toLocaleString()}
                     </strong>
                     <span>Used by</span>
                   </div>
@@ -277,7 +277,12 @@ export const OverviewPage: React.FC = () => {
                     </div>
                     <div className="meta-item">
                       <span>🕐</span>
-                      <span>Updated: {new Date(action.repoInfo.updated_at).toLocaleDateString()}</span>
+                      <span>
+                        Updated:{' '}
+                        {action?.repoInfo?.updated_at
+                          ? new Date(action.repoInfo.updated_at).toLocaleDateString()
+                          : 'Unknown'}
+                      </span>
                     </div>
                   </div>
                 )}

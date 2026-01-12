@@ -55,7 +55,14 @@ class ActionsService {
       }
       
       const data = await response.json();
-      this.actions = Array.isArray(data) ? data : [];
+
+      // Prefer array responses, but tolerate a minimal wrapper shape
+      // in case a proxy/middleware introduces `{ items: [...] }` / `{ value: [...] }`.
+      const items = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.value) ? data.value : []));
+
+      this.actions = items;
       this.lastFetch = now;
       this.notify();
       
