@@ -15,7 +15,9 @@ function normalizeApiUrl(apiUrl) {
       apiHost: 'https://your-api-endpoint.azurewebsites.net',
       apiBase: 'https://your-api-endpoint.azurewebsites.net/api'
     };
+  }
 
+  if (cleaned.endsWith('/api')) {
     return {
       apiHost: cleaned.slice(0, -4),
       apiBase: cleaned
@@ -24,8 +26,7 @@ function normalizeApiUrl(apiUrl) {
 
   return {
     apiHost: cleaned,
-    console.error(`::error::Failed to list actions: ${error.message}`);
-    hadError = true;
+    apiBase: `${cleaned}/api`
   };
 }
 
