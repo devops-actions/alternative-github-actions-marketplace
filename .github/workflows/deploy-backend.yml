@@ -33,6 +33,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
+      - name: Syntax check non-project JavaScript files
+        run: |
+          set -e
+          files=$(git ls-files '*.js' | grep -vE '^src/(backend|frontend)/' | grep -vE '^src/frontend/dist/' || true)
+          if [ -z "$files" ]; then
+            echo "No non-project JS files to check."
+            exit 0
+          fi
+          echo "$files" | while read -r f; do
+            echo "node -c $f"
+            node -c "$f"
+          done
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -40,6 +53,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: src/backend
+
+      - name: Syntax check backend example scripts
+        run: node -c examples/list-actions.js
         working-directory: src/backend
 
       - name: Run unit tests

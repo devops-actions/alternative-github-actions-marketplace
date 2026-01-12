@@ -26,6 +26,19 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
 
+      - name: Syntax check non-project JavaScript files
+        run: |
+          set -e
+          files=$(git ls-files '*.js' | grep -vE '^src/(backend|frontend)/' | grep -vE '^src/frontend/dist/' || true)
+          if [ -z "$files" ]; then
+            echo "No non-project JS files to check."
+            exit 0
+          fi
+          echo "$files" | while read -r f; do
+            echo "node -c $f"
+            node -c "$f"
+          done
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
