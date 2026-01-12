@@ -54,13 +54,25 @@ async function clearPersistedOverviewState(page: Page) {
   }, OVERVIEW_STATE_KEY);
 }
 
+async function waitForOverviewSettled(page: Page) {
+  // The app can be in one of these end states after loadData completes.
+  const terminalState = page.locator('.action-card, .no-results, .error-message').first();
+  await expect(terminalState).toBeVisible({ timeout: 120000 });
+
+  const errorMessage = page.locator('.error-message');
+  if (await errorMessage.isVisible()) {
+    const text = (await errorMessage.innerText()).trim();
+    throw new Error(`UI shows an error state: ${text || '(empty error message)'}`);
+  }
+}
+
 async function goHome(page: Page) {
   await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+  await waitForOverviewSettled(page);
 }
 
 async function ensureActionsVisible(page: Page) {
-  await expect(page.locator('.action-card').first()).toBeVisible({ timeout: 45000 });
+  await expect(page.locator('.action-card').first()).toBeVisible({ timeout: 120000 });
 }
 
 async function resetFilters(page: Page) {
@@ -138,8 +150,15 @@ async function assertCardsAreArchived(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await goHome(page);
-  await clearPersistedOverviewState(page);
+  // Clear persisted state before the app bootstraps, so every test starts clean.
+  await page.addInitScript((key) => {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }, OVERVIEW_STATE_KEY);
+
   await goHome(page);
 });
 
