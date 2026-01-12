@@ -52,6 +52,15 @@ function normalizeAction(raw: unknown): Action {
 }
 
 function extractArrayFromUnknown(value: unknown): unknown[] {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return extractArrayFromUnknown(parsed);
+    } catch {
+      return [];
+    }
+  }
+
   if (Array.isArray(value)) {
     return value;
   }
@@ -139,7 +148,7 @@ class ActionsService {
     this.loading = true;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/actions/list`);
+      const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`Failed to fetch actions: ${response.statusText}`);
       }
@@ -186,7 +195,7 @@ class ActionsService {
         return this.stats;
       }
 
-      const response = await fetch(`${API_BASE_URL}/actions/stats`);
+      const response = await fetch(`${API_BASE_URL}/actions/stats`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`Failed to fetch stats: ${response.statusText}`);
       }
@@ -221,7 +230,10 @@ class ActionsService {
 
   async fetchActionDetail(owner: string, name: string): Promise<Action | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/actions/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+      const response = await fetch(
+        `${API_BASE_URL}/actions/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+        { cache: 'no-store' }
+      );
       if (!response.ok) {
         if (response.status === 404) {
           return null;

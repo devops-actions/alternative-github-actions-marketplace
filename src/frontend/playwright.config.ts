@@ -7,6 +7,9 @@ export default defineConfig({
     baseURL,
     headless: true
   },
-  reporter: 'list',
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }]
+  ],
   timeout: 60000
 });

@@ -1,4 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+
+type ActionListItem = {
+  owner: string;
+  name: string;
+  verified?: boolean;
+  actionType?: { actionType?: string };
+  repoInfo?: { archived?: boolean };
+};
+
+const OVERVIEW_STATE_KEY = 'overviewState:v1';
 
 const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
 
@@ -18,39 +28,282 @@ const getApiBaseUrl = () => {
   return joinUrl(getFrontendBaseUrl(), '/api');
 };
 
-const fetchFirstAction = async () => {
+async function fetchActionsList(): Promise<ActionListItem[]> {
   const apiBaseUrl = getApiBaseUrl();
-  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'));
+  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'), {
+    headers: {
+      'Cache-Control': 'no-cache'
+    }
+  });
+
   if (!resp.ok) {
     throw new Error(`Failed to fetch actions list: ${resp.status}`);
   }
-  const data = (await resp.json()) as Array<{ owner: string; name: string }>;
-  if (!Array.isArray(data) || data.length === 0) {
-    return null;
-  }
-  return data[0];
-};
 
-// Validate the homepage renders and shows at least one action card.
-test('homepage renders and shows actions', async ({ page }) => {
-  const baseUrl = getFrontendBaseUrl();
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  const data = (await resp.json()) as unknown;
+  return Array.isArray(data) ? (data as ActionListItem[]) : [];
+}
 
-  // Cold starts or data fetches can keep the page in the loading state briefly.
+async function clearPersistedOverviewState(page: Page) {
+  await page.evaluate((key) => {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }, OVERVIEW_STATE_KEY);
+}
+
+async function goHome(page: Page) {
+  await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+}
+
+async function ensureActionsVisible(page: Page) {
   await expect(page.locator('.action-card').first()).toBeVisible({ timeout: 45000 });
+}
+
+async function resetFilters(page: Page) {
+  await page.getByRole('button', { name: 'All' }).click();
+
+  const verifiedOnly = page.getByRole('button', { name: 'Verified only' });
+  if (await verifiedOnly.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
+    await verifiedOnly.click();
+  }
+
+  const archived = page.getByRole('button', { name: 'Archived' });
+  if (await archived.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
+    await archived.click();
+  }
+}
+
+async function assertTypeFilterActive(page: Page, label: string) {
+  const button = page.getByRole('button', { name: label });
+  await expect(button).toHaveClass(/active/);
+}
+
+async function assertVerifiedOnlyActive(page: Page, active: boolean) {
+  const button = page.getByRole('button', { name: 'Verified only' });
+  if (active) {
+    await expect(button).toHaveClass(/active/);
+  } else {
+    await expect(button).not.toHaveClass(/active/);
+  }
+}
+
+async function assertArchivedToggleActive(page: Page, active: boolean) {
+  const button = page.getByRole('button', { name: 'Archived' });
+  if (active) {
+    await expect(button).toHaveClass(/active/);
+  } else {
+    await expect(button).not.toHaveClass(/active/);
+  }
+}
+
+async function assertCardsMatchType(page: Page, expectedType: string) {
+  const cards = page.locator('.action-card');
+  const count = await cards.count();
+  const sample = Math.min(count, 5);
+
+  for (let i = 0; i < sample; i += 1) {
+    await expect(cards.nth(i).locator('.action-badge')).toHaveText(expectedType);
+  }
+}
+
+async function assertCardsAreVerified(page: Page) {
+  const cards = page.locator('.action-card');
+  const count = await cards.count();
+  const sample = Math.min(count, 5);
+
+  for (let i = 0; i < sample; i += 1) {
+    await expect(cards.nth(i).getByText('Verified')).toBeVisible();
+  }
+}
+
+async function assertAtLeastOneArchivedCardVisible(page: Page) {
+  await expect(page.locator('.action-card').getByText('Archived')).toBeVisible({ timeout: 45000 });
+}
+
+test.beforeEach(async ({ page }) => {
+  await goHome(page);
+  await clearPersistedOverviewState(page);
+  await goHome(page);
+});
+
+// Baseline validations.
+test('homepage renders and shows actions', async ({ page }) => {
+  await ensureActionsVisible(page);
   await expect(page.getByText('Alternative GitHub Actions Marketplace')).toBeVisible();
 });
 
-// Validate a detail page renders using the first action from the API.
 test('detail page renders for first action', async ({ page }) => {
-  const baseUrl = getFrontendBaseUrl();
-  const firstAction = await fetchFirstAction();
-  if (!firstAction) {
+  const items = await fetchActionsList();
+  const first = items[0];
+  if (!first) {
     test.skip(true, 'No actions available to test detail page');
   }
 
-  const detailUrl = `${baseUrl}/action/${encodeURIComponent(firstAction!.owner)}/${encodeURIComponent(firstAction!.name)}`;
-  await page.goto(detailUrl, { waitUntil: 'networkidle' });
-  await expect(page.getByText(firstAction!.owner)).toBeVisible();
-  await expect(page.getByText(firstAction!.name)).toBeVisible();
+  const detailUrl = joinUrl(
+    getFrontendBaseUrl(),
+    `/action/${encodeURIComponent(first.owner)}/${encodeURIComponent(first.name)}`
+  );
+  await page.goto(detailUrl, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText(first.owner)).toBeVisible({ timeout: 45000 });
+  await expect(page.getByText(first.name)).toBeVisible();
+});
+
+test.describe('Stats panel filters (persist across refresh)', () => {
+  const statsPanelCases: Array<{
+    name: string;
+    ariaLabel: string;
+    assert: (page: Page, items: ActionListItem[]) => Promise<void>;
+  }> = [
+    {
+      name: 'Total Actions sets All type',
+      ariaLabel: 'Show all actions',
+      assert: async (page) => {
+        await assertTypeFilterActive(page, 'All');
+      }
+    },
+    {
+      name: 'Verified Actions sets Verified only',
+      ariaLabel: 'Show verified actions',
+      assert: async (page) => {
+        await assertVerifiedOnlyActive(page, true);
+        await assertCardsAreVerified(page);
+      }
+    }
+  ];
+
+  const typeToLabel: Array<{ type: string; buttonLabel: string; ariaLabel: string }> = [
+    { type: 'Node', buttonLabel: 'Node/JS', ariaLabel: 'Filter by Node actions' },
+    { type: 'Docker', buttonLabel: 'Docker', ariaLabel: 'Filter by Docker actions' },
+    { type: 'Composite', buttonLabel: 'Composite', ariaLabel: 'Filter by Composite actions' },
+    { type: 'Unknown', buttonLabel: 'Unknown', ariaLabel: 'Filter by Unknown actions' },
+    { type: 'No file found', buttonLabel: 'No file found', ariaLabel: 'Filter by No file found actions' }
+  ];
+
+  for (const { type, buttonLabel, ariaLabel } of typeToLabel) {
+    statsPanelCases.push({
+      name: `${type} Actions sets type filter`,
+      ariaLabel,
+      assert: async (page, items) => {
+        const hasAny = items.some(a => a?.actionType?.actionType === type);
+        if (!hasAny) {
+          test.skip(true, `No ${type} actions available to validate filter`);
+        }
+        await assertTypeFilterActive(page, buttonLabel);
+        await assertCardsMatchType(page, type);
+      }
+    });
+  }
+
+  statsPanelCases.push({
+    name: 'Archived Actions enables archived toggle',
+    ariaLabel: 'Include archived actions',
+    assert: async (page, items) => {
+      const hasArchived = items.some(a => a?.repoInfo?.archived === true);
+      if (!hasArchived) {
+        test.skip(true, 'No archived actions available to validate archived toggle');
+      }
+      await assertArchivedToggleActive(page, true);
+      await assertAtLeastOneArchivedCardVisible(page);
+    }
+  });
+
+  for (const c of statsPanelCases) {
+    test(c.name, async ({ page }) => {
+      const items = await fetchActionsList();
+      await ensureActionsVisible(page);
+      await resetFilters(page);
+
+      await page.getByRole('button', { name: c.ariaLabel }).click();
+      await ensureActionsVisible(page);
+
+      // Refresh (simulates F5) and ensure state is preserved.
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+
+      await c.assert(page, items);
+    });
+  }
+});
+
+test.describe('Filter buttons (persist across refresh)', () => {
+  const typeCases: Array<{ type: string; label: string }> = [
+    { type: 'All', label: 'All' },
+    { type: 'Node', label: 'Node/JS' },
+    { type: 'Docker', label: 'Docker' },
+    { type: 'Composite', label: 'Composite' },
+    { type: 'Unknown', label: 'Unknown' },
+    { type: 'No file found', label: 'No file found' }
+  ];
+
+  for (const { type, label } of typeCases) {
+    test(`Type filter ${label} persists on refresh`, async ({ page }) => {
+      const items = await fetchActionsList();
+      await ensureActionsVisible(page);
+      await resetFilters(page);
+
+      if (type !== 'All') {
+        const hasAny = items.some(a => a?.actionType?.actionType === type);
+        if (!hasAny) {
+          test.skip(true, `No ${type} actions available to validate filter`);
+        }
+      }
+
+      await page.getByRole('button', { name: label }).click();
+      await ensureActionsVisible(page);
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+
+      await assertTypeFilterActive(page, label);
+      if (type !== 'All') {
+        await ensureActionsVisible(page);
+        await assertCardsMatchType(page, type);
+      }
+    });
+  }
+
+  test('Verified only persists on refresh', async ({ page }) => {
+    const items = await fetchActionsList();
+    const hasVerified = items.some(a => a.verified === true);
+    if (!hasVerified) {
+      test.skip(true, 'No verified actions available to validate verified-only filter');
+    }
+
+    await ensureActionsVisible(page);
+    await resetFilters(page);
+
+    await page.getByRole('button', { name: 'Verified only' }).click();
+    await ensureActionsVisible(page);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+
+    await assertVerifiedOnlyActive(page, true);
+    await ensureActionsVisible(page);
+    await assertCardsAreVerified(page);
+  });
+
+  test('Archived toggle persists on refresh', async ({ page }) => {
+    const items = await fetchActionsList();
+    const hasArchived = items.some(a => a?.repoInfo?.archived === true);
+    if (!hasArchived) {
+      test.skip(true, 'No archived actions available to validate archived toggle');
+    }
+
+    await ensureActionsVisible(page);
+    await resetFilters(page);
+
+    await page.getByRole('button', { name: 'Archived' }).click();
+    await ensureActionsVisible(page);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+
+    await assertArchivedToggleActive(page, true);
+    await assertAtLeastOneArchivedCardVisible(page);
+  });
 });

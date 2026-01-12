@@ -437,17 +437,18 @@ export const OverviewPage: React.FC = () => {
       {filteredActions.length === 0 ? (
         <div className="no-results">
           <h2>No actions found</h2>
-          <p>Try adjusting your search or filters</p>
-          {actions.length > 0 && (
-            <button
-              type="button"
-              className="back-button"
-              onClick={clearFilters}
-              style={{ marginTop: '12px' }}
-            >
-              Clear filters
-            </button>
-          )}
+          <p>
+            Try adjusting your search or filters. ({actions.length.toLocaleString()} loaded,{' '}
+            {filteredActions.length.toLocaleString()} matching)
+          </p>
+          <button
+            type="button"
+            className="back-button"
+            onClick={clearFilters}
+            style={{ marginTop: '12px' }}
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
         <>
