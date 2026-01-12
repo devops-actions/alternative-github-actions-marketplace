@@ -57,7 +57,7 @@ async function clearPersistedOverviewState(page: Page) {
 async function waitForOverviewSettled(page: Page) {
   // The app can be in one of these end states after loadData completes.
   const terminalState = page.locator('.action-card, .no-results, .error-message').first();
-  await expect(terminalState).toBeVisible({ timeout: 120000 });
+  await expect(terminalState).toBeVisible({ timeout: 150000 });
 
   const errorMessage = page.locator('.error-message');
   if (await errorMessage.isVisible()) {
@@ -67,8 +67,22 @@ async function waitForOverviewSettled(page: Page) {
 }
 
 async function goHome(page: Page) {
-  await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
-  await waitForOverviewSettled(page);
+  const response = await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
+  const status = response?.status();
+  if (typeof status === 'number' && status >= 400) {
+    throw new Error(`Frontend navigation failed with HTTP ${status}`);
+  }
+
+  await expect(page).toHaveTitle(/Alternative GitHub Actions Marketplace/, { timeout: 60000 });
+
+  try {
+    await waitForOverviewSettled(page);
+  } catch (err) {
+    const url = page.url();
+    const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
+    const rootLen = (rootHtml || '').trim().length;
+    throw new Error(`Overview did not render. url=${url}, httpStatus=${String(status)}, rootHtmlLength=${rootLen}. ${String(err)}`);
+  }
 }
 
 async function ensureActionsVisible(page: Page) {

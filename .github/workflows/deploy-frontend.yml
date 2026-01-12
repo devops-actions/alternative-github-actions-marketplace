@@ -133,6 +133,33 @@ jobs:
           skip_app_build: true
           skip_api_build: true
 
+      - name: Wait for SWA + assets to be ready
+        env:
+          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_name }}.azurestaticapps.net
+        run: |
+          set -e
+          echo "Checking $FRONTEND_BASE_URL"
+          for i in $(seq 1 30); do
+            echo "Attempt $i/30"
+            html=$(curl -fsSL "$FRONTEND_BASE_URL" || true)
+            if printf '%s' "$html" | grep -q "<title>Alternative GitHub Actions Marketplace</title>"; then
+              asset=$(printf '%s' "$html" | grep -oE '/assets/index-[^"\x27]+\.js' | head -n 1 || true)
+              if [ -n "$asset" ]; then
+                curl -fsSI "$FRONTEND_BASE_URL$asset" >/dev/null && echo "SWA assets ready: $asset" && break
+              fi
+            fi
+            sleep 5
+          done
+
+      - name: Pre-warm API endpoints
+        env:
+          API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
+        run: |
+          set +e
+          curl -fsSI "$API_BASE_URL/actions/stats" >/dev/null
+          curl -fsSI "$API_BASE_URL/actions/list" >/dev/null
+          set -e
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
         working-directory: src/frontend
@@ -142,7 +169,7 @@ jobs:
         env:
           FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_name }}.azurestaticapps.net
           API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
-          PLAYWRIGHT_WORKERS: 12
+          PLAYWRIGHT_WORKERS: 4
         run: npm run test:e2e
 
       - name: Upload Playwright report (on failure)
