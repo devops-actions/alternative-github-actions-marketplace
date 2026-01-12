@@ -20,3 +20,10 @@
 - `main.bicep` exposes `assignTableDataContributor`; leave it `false` unless the deployment identity can create role assignments, otherwise grant Storage Table Data Contributor manually post-deploy.
 - Azure Functions runtime targets Node.js 22; develop and test with Node 22+ to stay aligned with production.
 - Workflows set Azure CLI automation-friendly env vars (only show errors, disable telemetry/dynamic install); mirror them locally to match CI behavior. See the docs here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
+
+## SWA + Functions integration notes
+- Browser calls from Static Web Apps require CORS + preflight: all HTTP Functions should respond to `OPTIONS` and include `Access-Control-Allow-*` headers.
+  - Shared implementation lives in `/src/backend/lib/cors.js`.
+  - Optionally restrict origins via `CORS_ALLOWED_ORIGINS` (comma-separated). If unset, CORS defaults to `*`.
+- Production data can contain GitHub release/tag objects (e.g., `{ tag_name, target_commitish }`) where the UI expects strings.
+  - Frontend normalizes `releaseInfo` / `tagInfo` to `string[]` in `/src/frontend/src/services/actionsService.ts`.
