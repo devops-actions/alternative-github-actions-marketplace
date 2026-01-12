@@ -1,26 +1,111 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 
 const PAGE_SIZE = 12;
+const OVERVIEW_STATE_KEY = 'overviewState:v1';
+
+type OverviewUiState = {
+  searchQuery: string;
+  typeFilter: ActionTypeFilter;
+  showVerifiedOnly: boolean;
+  sortBy: 'updated' | 'dependents';
+  currentPage: number;
+  scrollY?: number;
+};
+
+function readOverviewState(): Partial<OverviewUiState> | null {
+  try {
+    const raw = sessionStorage.getItem(OVERVIEW_STATE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeOverviewState(state: OverviewUiState) {
+  try {
+    sessionStorage.setItem(OVERVIEW_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 export const OverviewPage: React.FC = () => {
-  const [actions, setActions] = useState<Action[]>([]);
+  const initialPersisted = readOverviewState();
+  const initialActions = actionsService.getActions();
+  const initialStats = actionsService.getStats();
+
+  const [actions, setActions] = useState<Action[]>(initialActions);
   const [filteredActions, setFilteredActions] = useState<Action[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>('All');
-  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<'updated' | 'dependents'>('updated');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState(() => (initialPersisted?.searchQuery ?? ''));
+  const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>(() => {
+    const candidate = initialPersisted?.typeFilter;
+    const supported: ActionTypeFilter[] = ['All', 'Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
+    return candidate && supported.includes(candidate) ? candidate : 'All';
+  });
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(() => Boolean(initialPersisted?.showVerifiedOnly));
+  const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
+  const [currentPage, setCurrentPage] = useState(() => {
+    const candidate = Number(initialPersisted?.currentPage);
+    return Number.isFinite(candidate) && candidate > 0 ? candidate : 1;
+  });
+  const [loading, setLoading] = useState(() => initialActions.length === 0 && initialStats.total === 0);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<ActionStats>({ total: 0, byType: {}, verified: 0 });
+  const [stats, setStats] = useState<ActionStats>(initialStats);
   const navigate = useNavigate();
+
+  const prevFiltersRef = useRef({
+    searchQuery,
+    typeFilter,
+    showVerifiedOnly,
+    sortBy
+  });
+  const restoredScrollRef = useRef(false);
+
+  const setTypeFilterFromStats = (type: string) => {
+    if (type === 'All') {
+      setTypeFilter('All');
+      setShowVerifiedOnly(false);
+      return;
+    }
+
+    if (type === 'Verified') {
+      setShowVerifiedOnly(true);
+      setTypeFilter('All');
+      return;
+    }
+
+    const supportedTypes: ActionTypeFilter[] = ['Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
+    if (supportedTypes.includes(type as ActionTypeFilter)) {
+      setTypeFilter(type as ActionTypeFilter);
+      setShowVerifiedOnly(false);
+      return;
+    }
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('All');
+    setShowVerifiedOnly(false);
+    setSortBy('updated');
+    setCurrentPage(1);
+    try {
+      sessionStorage.removeItem(OVERVIEW_STATE_KEY);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = actionsService.subscribe(() => {
       setActions(actionsService.getActions());
+      setStats(actionsService.getStats());
     });
 
     loadData();
@@ -32,7 +117,9 @@ export const OverviewPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      if (actionsService.getActions().length === 0 && actionsService.getStats().total === 0) {
+        setLoading(true);
+      }
       const [statsData, actionsData] = await Promise.all([
         actionsService.fetchStats(),
         actionsService.fetchActions()
@@ -49,15 +136,25 @@ export const OverviewPage: React.FC = () => {
   };
 
   useEffect(() => {
+    writeOverviewState({
+      searchQuery,
+      typeFilter,
+      showVerifiedOnly,
+      sortBy,
+      currentPage
+    });
+  }, [searchQuery, typeFilter, showVerifiedOnly, sortBy, currentPage]);
+
+  useEffect(() => {
     let filtered = actions;
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        action =>
-          action.name.toLowerCase().includes(query) ||
-          action.owner.toLowerCase().includes(query)
-      );
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery) {
+      filtered = filtered.filter(action => {
+        const name = String(action?.name || '').toLowerCase();
+        const owner = String(action?.owner || '').toLowerCase();
+        return name.includes(normalizedQuery) || owner.includes(normalizedQuery);
+      });
     }
 
     if (typeFilter !== 'All') {
@@ -84,8 +181,45 @@ export const OverviewPage: React.FC = () => {
     });
 
     setFilteredActions(filtered);
-    setCurrentPage(1);
+
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.searchQuery !== searchQuery ||
+      prev.typeFilter !== typeFilter ||
+      prev.showVerifiedOnly !== showVerifiedOnly ||
+      prev.sortBy !== sortBy;
+
+    prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, sortBy };
+
+    const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (filtersChanged) {
+      setCurrentPage(1);
+    } else {
+      setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
+    }
   }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
+
+  useEffect(() => {
+    if (restoredScrollRef.current) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const persisted = readOverviewState();
+    const scrollY = Number(persisted?.scrollY);
+    if (!Number.isFinite(scrollY) || scrollY <= 0) {
+      restoredScrollRef.current = true;
+      return;
+    }
+
+    restoredScrollRef.current = true;
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+  }, [loading]);
 
   const totalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
   const pagedActions = filteredActions.slice(
@@ -102,6 +236,14 @@ export const OverviewPage: React.FC = () => {
   const showingTo = Math.min(currentPage * PAGE_SIZE, filteredActions.length);
 
   const handleActionClick = (action: Action) => {
+    writeOverviewState({
+      searchQuery,
+      typeFilter,
+      showVerifiedOnly,
+      sortBy,
+      currentPage,
+      scrollY: window.scrollY
+    });
     navigate(`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`);
   };
 
@@ -142,15 +284,37 @@ export const OverviewPage: React.FC = () => {
       </div>
 
       <div className="stats-bar">
-        <div className="stat-item">
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('All')}
+          aria-label="Show all actions"
+        >
           <span className="stat-label">Total Actions</span>
           <span className="stat-value">{stats.total.toLocaleString()}</span>
-        </div>
+        </button>
+
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('Verified')}
+          aria-label="Show verified actions"
+        >
+          <span className="stat-label">Verified Actions</span>
+          <span className="stat-value">{stats.verified.toLocaleString()}</span>
+        </button>
+
         {Object.entries(stats.byType).map(([type, count]) => (
-          <div key={type} className="stat-item">
+          <button
+            key={type}
+            type="button"
+            className="stat-item stat-button"
+            onClick={() => setTypeFilterFromStats(type)}
+            aria-label={`Filter by ${type} actions`}
+          >
             <span className="stat-label">{type} Actions</span>
             <span className="stat-value">{count.toLocaleString()}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -193,21 +357,48 @@ export const OverviewPage: React.FC = () => {
           </button>
           <button
             className={typeFilter === 'Node' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node')}
+            onClick={() => {
+              setShowVerifiedOnly(false);
+              setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node');
+            }}
           >
             Node/JS
           </button>
           <button
             className={typeFilter === 'Docker' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker')}
+            onClick={() => {
+              setShowVerifiedOnly(false);
+              setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker');
+            }}
           >
             Docker
           </button>
           <button
             className={typeFilter === 'Composite' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite')}
+            onClick={() => {
+              setShowVerifiedOnly(false);
+              setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite');
+            }}
           >
             Composite
+          </button>
+          <button
+            className={typeFilter === 'Unknown' ? 'active' : ''}
+            onClick={() => {
+              setShowVerifiedOnly(false);
+              setTypeFilter(typeFilter === 'Unknown' ? 'All' : 'Unknown');
+            }}
+          >
+            Unknown
+          </button>
+          <button
+            className={typeFilter === 'No file found' ? 'active' : ''}
+            onClick={() => {
+              setShowVerifiedOnly(false);
+              setTypeFilter(typeFilter === 'No file found' ? 'All' : 'No file found');
+            }}
+          >
+            No file found
           </button>
           <button
             className={showVerifiedOnly ? 'active' : ''}
@@ -223,6 +414,16 @@ export const OverviewPage: React.FC = () => {
         <div className="no-results">
           <h2>No actions found</h2>
           <p>Try adjusting your search or filters</p>
+          {actions.length > 0 && (
+            <button
+              type="button"
+              className="back-button"
+              onClick={clearFilters}
+              style={{ marginTop: '12px' }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <>

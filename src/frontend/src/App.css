@@ -57,6 +57,28 @@ body {
   flex-direction: column;
 }
 
+.stat-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-button:hover .stat-label {
+  color: #24292e;
+}
+
+.stat-button:hover .stat-value {
+  text-decoration: underline;
+}
+
+.stat-button:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .stat-label {
   font-size: 14px;
   color: #666;

@@ -46,7 +46,7 @@ export interface Action {
   };
 }
 
-export type ActionTypeFilter = 'All' | 'Node' | 'Docker' | 'Composite';
+export type ActionTypeFilter = 'All' | 'Node' | 'Docker' | 'Composite' | 'Unknown' | 'No file found';
 
 export interface ActionStats {
   total: number;

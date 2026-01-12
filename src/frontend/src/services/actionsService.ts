@@ -51,6 +51,47 @@ function normalizeAction(raw: unknown): Action {
   } as Action;
 }
 
+function extractArrayFromUnknown(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  const obj = value as Record<string, unknown>;
+
+  // Common wrapper shapes.
+  const preferredKeys = ['items', 'value', 'actions', 'results', 'data', 'body'];
+  for (const key of preferredKeys) {
+    const candidate = obj[key];
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+
+    if (key === 'body' && typeof candidate === 'string') {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // Last resort: find the first array-valued property.
+  for (const candidate of Object.values(obj)) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+}
+
 class ActionsService {
   private actions: Action[] = [];
   private loading: boolean = false;
@@ -58,6 +99,7 @@ class ActionsService {
   private listeners: Array<() => void> = [];
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private stats: ActionStats = { total: 0, byType: {}, verified: 0 };
+  private lastStatsFetch: number = 0;
 
   constructor() {
     this.startAutoRefresh();
@@ -104,13 +146,27 @@ class ActionsService {
       
       const data = await response.json();
 
-      // Prefer array responses, but tolerate a minimal wrapper shape
-      // in case a proxy/middleware introduces `{ items: [...] }` / `{ value: [...] }`.
-      const items = Array.isArray(data)
-        ? data
-        : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.value) ? data.value : []));
+      const items = extractArrayFromUnknown(data);
+      const hasCountHeader = response.headers.has('x-actions-count');
+      const declaredCount = Number(response.headers.get('x-actions-count') || '0');
 
-      this.actions = items.map(normalizeAction);
+      const serverExplicitlyEmpty =
+        (hasCountHeader && declaredCount === 0) ||
+        (Array.isArray(data) && data.length === 0);
+
+      // If the server claims there are results but we couldn't extract them,
+      // keep any previously cached actions instead of wiping the UI.
+      if (items.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
+        const responseType = Array.isArray(data) ? 'array' : typeof data;
+        const keys = (data && typeof data === 'object' && !Array.isArray(data))
+          ? Object.keys(data)
+          : [];
+        console.warn(
+          `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
+        );
+      } else {
+        this.actions = items.map(normalizeAction);
+      }
       this.lastFetch = now;
       this.notify();
       
@@ -123,8 +179,13 @@ class ActionsService {
     }
   }
 
-  async fetchStats(): Promise<ActionStats> {
+  async fetchStats(force: boolean = false): Promise<ActionStats> {
     try {
+      const now = Date.now();
+      if (!force && this.stats.total > 0 && (now - this.lastStatsFetch) < REFRESH_INTERVAL) {
+        return this.stats;
+      }
+
       const response = await fetch(`${API_BASE_URL}/actions/stats`);
       if (!response.ok) {
         throw new Error(`Failed to fetch stats: ${response.statusText}`);
@@ -137,6 +198,7 @@ class ActionsService {
         verified: Number(data?.verified) || 0
       };
       this.stats = stats;
+      this.lastStatsFetch = now;
       this.notify();
       return stats;
     } catch (error) {

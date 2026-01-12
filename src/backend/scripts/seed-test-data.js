@@ -32,7 +32,58 @@ function buildExpandedActions() {
     };
   });
 
-  return [...sampleActions, ...extras];
+  const nowIso = new Date().toISOString();
+  const base = sampleActions[0] || {};
+
+  const unknownType = {
+    ...base,
+    owner: 'seed-unknown',
+    name: 'seed-unknown-action',
+    repoInfo: {
+      ...(base.repoInfo || {}),
+      updated_at: nowIso,
+      archived: false
+    },
+    actionType: {
+      ...(base.actionType || {}),
+      actionType: 'Unknown',
+      fileFound: 'unknown',
+      actionDockerType: '',
+      nodeVersion: null
+    },
+    dependents: {
+      ...(base.dependents || {}),
+      dependentsLastUpdated: nowIso,
+      dependents: '0'
+    },
+    verified: false
+  };
+
+  const noFileFoundType = {
+    ...base,
+    owner: 'seed-nofile',
+    name: 'seed-no-file-found-action',
+    repoInfo: {
+      ...(base.repoInfo || {}),
+      updated_at: nowIso,
+      archived: false
+    },
+    actionType: {
+      ...(base.actionType || {}),
+      actionType: 'No file found',
+      fileFound: 'no file found',
+      actionDockerType: '',
+      nodeVersion: null
+    },
+    dependents: {
+      ...(base.dependents || {}),
+      dependentsLastUpdated: nowIso,
+      dependents: '0'
+    },
+    verified: false
+  };
+
+  return [...sampleActions, ...extras, unknownType, noFileFoundType];
 }
 
 async function seedTestData() {
