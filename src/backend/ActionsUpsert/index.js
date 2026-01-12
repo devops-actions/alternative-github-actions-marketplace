@@ -1,6 +1,7 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { getTableClient, getActionEntity } = require('../lib/tableStorage');
 const { ErrorCodes, createErrorResponse, extractErrorDetails, logErrorDetails } = require('../lib/errorResponse');
+const { withCorsHeaders } = require('../lib/cors');
 
 async function fetchExisting(tableClient, partitionKey, rowKey) {
   return getActionEntity(partitionKey, rowKey, { tableClient });
@@ -38,10 +39,18 @@ async function persistActionRecord(tableClient, actionRecord, existing) {
 }
 
 module.exports = async function actionsUpsert(context, req) {
+  if (req.method === 'OPTIONS') {
+    context.res = {
+      status: 204,
+      headers: withCorsHeaders(req, { 'Allow': 'POST,OPTIONS' })
+    };
+    return;
+  }
+
   if (req.method !== 'POST') {
     context.res = {
       status: 405,
-      headers: { 'Allow': 'POST' },
+      headers: withCorsHeaders(req, { 'Allow': 'POST,OPTIONS' }),
       body: { error: 'Method not allowed.' }
     };
     return;
@@ -61,6 +70,7 @@ module.exports = async function actionsUpsert(context, req) {
     logErrorDetails(context, error, errorResponse.correlationId);
     context.res = {
       status: errorResponse.statusCode,
+      headers: withCorsHeaders(req),
       body: errorResponse.body
     };
     return;
@@ -73,6 +83,7 @@ module.exports = async function actionsUpsert(context, req) {
     if (record.matchesExisting(existing)) {
       context.res = {
         status: 200,
+        headers: withCorsHeaders(req),
         body: {
           updated: false,
           owner: record.owner,
@@ -87,6 +98,7 @@ module.exports = async function actionsUpsert(context, req) {
 
     context.res = {
       status: result.created ? 201 : 200,
+      headers: withCorsHeaders(req),
       body: {
         updated: result.updated,
         created: !!result.created,
@@ -106,6 +118,7 @@ module.exports = async function actionsUpsert(context, req) {
     logErrorDetails(context, error, errorResponse.correlationId);
     context.res = {
       status: errorResponse.statusCode,
+      headers: withCorsHeaders(req),
       body: errorResponse.body
     };
   }

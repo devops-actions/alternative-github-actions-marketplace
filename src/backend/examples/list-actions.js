@@ -78,9 +78,7 @@ async function main() {
     const actions = await httpClient.listActions();
     
     console.log(`Found ${actions.length} actions in total\n`);
-    
-    console.error(`::error::Failed to list actions: ${error.message}`);
-    hadError = true;
+
     const displayCount = Math.min(5, actions.length);
     if (displayCount > 0) {
       console.log(`First ${displayCount} actions:`);
@@ -96,7 +94,8 @@ async function main() {
       });
     }
   } catch (error) {
-    console.error('Failed to list actions:', error.message);
+    console.error(`::error::Failed to list actions: ${error.message}`);
+    hadError = true;
   }
 
   // Example 2: List actions for a specific owner

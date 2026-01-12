@@ -1,10 +1,19 @@
 const { getTableClient } = require('../lib/tableStorage');
+const { withCorsHeaders } = require('../lib/cors');
 
 module.exports = async function actionsStats(context, req) {
+  if (req.method === 'OPTIONS') {
+    context.res = {
+      status: 204,
+      headers: withCorsHeaders(req, { Allow: 'GET,OPTIONS' })
+    };
+    return;
+  }
+
   if (req.method !== 'GET') {
     context.res = {
       status: 405,
-      headers: { Allow: 'GET' },
+      headers: withCorsHeaders(req, { Allow: 'GET,OPTIONS' }),
       body: { error: 'Method not allowed.' }
     };
     return;
@@ -54,10 +63,12 @@ module.exports = async function actionsStats(context, req) {
       },
       body: JSON.stringify(payload)
     };
+    context.res.headers = withCorsHeaders(req, context.res.headers);
   } catch (error) {
     context.log.error('Error computing stats:', error);
     context.res = {
       status: 500,
+      headers: withCorsHeaders(req),
       body: { error: 'Failed to compute stats.' }
     };
   }

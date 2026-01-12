@@ -1,5 +1,6 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { getActionEntity } = require('../lib/tableStorage');
+const { withCorsHeaders } = require('../lib/cors');
 
 function normalizeLastSynced(value) {
   if (typeof value !== 'string') {
@@ -9,10 +10,18 @@ function normalizeLastSynced(value) {
 }
 
 module.exports = async function actionsGet(context, req) {
+  if (req.method === 'OPTIONS') {
+    context.res = {
+      status: 204,
+      headers: withCorsHeaders(req, { 'Allow': 'GET,OPTIONS' })
+    };
+    return;
+  }
+
   if (req.method !== 'GET') {
     context.res = {
       status: 405,
-      headers: { 'Allow': 'GET' },
+      headers: withCorsHeaders(req, { 'Allow': 'GET,OPTIONS' }),
       body: { error: 'Method not allowed.' }
     };
     return;
@@ -24,6 +33,7 @@ module.exports = async function actionsGet(context, req) {
   if (!owner || !name) {
     context.res = {
       status: 400,
+      headers: withCorsHeaders(req),
       body: { error: 'Owner and name route parameters are required.' }
     };
     return;
@@ -38,6 +48,7 @@ module.exports = async function actionsGet(context, req) {
     if (!entity) {
       context.res = {
         status: 404,
+        headers: withCorsHeaders(req),
         body: { error: 'Action not found.' }
       };
       return;
@@ -50,6 +61,7 @@ module.exports = async function actionsGet(context, req) {
       context.log.error('Failed to deserialize stored entity: %s', error.message);
       context.res = {
         status: 500,
+        headers: withCorsHeaders(req),
         body: { error: 'Stored action payload is invalid.' }
       };
       return;
@@ -68,12 +80,14 @@ module.exports = async function actionsGet(context, req) {
 
     context.res = {
       status: 200,
+      headers: withCorsHeaders(req),
       body: record.toActionInfo(true, metadata)
     };
   } catch (error) {
     context.log.error('Failed to retrieve action: %s', error.message);
     context.res = {
       status: 500,
+      headers: withCorsHeaders(req),
       body: { error: 'Failed to retrieve action.' }
     };
   }
