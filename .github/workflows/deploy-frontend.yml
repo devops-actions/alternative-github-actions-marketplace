@@ -47,10 +47,19 @@ jobs:
             echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
+
+          swaHost=$(az staticwebapp show --name "$swaName" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "defaultHostname" -o tsv)
+          if [ -z "$swaHost" ]; then
+            echo "::error::Failed to resolve Static Web App hostname for $swaName"
+            exit 1
+          fi
+
           suffix=${swaName#swa-}
           echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+          echo "swa_host=$swaHost" >> $GITHUB_OUTPUT
           echo "suffix=$suffix" >> $GITHUB_OUTPUT
           echo "SWA_NAME=$swaName" >> $GITHUB_ENV
+          echo "SWA_HOST=$swaHost" >> $GITHUB_ENV
 
       - name: Resolve Function App host
         id: functionapp
@@ -135,7 +144,7 @@ jobs:
 
       - name: Wait for SWA + assets to be ready
         env:
-          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_name }}.azurestaticapps.net
+          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_host }}
         run: |
           set -e
           echo "Checking $FRONTEND_BASE_URL"
@@ -167,7 +176,7 @@ jobs:
       - name: Run E2E tests against deployed site
         working-directory: src/frontend
         env:
-          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_name }}.azurestaticapps.net
+          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_host }}
           API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
           PLAYWRIGHT_WORKERS: 4
         run: npm run test:e2e
