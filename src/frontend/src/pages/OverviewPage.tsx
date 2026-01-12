@@ -10,6 +10,7 @@ type OverviewUiState = {
   searchQuery: string;
   typeFilter: ActionTypeFilter;
   showVerifiedOnly: boolean;
+  includeArchived: boolean;
   sortBy: 'updated' | 'dependents';
   currentPage: number;
   scrollY?: number;
@@ -50,6 +51,7 @@ export const OverviewPage: React.FC = () => {
     return candidate && supported.includes(candidate) ? candidate : 'All';
   });
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(() => Boolean(initialPersisted?.showVerifiedOnly));
+  const [includeArchived, setIncludeArchived] = useState(() => Boolean(initialPersisted?.includeArchived));
   const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
   const [currentPage, setCurrentPage] = useState(() => {
     const candidate = Number(initialPersisted?.currentPage);
@@ -64,6 +66,7 @@ export const OverviewPage: React.FC = () => {
     searchQuery,
     typeFilter,
     showVerifiedOnly,
+    includeArchived,
     sortBy
   });
   const restoredScrollRef = useRef(false);
@@ -71,20 +74,22 @@ export const OverviewPage: React.FC = () => {
   const setTypeFilterFromStats = (type: string) => {
     if (type === 'All') {
       setTypeFilter('All');
-      setShowVerifiedOnly(false);
       return;
     }
 
     if (type === 'Verified') {
       setShowVerifiedOnly(true);
-      setTypeFilter('All');
+      return;
+    }
+
+    if (type === 'Archived') {
+      setIncludeArchived(true);
       return;
     }
 
     const supportedTypes: ActionTypeFilter[] = ['Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
     if (supportedTypes.includes(type as ActionTypeFilter)) {
       setTypeFilter(type as ActionTypeFilter);
-      setShowVerifiedOnly(false);
       return;
     }
   };
@@ -93,6 +98,7 @@ export const OverviewPage: React.FC = () => {
     setSearchQuery('');
     setTypeFilter('All');
     setShowVerifiedOnly(false);
+    setIncludeArchived(false);
     setSortBy('updated');
     setCurrentPage(1);
     try {
@@ -140,10 +146,11 @@ export const OverviewPage: React.FC = () => {
       searchQuery,
       typeFilter,
       showVerifiedOnly,
+      includeArchived,
       sortBy,
       currentPage
     });
-  }, [searchQuery, typeFilter, showVerifiedOnly, sortBy, currentPage]);
+  }, [searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy, currentPage]);
 
   useEffect(() => {
     let filtered = actions;
@@ -164,6 +171,10 @@ export const OverviewPage: React.FC = () => {
     }
     if (showVerifiedOnly) {
       filtered = filtered.filter(action => action.verified === true);
+    }
+
+    if (!includeArchived) {
+      filtered = filtered.filter(action => action?.repoInfo?.archived !== true);
     }
 
     // Apply sorting
@@ -187,9 +198,10 @@ export const OverviewPage: React.FC = () => {
       prev.searchQuery !== searchQuery ||
       prev.typeFilter !== typeFilter ||
       prev.showVerifiedOnly !== showVerifiedOnly ||
+      prev.includeArchived !== includeArchived ||
       prev.sortBy !== sortBy;
 
-    prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, sortBy };
+    prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy };
 
     const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     if (filtersChanged) {
@@ -197,7 +209,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -240,6 +252,7 @@ export const OverviewPage: React.FC = () => {
       searchQuery,
       typeFilter,
       showVerifiedOnly,
+      includeArchived,
       sortBy,
       currentPage,
       scrollY: window.scrollY
@@ -316,6 +329,16 @@ export const OverviewPage: React.FC = () => {
             <span className="stat-value">{count.toLocaleString()}</span>
           </button>
         ))}
+        
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('Archived')}
+          aria-label="Include archived actions"
+        >
+          <span className="stat-label">Archived Actions</span>
+          <span className="stat-value">{stats.archived.toLocaleString()}</span>
+        </button>
       </div>
 
       <div className="controls">
@@ -350,7 +373,6 @@ export const OverviewPage: React.FC = () => {
             className={typeFilter === 'All' ? 'active' : ''}
             onClick={() => {
               setTypeFilter('All');
-              setShowVerifiedOnly(false);
             }}
           >
             All
@@ -358,7 +380,6 @@ export const OverviewPage: React.FC = () => {
           <button
             className={typeFilter === 'Node' ? 'active' : ''}
             onClick={() => {
-              setShowVerifiedOnly(false);
               setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node');
             }}
           >
@@ -367,7 +388,6 @@ export const OverviewPage: React.FC = () => {
           <button
             className={typeFilter === 'Docker' ? 'active' : ''}
             onClick={() => {
-              setShowVerifiedOnly(false);
               setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker');
             }}
           >
@@ -376,7 +396,6 @@ export const OverviewPage: React.FC = () => {
           <button
             className={typeFilter === 'Composite' ? 'active' : ''}
             onClick={() => {
-              setShowVerifiedOnly(false);
               setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite');
             }}
           >
@@ -385,7 +404,6 @@ export const OverviewPage: React.FC = () => {
           <button
             className={typeFilter === 'Unknown' ? 'active' : ''}
             onClick={() => {
-              setShowVerifiedOnly(false);
               setTypeFilter(typeFilter === 'Unknown' ? 'All' : 'Unknown');
             }}
           >
@@ -394,7 +412,6 @@ export const OverviewPage: React.FC = () => {
           <button
             className={typeFilter === 'No file found' ? 'active' : ''}
             onClick={() => {
-              setShowVerifiedOnly(false);
               setTypeFilter(typeFilter === 'No file found' ? 'All' : 'No file found');
             }}
           >
@@ -406,6 +423,13 @@ export const OverviewPage: React.FC = () => {
             onClick={() => setShowVerifiedOnly(v => !v)}
           >
             Verified only
+          </button>
+
+          <button
+            className={`${includeArchived ? 'active' : ''} danger`}
+            onClick={() => setIncludeArchived(v => !v)}
+          >
+            Archived
           </button>
         </div>
       </div>

@@ -52,4 +52,5 @@ export interface ActionStats {
   total: number;
   byType: Record<string, number>;
   verified: number;
+  archived: number;
 }

@@ -141,4 +141,5 @@ jobs:
         working-directory: src/frontend
         env:
           FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_name }}.azurestaticapps.net
+          API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
         run: npm run test:e2e

@@ -1,9 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-const getBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
+const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
 
-const fetchFirstAction = async (baseUrl: string) => {
-  const resp = await fetch(`${baseUrl}/api/actions/list`);
+function joinUrl(baseUrl: string, path: string) {
+  const base = baseUrl.replace(/\/+$/, '');
+  const suffix = path.replace(/^\/+/, '');
+  return `${base}/${suffix}`;
+}
+
+const getApiBaseUrl = () => {
+  const explicit = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL;
+  if (explicit) {
+    return explicit;
+  }
+
+  // Fallback for local setups that serve Functions behind /api.
+  return joinUrl(getFrontendBaseUrl(), '/api');
+};
+
+const fetchFirstAction = async () => {
+  const apiBaseUrl = getApiBaseUrl();
+  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'));
   if (!resp.ok) {
     throw new Error(`Failed to fetch actions list: ${resp.status}`);
   }
@@ -16,16 +33,18 @@ const fetchFirstAction = async (baseUrl: string) => {
 
 // Validate the homepage renders and shows at least one action card.
 test('homepage renders and shows actions', async ({ page }) => {
-  const baseUrl = getBaseUrl();
-  await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  const baseUrl = getFrontendBaseUrl();
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+
+  // Cold starts or data fetches can keep the page in the loading state briefly.
+  await expect(page.locator('.action-card').first()).toBeVisible({ timeout: 45000 });
   await expect(page.getByText('Alternative GitHub Actions Marketplace')).toBeVisible();
-  await expect(page.locator('.action-card').first()).toBeVisible();
 });
 
 // Validate a detail page renders using the first action from the API.
 test('detail page renders for first action', async ({ page }) => {
-  const baseUrl = getBaseUrl();
-  const firstAction = await fetchFirstAction(baseUrl);
+  const baseUrl = getFrontendBaseUrl();
+  const firstAction = await fetchFirstAction();
   if (!firstAction) {
     test.skip(true, 'No actions available to test detail page');
   }

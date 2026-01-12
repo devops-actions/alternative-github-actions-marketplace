@@ -25,6 +25,7 @@ module.exports = async function actionsStats(context, req) {
   let total = 0;
   const byType = {};
   let verified = 0;
+  let archived = 0;
 
   try {
     for await (const entity of tableClient.listEntities()) {
@@ -43,14 +44,18 @@ module.exports = async function actionsStats(context, req) {
         if (payload.verified === true) {
           verified += 1;
         }
+
+        if (payload.repoInfo && payload.repoInfo.archived === true) {
+          archived += 1;
+        }
       } catch (parseErr) {
         // skip malformed payloads
       }
     }
 
-    context.log(`ActionsStats: total=${total}, verified=${verified}, table=${tableUrl}`);
+    context.log(`ActionsStats: total=${total}, verified=${verified}, archived=${archived}, table=${tableUrl}`);
 
-    const payload = { total, byType, verified };
+    const payload = { total, byType, verified, archived };
 
     context.res = {
       status: 200,
@@ -58,6 +63,7 @@ module.exports = async function actionsStats(context, req) {
       headers: {
         'X-Actions-Count': total,
         'X-Verified-Count': verified,
+        'X-Archived-Count': archived,
         'X-Table-Endpoint': tableUrl,
         'Content-Type': 'application/json'
       },

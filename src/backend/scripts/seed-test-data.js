@@ -83,7 +83,24 @@ function buildExpandedActions() {
     verified: false
   };
 
-  return [...sampleActions, ...extras, unknownType, noFileFoundType];
+  const archivedRepo = {
+    ...base,
+    owner: 'seed-archived',
+    name: 'seed-archived-action',
+    repoInfo: {
+      ...(base.repoInfo || {}),
+      updated_at: nowIso,
+      archived: true
+    },
+    dependents: {
+      ...(base.dependents || {}),
+      dependentsLastUpdated: nowIso,
+      dependents: '0'
+    },
+    verified: false
+  };
+
+  return [...sampleActions, ...extras, unknownType, noFileFoundType, archivedRepo];
 }
 
 async function seedTestData() {
