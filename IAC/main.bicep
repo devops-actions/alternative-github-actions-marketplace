@@ -16,6 +16,14 @@ param assignTableDataContributor bool = false
 @description('IP CIDRs allowed to reach the Function App (e.g., Static Web Apps outbound IPs). Leave empty to allow all.')
 param functionAllowedIpCidrs array = []
 
+@description('Additional IP CIDRs allowed to reach the Function App for debugging/validation (e.g., your public IP as /32). Leave empty to disable.')
+param functionDebugAllowedIpCidrs array = []
+
+@description('CORS allowed origins for the Function App. Include https://portal.azure.com to enable Azure Portal Test/Run. Add your SWA origin if calling the Function App directly from the browser.')
+param functionCorsAllowedOrigins array = [
+  'https://portal.azure.com'
+]
+
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -23,6 +31,23 @@ var staticWebAppName = 'swa-${uniqueSuffix}'
 var hostingPlanName = 'plan-${uniqueSuffix}'
 var insightsName = 'appi-${uniqueSuffix}'
 var fileShareName = toLower('func${uniqueSuffix}')
+
+var functionIpSecurityRestrictions = concat(
+  [for (cidr, i) in functionDebugAllowedIpCidrs: {
+    name: 'AllowDebug${i}'
+    ipAddress: cidr
+    action: 'Allow'
+    priority: 90 + i
+    description: 'Temporary debug access (e.g., Azure Portal Test/Run)'
+  }],
+  [for (cidr, i) in functionAllowedIpCidrs: {
+    name: 'AllowSWA${i}'
+    ipAddress: cidr
+    action: 'Allow'
+    priority: 100 + i
+    description: 'Static Web Apps outbound IP'
+  }]
+)
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -82,6 +107,9 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
     serverFarmId: hostingPlan.id
     siteConfig: {
       nodeVersion: '~22'
+      cors: {
+        allowedOrigins: functionCorsAllowedOrigins
+      }
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
@@ -128,14 +156,8 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           value: '1'
         }
       ]
-      ipSecurityRestrictions: [for (cidr, i) in functionAllowedIpCidrs: {
-        name: 'AllowSWA${i}'
-        ipAddress: cidr
-        action: 'Allow'
-        priority: 100 + i
-        description: 'Static Web Apps outbound IP'
-      }]
-      ipSecurityRestrictionsDefaultAction: length(functionAllowedIpCidrs) > 0 ? 'Deny' : 'Allow'
+      ipSecurityRestrictions: functionIpSecurityRestrictions
+      ipSecurityRestrictionsDefaultAction: (length(functionAllowedIpCidrs) > 0 || length(functionDebugAllowedIpCidrs) > 0) ? 'Deny' : 'Allow'
       scmIpSecurityRestrictionsUseMain: false
     }
   }
