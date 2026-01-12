@@ -50,6 +50,26 @@ jobs:
         run: npm prune --omit=dev
         working-directory: src/backend
 
+      - name: Resolve Function App name and host
+        run: |
+          appName=$(az functionapp list \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
+
+          if [ -z "$appName" ]; then
+            echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+
+          hostName=$(az functionapp show \
+            --name "$appName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "defaultHostName" -o tsv)
+
+          echo "FUNCTION_APP_NAME=$appName" >> "$GITHUB_ENV"
+          echo "FUNCTION_APP_HOSTNAME=$hostName" >> "$GITHUB_ENV"
+          echo "Resolved Function App: $appName ($hostName)"
+
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2.3.0
         with:
@@ -80,3 +100,15 @@ jobs:
         with:
           app-name: ${{ env.FUNCTION_APP_NAME }}
           package: functionapp.zip
+
+      - name: Smoke test via client (list actions)
+        working-directory: src/backend
+        env:
+          API_URL: https://${{ env.FUNCTION_APP_HOSTNAME }}/api
+        run: node examples/list-actions.js
+
+      - name: Smoke test via client (stats)
+        working-directory: src/backend
+        env:
+          API_URL: https://${{ env.FUNCTION_APP_HOSTNAME }}/api
+        run: node -e "require('./examples/list-actions.js').statsExample()"
