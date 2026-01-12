@@ -11,7 +11,9 @@ module.exports = async function actionsList(context, req) {
     return;
   }
 
-  const owner = context.bindingData && context.bindingData.owner;
+  const owner = (req && req.query && req.query.owner)
+    ? String(req.query.owner)
+    : (context.bindingData && context.bindingData.owner);
   const tableClient = getTableClient();
   const tableUrl = tableClient && tableClient.url ? tableClient.url.split('?')[0] : 'unknown';
   let entities = [];
