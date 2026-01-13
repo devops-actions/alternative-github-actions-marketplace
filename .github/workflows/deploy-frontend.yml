@@ -41,12 +41,22 @@ jobs:
 
       - name: Resolve Static Web App name and suffix
         run: |
-          read -r swaName swaHost < <(az staticwebapp list \
+          swaName=$(az staticwebapp list \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "[0].[name, defaultHostname]" -o tsv)
+            --query "[0].name" -o tsv)
 
-          if [ -z "$swaName" ] || [ -z "$swaHost" ]; then
+          if [ -z "$swaName" ]; then
             echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+
+          swaHost=$(az staticwebapp show \
+            --name "$swaName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "defaultHostname" -o tsv)
+
+          if [ -z "$swaHost" ]; then
+            echo "::error::Failed to resolve Static Web App hostname for $swaName"
             exit 1
           fi
 
