@@ -390,14 +390,19 @@ jobs:
             --name "$FUNCTION_APP_NAME" \
             --query "ipSecurityRestrictions[].priority" -o tsv | tr '\t' '\n' | grep -E '^[0-9]+$' || true)
 
-          if [ -z "$priorities" ]; then
-            priority=100
-          else
-            maxPriority=$(printf '%s\n' "$priorities" | sort -n | tail -n 1)
-            priority=$((maxPriority + 1))
-            if [ "$priority" -lt 100 ]; then
-              priority=100
+          # Azure uses a catch-all "Allow all" rule with priority 2147483647 (max int). Do not attempt to go above it.
+          # Pick the first available priority starting from 100.
+          priority=""
+          for p in $(seq 100 500); do
+            if ! printf '%s\n' "$priorities" | grep -qx "$p"; then
+              priority="$p"
+              break
             fi
+          done
+
+          if [ -z "$priority" ]; then
+            echo "::error::Failed to find a free access restriction priority in range 100-500"
+            exit 1
           fi
 
           echo "Using allow rule priority: $priority"
