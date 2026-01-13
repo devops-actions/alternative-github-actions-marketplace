@@ -1,5 +1,9 @@
 import { defineConfig } from '@playwright/test';
 import os from 'node:os';
+import { config as dotenvConfig } from 'dotenv';
+
+// Load .env file for local testing if present.
+dotenvConfig();
 
 const baseURL = process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
 

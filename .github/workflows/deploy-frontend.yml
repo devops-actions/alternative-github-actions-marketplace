@@ -64,12 +64,15 @@ jobs:
       - name: Resolve Function App host
         id: functionapp
         run: |
+          funcName=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
           funcHost=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].defaultHostName" -o tsv)
-          if [ -z "$funcHost" ]; then
+          if [ -z "$funcHost" ] || [ -z "$funcName" ]; then
             echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
+          echo "function_name=$funcName" >> $GITHUB_OUTPUT
           echo "function_host=$funcHost" >> $GITHUB_OUTPUT
+          echo "FUNCTION_APP_NAME=$funcName" >> $GITHUB_ENV
 
       - name: Resolve App Insights connection string
         id: appinsights
@@ -169,6 +172,29 @@ jobs:
           curl -fsSI "$API_BASE_URL/actions/list" >/dev/null
           set -e
 
+      - name: Temporarily allow GitHub runner IP (for E2E tests)
+        run: |
+          set -e
+          runnerIp=$(curl -s https://api.ipify.org)
+          if [ -z "$runnerIp" ]; then
+            echo "::error::Failed to determine runner public IP"
+            exit 1
+          fi
+
+          echo "Runner public IP: $runnerIp"
+
+          az functionapp config access-restriction add \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ steps.functionapp.outputs.function_name }}" \
+            --rule-name "AllowGitHubRunnerE2E" \
+            --action Allow \
+            --ip-address "$runnerIp/32" \
+            --priority 88 \
+            --description "Temporary allow for GitHub Actions E2E tests"
+
+          sleep 10
+          echo "RUNNER_PUBLIC_IP=$runnerIp" >> $GITHUB_ENV
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
         working-directory: src/frontend
@@ -180,6 +206,16 @@ jobs:
           API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
           PLAYWRIGHT_WORKERS: 4
         run: npm run test:e2e
+
+      - name: Remove temporary GitHub runner allow rule
+        if: always()
+        run: |
+          set +e
+          az functionapp config access-restriction remove \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ steps.functionapp.outputs.function_name }}" \
+            --rule-name "AllowGitHubRunnerE2E"
+          exit 0
 
       - name: Upload Playwright report (on failure)
         if: failure()

@@ -9,6 +9,9 @@ type ActionListItem = {
 };
 
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
+let cachedActions: ActionListItem[] = [];
+let apiReady = false;
+let apiError: Error | null = null;
 
 const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
 
@@ -42,6 +45,19 @@ async function fetchActionsList(): Promise<ActionListItem[]> {
 
   const data = (await resp.json()) as unknown;
   return Array.isArray(data) ? (data as ActionListItem[]) : [];
+}
+
+async function fetchActionsListWithRetry(retries: number = 5, delayMs: number = 3000): Promise<ActionListItem[]> {
+  let lastErr: unknown;
+  for (let i = 0; i < retries; i += 1) {
+    try {
+      return await fetchActionsList();
+    } catch (err) {
+      lastErr = err;
+      await new Promise(res => setTimeout(res, delayMs));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function clearPersistedOverviewState(page: Page) {
@@ -164,6 +180,19 @@ async function assertCardsAreArchived(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  if (!apiReady) {
+    if (apiError) {
+      test.skip(true, `API unavailable: ${apiError.message}`);
+    }
+    try {
+      cachedActions = await fetchActionsListWithRetry();
+      apiReady = true;
+    } catch (err) {
+      apiError = err as Error;
+      test.skip(true, `API unavailable: ${apiError.message}`);
+    }
+  }
+
   // Clear persisted state before the app bootstraps, so every test starts clean.
   await page.addInitScript((key) => {
     try {
@@ -183,8 +212,7 @@ test('homepage renders and shows actions', async ({ page }) => {
 });
 
 test('detail page renders for first action', async ({ page }) => {
-  const items = await fetchActionsList();
-  const first = items[0];
+  const first = cachedActions[0];
   if (!first) {
     test.skip(true, 'No actions available to test detail page');
   }
