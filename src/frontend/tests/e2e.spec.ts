@@ -254,10 +254,20 @@ test.beforeEach(async ({ page }) => {
     }
   }
 
-  // Clear persisted state before the app bootstraps, so every test starts clean.
+  // Clear persisted state once before the first document load for this test.
+  // Important: many tests validate state persists across refresh, so do not clear on reload.
   await page.addInitScript((key) => {
     try {
-      sessionStorage.removeItem(key);
+      const token = '__e2e_overview_state_cleared__';
+      if (typeof window.name === 'string' && window.name.includes(token)) {
+        return;
+      }
+      try {
+        sessionStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+      window.name = typeof window.name === 'string' ? `${window.name}${token}` : token;
     } catch {
       // ignore
     }
