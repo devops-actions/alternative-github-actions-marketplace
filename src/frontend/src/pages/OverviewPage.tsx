@@ -121,24 +121,42 @@ export const OverviewPage: React.FC = () => {
     };
   }, []);
 
-  const loadData = async () => {
-    try {
-      if (actionsService.getActions().length === 0 && actionsService.getStats().total === 0) {
-        setLoading(true);
-      }
-      const [statsData, actionsData] = await Promise.all([
-        actionsService.fetchStats(),
-        actionsService.fetchActions()
-      ]);
-      setStats(statsData);
-      setActions(actionsData);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load actions. Please try again later.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const loadData = async (options?: { retries?: number }) => {
+    // Cold starts + large payloads can take a while; retry a bit longer before showing an error.
+    const retries = Math.max(0, options?.retries ?? 5);
+    const hadNoData = actionsService.getActions().length === 0 && actionsService.getStats().total === 0;
+
+    if (hadNoData) {
+      setLoading(true);
     }
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const force = attempt > 0;
+        const [statsData, actionsData] = await Promise.all([
+          actionsService.fetchStats(force),
+          actionsService.fetchActions(force)
+        ]);
+        setStats(statsData);
+        setActions(actionsData);
+        setError(null);
+        setLoading(false);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt >= retries) {
+          break;
+        }
+        const delayMs = Math.min(2500 * (attempt + 1), 15000);
+        console.warn(`Overview load failed (attempt ${attempt + 1}/${retries + 1}); retrying in ${delayMs}ms`, err);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    setError('Failed to load actions. Please try again later.');
+    console.error(lastErr);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -282,9 +300,15 @@ export const OverviewPage: React.FC = () => {
   }
 
   if (error) {
+    const empty = actions.length === 0 && stats.total === 0;
     return (
       <div className="app">
         <div className="error-message">{error}</div>
+        {empty && (
+          <button type="button" onClick={() => loadData()} style={{ marginTop: 12 }}>
+            Retry
+          </button>
+        )}
       </div>
     );
   }

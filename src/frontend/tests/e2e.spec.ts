@@ -71,15 +71,42 @@ async function clearPersistedOverviewState(page: Page) {
 }
 
 async function waitForOverviewSettled(page: Page) {
-  // The app can be in one of these end states after loadData completes.
-  const terminalState = page.locator('.action-card, .no-results, .error-message').first();
-  await expect(terminalState).toBeVisible({ timeout: 150000 });
+  const start = Date.now();
+  const overallTimeoutMs = 240000;
+  const errorGraceMs = 90000;
 
-  const errorMessage = page.locator('.error-message');
-  if (await errorMessage.isVisible()) {
-    const text = (await errorMessage.innerText()).trim();
-    throw new Error(`UI shows an error state: ${text || '(empty error message)'}`);
+  const cards = page.locator('.action-card').first();
+  const noResults = page.locator('.no-results').first();
+  const errorMessage = page.locator('.error-message').first();
+
+  let errorSince: number | null = null;
+  let lastErrorText = '';
+
+  while (Date.now() - start < overallTimeoutMs) {
+    if (await cards.isVisible().catch(() => false)) {
+      return;
+    }
+    if (await noResults.isVisible().catch(() => false)) {
+      return;
+    }
+
+    if (await errorMessage.isVisible().catch(() => false)) {
+      if (errorSince === null) {
+        errorSince = Date.now();
+      }
+      lastErrorText = ((await errorMessage.innerText().catch(() => '')) || '').trim();
+      if (Date.now() - errorSince > errorGraceMs) {
+        throw new Error(`UI shows an error state: ${lastErrorText || '(empty error message)'}`);
+      }
+    } else {
+      errorSince = null;
+      lastErrorText = '';
+    }
+
+    await page.waitForTimeout(1000);
   }
+
+  throw new Error(`Overview did not settle within ${overallTimeoutMs}ms. lastError=${lastErrorText || '(none)'}`);
 }
 
 type PageDiagnostics = {

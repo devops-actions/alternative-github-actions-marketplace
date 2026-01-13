@@ -179,10 +179,27 @@ jobs:
 
       - name: Pre-warm API endpoints
         run: |
-          set +e
-          curl -fsSI "$API_BASE_URL/actions/stats" >/dev/null
-          curl -fsSI "$API_BASE_URL/actions/list" >/dev/null
           set -e
+          echo "Warming up API at $API_BASE_URL"
+
+          # Prefer warming up the small stats payload rather than repeatedly downloading the full list.
+          for i in $(seq 1 60); do
+            echo "Attempt $i/60"
+            code=$(curl -sS -o /tmp/actions-stats.json -w "%{http_code}" \
+              --connect-timeout 5 --max-time 30 \
+              "$API_BASE_URL/actions/stats" || true)
+            if [ "$code" = "200" ]; then
+              # Basic sanity check: response looks like JSON and contains a total field.
+              if head -c 200 /tmp/actions-stats.json | grep -q '"total"'; then
+                echo "API stats ready"
+                break
+              fi
+              echo "Stats returned 200 but did not include expected payload yet"
+            else
+              echo "Stats not ready yet (http=$code)"
+            fi
+            sleep 5
+          done
 
       - name: Temporarily allow GitHub runner IP (for E2E tests)
         run: |
