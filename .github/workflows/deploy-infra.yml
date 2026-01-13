@@ -1,5 +1,9 @@
 name: Deploy IaC
 
+concurrency:
+  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   push:

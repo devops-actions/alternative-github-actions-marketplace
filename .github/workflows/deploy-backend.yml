@@ -1,5 +1,9 @@
 name: Deploy Backend
 
+concurrency:
+  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   push:
@@ -121,11 +125,14 @@ jobs:
 
           echo "Runner public IP: $runnerIp"
 
+          ruleName="AllowGitHubRunnerSmokeTest-${GITHUB_RUN_ID}"
+          echo "ALLOW_SMOKE_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
+
           # Allow this runner IP so smoke tests can reach the app when access restrictions are locked down to SWA IPs.
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --rule-name "AllowGitHubRunnerSmokeTest" \
+            --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
             --priority 89 \
@@ -193,7 +200,7 @@ jobs:
           az functionapp config access-restriction remove \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --rule-name "AllowGitHubRunnerSmokeTest"
+            --rule-name "$ALLOW_SMOKE_RULE_NAME"
           exit 0
 
       - name: Report smoke test errors

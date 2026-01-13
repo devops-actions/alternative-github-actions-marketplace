@@ -1,5 +1,9 @@
 name: Deploy Frontend
 
+concurrency:
+  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   push:
@@ -212,10 +216,13 @@ jobs:
 
           echo "Runner public IP: $runnerIp"
 
+          ruleName="AllowGitHubRunnerE2E-${GITHUB_RUN_ID}"
+          echo "ALLOW_RULE_NAME=$ruleName" >> $GITHUB_ENV
+
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --rule-name "AllowGitHubRunnerE2E" \
+            --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
             --priority 88 \
@@ -266,6 +273,31 @@ jobs:
             exit 1
           fi
 
+          echo
+          echo "--- GET /actions/stats with Origin header ---"
+          statsCode=$(curl -sS -D /tmp/actions-stats.headers -o /tmp/actions-stats.json -w "%{http_code}" \
+            -H "Origin: $FRONTEND_BASE_URL" \
+            "$API_BASE_URL/actions/stats" || true)
+          sed -n '1,25p' /tmp/actions-stats.headers || true
+          if [ "$statsCode" != "200" ]; then
+            echo "::error::GET /actions/stats failed (http=$statsCode)"
+            exit 1
+          fi
+          head -c 200 /tmp/actions-stats.json || true
+
+          echo
+          echo "--- OPTIONS preflight /actions/stats ---"
+          statsOptCode=$(curl -sS -D /tmp/actions-stats.options.headers -o /dev/null -w "%{http_code}" -X OPTIONS \
+            -H "Origin: $FRONTEND_BASE_URL" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: content-type" \
+            "$API_BASE_URL/actions/stats" || true)
+          sed -n '1,25p' /tmp/actions-stats.options.headers || true
+          if [ "$statsOptCode" != "204" ]; then
+            echo "::error::OPTIONS preflight for /actions/stats failed (http=$statsOptCode). Browser requests may fail due to CORS preflight."
+            exit 1
+          fi
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
         working-directory: src/frontend
@@ -283,7 +315,7 @@ jobs:
           az functionapp config access-restriction remove \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --rule-name "AllowGitHubRunnerE2E"
+            --rule-name "$ALLOW_RULE_NAME"
           exit 0
 
       - name: Upload Playwright report (on failure)
