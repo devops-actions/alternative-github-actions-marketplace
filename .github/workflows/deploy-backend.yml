@@ -1,17 +1,7 @@
 name: Deploy Backend
 
-concurrency:
-  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
-  cancel-in-progress: false
-
 on:
   workflow_dispatch:
-  push:
-    #branches:
-      #- main
-    paths:
-      - 'src/backend/**'
-      - '.github/workflows/deploy-backend.yml'
 
 env:
   # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/

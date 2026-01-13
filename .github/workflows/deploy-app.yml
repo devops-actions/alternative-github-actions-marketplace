@@ -1,9 +1,33 @@
-name: Deploy Frontend
+name: Deploy App (Frontend + Backend)
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_frontend:
+        description: 'Deploy the frontend (SWA)'
+        required: true
+        default: true
+        type: boolean
+      deploy_backend:
+        description: 'Deploy the backend (Function App)'
+        required: true
+        default: true
+        type: boolean
+      run_e2e:
+        description: 'Run Playwright E2E tests (uses temporary runner allow rule)'
+        required: true
+        default: true
+        type: boolean
+  push:
+    #branches:
+    #  - main
+    paths:
+      - 'src/frontend/**'
+      - 'src/backend/**'
+      - '.github/workflows/deploy-app.yml'
 
 env:
+  # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
   AZURE_CORE_ONLY_SHOW_ERRORS: true
   AZURE_CORE_ERROR_RECOMMENDATION: false
   AZURE_CORE_COLLECT_TELEMETRY: false
@@ -18,10 +42,40 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy Frontend
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'src/frontend/**'
+            backend:
+              - 'src/backend/**'
+
+  resolve:
+    name: Resolve Azure resource hosts
+    runs-on: ubuntu-latest
+    needs: changes
     environment: prod
+    outputs:
+      swa_name: ${{ steps.resolve.outputs.swa_name }}
+      swa_host: ${{ steps.resolve.outputs.swa_host }}
+      swa_suffix: ${{ steps.resolve.outputs.swa_suffix }}
+      frontend_base_url: ${{ steps.resolve.outputs.frontend_base_url }}
+      function_app_name: ${{ steps.resolve.outputs.function_app_name }}
+      function_app_host: ${{ steps.resolve.outputs.function_app_host }}
+      api_base_url: ${{ steps.resolve.outputs.api_base_url }}
+      appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -33,8 +87,11 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Resolve Static Web App name and suffix
+      - name: Resolve Static Web App and Function App hosts
+        id: resolve
         run: |
+          set -euo pipefail
+
           swaName=$(az staticwebapp list \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --query "[0].name" -o tsv)
@@ -55,13 +112,7 @@ jobs:
           fi
 
           suffix=${swaName#swa-}
-          echo "SWA_NAME=$swaName" >> $GITHUB_ENV
-          echo "SWA_HOST=$swaHost" >> $GITHUB_ENV
-          echo "SWA_SUFFIX=$suffix" >> $GITHUB_ENV
-          echo "FRONTEND_BASE_URL=https://$swaHost" >> $GITHUB_ENV
 
-      - name: Resolve Function App host
-        run: |
           funcName=$(az functionapp list \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
@@ -80,14 +131,23 @@ jobs:
             echo "::error::Failed to resolve Function App hostname for $funcName"
             exit 1
           fi
-          echo "FUNCTION_APP_NAME=$funcName" >> $GITHUB_ENV
-          echo "FUNCTION_APP_HOST=$funcHost" >> $GITHUB_ENV
-          echo "API_BASE_URL=https://$funcHost/api" >> $GITHUB_ENV
+
+          {
+            echo "swa_name=$swaName"
+            echo "swa_host=$swaHost"
+            echo "swa_suffix=$suffix"
+            echo "frontend_base_url=https://$swaHost"
+            echo "function_app_name=$funcName"
+            echo "function_app_host=$funcHost"
+            echo "api_base_url=https://$funcHost/api"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
-          suffix="$SWA_SUFFIX"
+          set -euo pipefail
+
+          suffix="${{ steps.resolve.outputs.swa_suffix }}"
           if [ -z "$suffix" ]; then
             echo "::error::Missing Static Web App suffix; cannot resolve App Insights name"
             exit 1
@@ -101,51 +161,143 @@ jobs:
             --query "properties.ConnectionString" -o tsv)
 
           if [ -z "$connection" ]; then
-            # Fallback to first component in case naming diverged
             connection=$(az resource list \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --resource-type "microsoft.insights/components" \
               --query "[0].properties.ConnectionString" -o tsv)
           fi
+
           if [ -z "$connection" ]; then
             echo "::error::No Application Insights resource found in RG ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
-          echo "connection_string=$connection" >> $GITHUB_OUTPUT
+
+          echo "connection_string=$connection" >> "$GITHUB_OUTPUT"
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [changes, resolve]
+    environment: prod
+    env:
+      DO_BACKEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_backend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.backend == 'true') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Syntax check non-project JavaScript files
+        if: ${{ env.DO_BACKEND == 'true' }}
+        run: |
+          set -e
+          files=$(git ls-files '*.js' | grep -vE '^src/(backend|frontend)/' | grep -vE '^src/frontend/dist/' || true)
+          if [ -z "$files" ]; then
+            echo "No non-project JS files to check."
+            exit 0
+          fi
+          echo "$files" | while read -r f; do
+            echo "node -c $f"
+            node -c "$f"
+          done
 
       - name: Set up Node.js
+        if: ${{ env.DO_BACKEND == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Install dependencies
+        if: ${{ env.DO_BACKEND == 'true' }}
+        run: npm ci
+        working-directory: src/backend
+
+      - name: Syntax check backend example scripts
+        if: ${{ env.DO_BACKEND == 'true' }}
+        run: node -c examples/list-actions.js
+        working-directory: src/backend
+
+      - name: Run unit tests
+        if: ${{ env.DO_BACKEND == 'true' }}
+        run: npm test
+        working-directory: src/backend
+
+      - name: Log in to Azure (OIDC)
+        if: ${{ env.DO_BACKEND == 'true' }}
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Package function app
+        if: ${{ env.DO_BACKEND == 'true' }}
+        working-directory: src/backend
+        run: zip -r ../../functionapp.zip . -x "*.git*" "node_modules/.cache/*" "tests/*"
+
+      - name: Deploy function app
+        if: ${{ env.DO_BACKEND == 'true' }}
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ needs.resolve.outputs.function_app_name }}
+          package: functionapp.zip
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [changes, resolve]
+    environment: prod
+    env:
+      DO_FRONTEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend == 'true') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        if: ${{ env.DO_FRONTEND == 'true' }}
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Node.js
+        if: ${{ env.DO_FRONTEND == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        if: ${{ env.DO_FRONTEND == 'true' }}
         run: npm ci
         working-directory: src/frontend
 
       - name: Build frontend
+        if: ${{ env.DO_FRONTEND == 'true' }}
         run: |
-          VITE_API_BASE_URL="$API_BASE_URL" \
-          VITE_APPINSIGHTS_CONNECTION_STRING="${{ steps.appinsights.outputs.connection_string }}" \
+          VITE_API_BASE_URL="${{ needs.resolve.outputs.api_base_url }}" \
+          VITE_APPINSIGHTS_CONNECTION_STRING="${{ needs.resolve.outputs.appinsights_connection_string }}" \
           npm run build
         working-directory: src/frontend
 
       - name: Get Static Web App deployment token
+        if: ${{ env.DO_FRONTEND == 'true' }}
         id: swa-token
         run: |
-          swaName="$SWA_NAME"
+          set -euo pipefail
+          swaName="${{ needs.resolve.outputs.swa_name }}"
           if [ -z "$swaName" ]; then
             echo "::error::No static web app name available"
             exit 1
           fi
           token=$(az staticwebapp secrets list --name "$swaName" --query "properties.apiKey" -o tsv)
           echo "::add-mask::$token"
-          echo "deployment_token=$token" >> $GITHUB_OUTPUT
+          echo "deployment_token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Copy staticwebapp.config.json into dist
-        run: |
-          cp src/frontend/staticwebapp.config.json src/frontend/dist/
+        if: ${{ env.DO_FRONTEND == 'true' }}
+        run: cp src/frontend/staticwebapp.config.json src/frontend/dist/
 
       - name: Deploy to Azure Static Web Apps (prebuilt dist)
+        if: ${{ env.DO_FRONTEND == 'true' }}
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.deployment_token }}
@@ -155,7 +307,26 @@ jobs:
           skip_app_build: true
           skip_api_build: true
 
+  validate:
+    name: Smoke + Diagnose + E2E
+    runs-on: ubuntu-latest
+    needs: [changes, resolve, deploy-backend, deploy-frontend]
+    environment: prod
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_e2e == true) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true')) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Wait for SWA + assets to be ready
+        env:
+          FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
         run: |
           set -e
           echo "Checking $FRONTEND_BASE_URL"
@@ -172,18 +343,18 @@ jobs:
           done
 
       - name: Pre-warm API endpoints
+        env:
+          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
         run: |
           set -e
           echo "Warming up API at $API_BASE_URL"
 
-          # Prefer warming up the small stats payload rather than repeatedly downloading the full list.
           for i in $(seq 1 60); do
             echo "Attempt $i/60"
             code=$(curl -sS -o /tmp/actions-stats.json -w "%{http_code}" \
               --connect-timeout 5 --max-time 30 \
               "$API_BASE_URL/actions/stats" || true)
             if [ "$code" = "200" ]; then
-              # Basic sanity check: response looks like JSON and contains a total field.
               if head -c 200 /tmp/actions-stats.json | grep -q '"total"'; then
                 echo "API stats ready"
                 break
@@ -195,7 +366,9 @@ jobs:
             sleep 5
           done
 
-      - name: Temporarily allow GitHub runner IP (for E2E tests)
+      - name: Temporarily allow GitHub runner IP (for smoke + E2E)
+        env:
+          FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
         run: |
           set -e
           runnerIp=$(curl -s https://api.ipify.org)
@@ -206,8 +379,8 @@ jobs:
 
           echo "Runner public IP: $runnerIp"
 
-          ruleName="AllowGitHubRunnerE2E-${GITHUB_RUN_ID}"
-          echo "ALLOW_RULE_NAME=$ruleName" >> $GITHUB_ENV
+          ruleName="AllowGitHubRunnerValidate-${GITHUB_RUN_ID}"
+          echo "ALLOW_VALIDATE_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
 
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
@@ -216,12 +389,16 @@ jobs:
             --action Allow \
             --ip-address "$runnerIp/32" \
             --priority 88 \
-            --description "Temporary allow for GitHub Actions E2E tests"
+            --description "Temporary allow for GitHub Actions validate (smoke + E2E)"
 
           sleep 10
-          echo "RUNNER_PUBLIC_IP=$runnerIp" >> $GITHUB_ENV
+          echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
 
       - name: Diagnose API access + CORS (runner + browser origin)
+        env:
+          FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
+          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
+          FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
         run: |
           set -euo pipefail
           echo "FRONTEND_BASE_URL=$FRONTEND_BASE_URL"
@@ -248,8 +425,6 @@ jobs:
             echo "::error::GET /actions/list failed (http=$getCode)"
             exit 1
           fi
-          head -c 200 /tmp/actions-list.json || true
-          echo
 
           echo "--- OPTIONS preflight /actions/list ---"
           optCode=$(curl -sS -D /tmp/actions-list.options.headers -o /dev/null -w "%{http_code}" -X OPTIONS \
@@ -259,11 +434,10 @@ jobs:
             "$API_BASE_URL/actions/list" || true)
           sed -n '1,25p' /tmp/actions-list.options.headers || true
           if [ "$optCode" != "204" ]; then
-            echo "::error::OPTIONS preflight for /actions/list failed (http=$optCode). Browser requests may fail due to CORS preflight."
+            echo "::error::OPTIONS preflight for /actions/list failed (http=$optCode)."
             exit 1
           fi
 
-          echo
           echo "--- GET /actions/stats with Origin header ---"
           statsCode=$(curl -sS -D /tmp/actions-stats.headers -o /tmp/actions-stats.json -w "%{http_code}" \
             -H "Origin: $FRONTEND_BASE_URL" \
@@ -273,9 +447,7 @@ jobs:
             echo "::error::GET /actions/stats failed (http=$statsCode)"
             exit 1
           fi
-          head -c 200 /tmp/actions-stats.json || true
 
-          echo
           echo "--- OPTIONS preflight /actions/stats ---"
           statsOptCode=$(curl -sS -D /tmp/actions-stats.options.headers -o /dev/null -w "%{http_code}" -X OPTIONS \
             -H "Origin: $FRONTEND_BASE_URL" \
@@ -284,9 +456,34 @@ jobs:
             "$API_BASE_URL/actions/stats" || true)
           sed -n '1,25p' /tmp/actions-stats.options.headers || true
           if [ "$statsOptCode" != "204" ]; then
-            echo "::error::OPTIONS preflight for /actions/stats failed (http=$statsOptCode). Browser requests may fail due to CORS preflight."
+            echo "::error::OPTIONS preflight for /actions/stats failed (http=$statsOptCode)."
             exit 1
           fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend deps (for smoke via examples)
+        run: npm ci
+        working-directory: src/backend
+
+      - name: Backend smoke test via client (list actions)
+        env:
+          API_URL: ${{ needs.resolve.outputs.api_base_url }}
+        working-directory: src/backend
+        run: node examples/list-actions.js
+
+      - name: Backend smoke test via client (stats)
+        env:
+          API_URL: ${{ needs.resolve.outputs.api_base_url }}
+        working-directory: src/backend
+        run: node -e "require('./examples/list-actions.js').statsExample()"
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: src/frontend
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
@@ -299,13 +496,15 @@ jobs:
         run: npm run test:e2e
 
       - name: Remove temporary GitHub runner allow rule
-        if: always()
+        if: ${{ always() }}
+        env:
+          FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
         run: |
           set +e
           az functionapp config access-restriction remove \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --rule-name "$ALLOW_RULE_NAME"
+            --rule-name "$ALLOW_VALIDATE_RULE_NAME"
           exit 0
 
       - name: Upload Playwright report (on failure)
