@@ -70,6 +70,11 @@ async function clearPersistedOverviewState(page: Page) {
   }, OVERVIEW_STATE_KEY);
 }
 
+function typeFilterGroup(page: Page) {
+  // The controls bar has two filter groups; the second contains the type filter buttons.
+  return page.locator('.filter-group').filter({ hasText: 'Type:' }).first();
+}
+
 async function waitForOverviewSettled(page: Page) {
   const start = Date.now();
   const overallTimeoutMs = 240000;
@@ -145,7 +150,7 @@ async function ensureActionsVisible(page: Page) {
 }
 
 async function resetFilters(page: Page) {
-  await page.getByRole('button', { name: 'All' }).click();
+  await typeFilterGroup(page).getByRole('button', { name: 'All', exact: true }).click();
 
   const verifiedOnly = page.getByRole('button', { name: 'Verified only' });
   if (await verifiedOnly.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
@@ -362,7 +367,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
       await ensureActionsVisible(page);
       await resetFilters(page);
 
-      await page.getByRole('button', { name: c.ariaLabel }).click();
+      await typeFilterGroup(page).getByRole('button', { name: c.ariaLabel, exact: true }).click();
       await ensureActionsVisible(page);
 
       // Refresh (simulates F5) and ensure state is preserved.
@@ -397,7 +402,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
         }
       }
 
-      await page.getByRole('button', { name: label }).click();
+      await typeFilterGroup(page).getByRole('button', { name: label, exact: true }).click();
       await ensureActionsVisible(page);
 
       await page.reload({ waitUntil: 'domcontentloaded' });
