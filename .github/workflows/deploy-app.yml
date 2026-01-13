@@ -535,7 +535,7 @@ jobs:
           FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
           API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
           PLAYWRIGHT_WORKERS: 12
-        run: npm run test:e2e
+        run: npm run test:e2e -- --reporter=list
 
       - name: Remove temporary GitHub runner allow rule
         if: ${{ always() }}
