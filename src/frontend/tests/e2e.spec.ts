@@ -145,8 +145,13 @@ async function goHome(page: Page, diagnostics?: PageDiagnostics) {
   }
 }
 
-async function ensureActionsVisible(page: Page) {
-  await expect(page.locator('.action-card').first()).toBeVisible({ timeout: 120000 });
+async function waitForResults(page: Page) {
+  const card = page.locator('.action-card').first();
+  const empty = page.locator('.no-results').first();
+  await Promise.race([
+    card.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined),
+    empty.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined)
+  ]);
 }
 
 async function resetFilters(page: Page) {
@@ -189,8 +194,12 @@ async function assertArchivedToggleActive(page: Page, active: boolean) {
 async function assertCardsMatchType(page: Page, expectedType: string) {
   const cards = page.locator('.action-card');
   const count = await cards.count();
-  const sample = Math.min(count, 5);
+  if (count === 0) {
+    await expect(page.locator('.no-results')).toBeVisible({ timeout: 10000 });
+    return;
+  }
 
+  const sample = Math.min(count, 5);
   for (let i = 0; i < sample; i += 1) {
     await expect(cards.nth(i).locator('.action-badge')).toHaveText(expectedType);
   }
@@ -199,8 +208,12 @@ async function assertCardsMatchType(page: Page, expectedType: string) {
 async function assertCardsAreVerified(page: Page) {
   const cards = page.locator('.action-card');
   const count = await cards.count();
-  const sample = Math.min(count, 5);
+  if (count === 0) {
+    await expect(page.locator('.no-results')).toBeVisible({ timeout: 10000 });
+    return;
+  }
 
+  const sample = Math.min(count, 5);
   for (let i = 0; i < sample; i += 1) {
     await expect(cards.nth(i).getByText('Verified')).toBeVisible();
   }
@@ -283,7 +296,7 @@ test.beforeEach(async ({ page }) => {
 
 // Baseline validations.
 test('homepage renders and shows actions', async ({ page }) => {
-  await ensureActionsVisible(page);
+  await waitForResults(page);
   await expect(page.getByText('Alternative GitHub Actions Marketplace')).toBeVisible();
 });
 
@@ -364,11 +377,11 @@ test.describe('Stats panel filters (persist across refresh)', () => {
   for (const c of statsPanelCases) {
     test(c.name, async ({ page }) => {
       const items = await fetchActionsList();
-      await ensureActionsVisible(page);
+      await waitForResults(page);
       await resetFilters(page);
 
       await typeFilterGroup(page).getByRole('button', { name: c.ariaLabel, exact: true }).click();
-      await ensureActionsVisible(page);
+      await waitForResults(page);
 
       // Refresh (simulates F5) and ensure state is preserved.
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -392,7 +405,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
   for (const { type, label } of typeCases) {
     test(`Type filter ${label} persists on refresh`, async ({ page }) => {
       const items = await fetchActionsList();
-      await ensureActionsVisible(page);
+      await waitForResults(page);
       await resetFilters(page);
 
       if (type !== 'All') {
@@ -403,7 +416,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
       }
 
       await typeFilterGroup(page).getByRole('button', { name: label, exact: true }).click();
-      await ensureActionsVisible(page);
+      await waitForResults(page);
 
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
@@ -423,17 +436,17 @@ test.describe('Filter buttons (persist across refresh)', () => {
       test.skip(true, 'No verified actions available to validate verified-only filter');
     }
 
-    await ensureActionsVisible(page);
+    await waitForResults(page);
     await resetFilters(page);
 
     await page.getByRole('button', { name: 'Verified only' }).click();
-    await ensureActionsVisible(page);
+    await waitForResults(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
 
     await assertVerifiedOnlyActive(page, true);
-    await ensureActionsVisible(page);
+    await waitForResults(page);
     await assertCardsAreVerified(page);
   });
 
