@@ -82,7 +82,12 @@ async function waitForOverviewSettled(page: Page) {
   }
 }
 
-async function goHome(page: Page) {
+type PageDiagnostics = {
+  console: string[];
+  network: string[];
+};
+
+async function goHome(page: Page, diagnostics?: PageDiagnostics) {
   const response = await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
   const status = response?.status();
   if (typeof status === 'number' && status >= 400) {
@@ -97,7 +102,14 @@ async function goHome(page: Page) {
     const url = page.url();
     const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
     const rootLen = (rootHtml || '').trim().length;
-    throw new Error(`Overview did not render. url=${url}, httpStatus=${String(status)}, rootHtmlLength=${rootLen}. ${String(err)}`);
+
+    const consoleTail = diagnostics?.console?.slice(-30).join('\n') || '(none)';
+    const networkTail = diagnostics?.network?.slice(-30).join('\n') || '(none)';
+    throw new Error(
+      `Overview did not render. url=${url}, httpStatus=${String(status)}, rootHtmlLength=${rootLen}. ${String(err)}\n\n` +
+      `--- Browser console (tail) ---\n${consoleTail}\n\n` +
+      `--- Network (tail) ---\n${networkTail}`
+    );
   }
 }
 
@@ -180,6 +192,28 @@ async function assertCardsAreArchived(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  const diagnostics: PageDiagnostics = { console: [], network: [] };
+  page.on('console', msg => diagnostics.console.push(`[${msg.type()}] ${msg.text()}`));
+  page.on('pageerror', err => diagnostics.console.push(`[pageerror] ${err.message}`));
+  page.on('requestfailed', req => {
+    const failure = req.failure();
+    diagnostics.network.push(`[requestfailed] ${req.method()} ${req.url()} ${failure?.errorText || ''}`.trim());
+  });
+  page.on('response', async resp => {
+    const url = resp.url();
+    if (!url.includes('/actions/')) {
+      return;
+    }
+    diagnostics.network.push(`[response] ${resp.status()} ${resp.request().method()} ${url}`);
+    if (resp.status() >= 400) {
+      const body = await resp.text().catch(() => '');
+      const snippet = (body || '').slice(0, 500);
+      if (snippet) {
+        diagnostics.network.push(`[response-body] ${snippet}`);
+      }
+    }
+  });
+
   if (!apiReady) {
     if (apiError) {
       test.skip(true, `API unavailable: ${apiError.message}`);
@@ -202,7 +236,7 @@ test.beforeEach(async ({ page }) => {
     }
   }, OVERVIEW_STATE_KEY);
 
-  await goHome(page);
+  await goHome(page, diagnostics);
 });
 
 // Baseline validations.
@@ -222,8 +256,8 @@ test('detail page renders for first action', async ({ page }) => {
     `/action/${encodeURIComponent(first.owner)}/${encodeURIComponent(first.name)}`
   );
   await page.goto(detailUrl, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByText(first.owner)).toBeVisible({ timeout: 45000 });
-  await expect(page.getByText(first.name)).toBeVisible();
+  await expect(page.locator('.detail-owner')).toHaveText(first.owner, { timeout: 45000 });
+  await expect(page.locator('.detail-title')).toContainText(first.name);
 });
 
 test.describe('Stats panel filters (persist across refresh)', () => {
