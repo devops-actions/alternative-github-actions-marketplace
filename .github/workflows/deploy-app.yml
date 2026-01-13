@@ -379,6 +379,29 @@ jobs:
 
           echo "Runner public IP: $runnerIp"
 
+          echo "--- Existing access restriction rules (name/priority/action/ip) ---"
+          az functionapp config access-restriction show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$FUNCTION_APP_NAME" \
+            --query "ipSecurityRestrictions[].{name:name,priority:priority,action:action,ip:ipAddress}" -o table || true
+
+          priorities=$(az functionapp config access-restriction show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$FUNCTION_APP_NAME" \
+            --query "ipSecurityRestrictions[].priority" -o tsv | tr '\t' '\n' | grep -E '^[0-9]+$' || true)
+
+          if [ -z "$priorities" ]; then
+            priority=100
+          else
+            maxPriority=$(printf '%s\n' "$priorities" | sort -n | tail -n 1)
+            priority=$((maxPriority + 1))
+            if [ "$priority" -lt 100 ]; then
+              priority=100
+            fi
+          fi
+
+          echo "Using allow rule priority: $priority"
+
           ruleName="AllowGitHubRunnerValidate-${GITHUB_RUN_ID}"
           echo "ALLOW_VALIDATE_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
 
@@ -388,7 +411,7 @@ jobs:
             --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
-            --priority 88 \
+            --priority "$priority" \
             --description "Temporary allow for GitHub Actions validate (smoke + E2E)"
 
           sleep 10
