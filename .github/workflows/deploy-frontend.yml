@@ -40,44 +40,40 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolve Static Web App name and suffix
-        id: swa
         run: |
-          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
-          if [ -z "$swaName" ]; then
+          read -r swaName swaHost < <(az staticwebapp list \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "[0].[name, defaultHostname]" -o tsv)
+
+          if [ -z "$swaName" ] || [ -z "$swaHost" ]; then
             echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
 
-          swaHost=$(az staticwebapp show --name "$swaName" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "defaultHostname" -o tsv)
-          if [ -z "$swaHost" ]; then
-            echo "::error::Failed to resolve Static Web App hostname for $swaName"
-            exit 1
-          fi
-
           suffix=${swaName#swa-}
-          echo "swa_name=$swaName" >> $GITHUB_OUTPUT
-          echo "swa_host=$swaHost" >> $GITHUB_OUTPUT
-          echo "suffix=$suffix" >> $GITHUB_OUTPUT
           echo "SWA_NAME=$swaName" >> $GITHUB_ENV
           echo "SWA_HOST=$swaHost" >> $GITHUB_ENV
+          echo "SWA_SUFFIX=$suffix" >> $GITHUB_ENV
+          echo "FRONTEND_BASE_URL=https://$swaHost" >> $GITHUB_ENV
 
       - name: Resolve Function App host
-        id: functionapp
         run: |
-          funcName=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
-          funcHost=$(az functionapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].defaultHostName" -o tsv)
+          read -r funcName funcHost < <(az functionapp list \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "[0].[name, defaultHostName]" -o tsv)
+
           if [ -z "$funcHost" ] || [ -z "$funcName" ]; then
             echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
-          echo "function_name=$funcName" >> $GITHUB_OUTPUT
-          echo "function_host=$funcHost" >> $GITHUB_OUTPUT
           echo "FUNCTION_APP_NAME=$funcName" >> $GITHUB_ENV
+          echo "FUNCTION_APP_HOST=$funcHost" >> $GITHUB_ENV
+          echo "API_BASE_URL=https://$funcHost/api" >> $GITHUB_ENV
 
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
-          suffix="${{ steps.swa.outputs.suffix }}"
+          suffix="$SWA_SUFFIX"
           if [ -z "$suffix" ]; then
             echo "::error::Missing Static Web App suffix; cannot resolve App Insights name"
             exit 1
@@ -113,16 +109,16 @@ jobs:
         working-directory: src/frontend
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          VITE_API_BASE_URL="$API_BASE_URL" \
+          VITE_APPINSIGHTS_CONNECTION_STRING="${{ steps.appinsights.outputs.connection_string }}" \
+          npm run build
         working-directory: src/frontend
-        env:
-          VITE_API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
-          VITE_APPINSIGHTS_CONNECTION_STRING: ${{ steps.appinsights.outputs.connection_string }}
 
       - name: Get Static Web App deployment token
         id: swa-token
         run: |
-          swaName="${{ steps.swa.outputs.swa_name }}"
+          swaName="$SWA_NAME"
           if [ -z "$swaName" ]; then
             echo "::error::No static web app name available"
             exit 1
@@ -146,8 +142,6 @@ jobs:
           skip_api_build: true
 
       - name: Wait for SWA + assets to be ready
-        env:
-          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_host }}
         run: |
           set -e
           echo "Checking $FRONTEND_BASE_URL"
@@ -164,8 +158,6 @@ jobs:
           done
 
       - name: Pre-warm API endpoints
-        env:
-          API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
         run: |
           set +e
           curl -fsSI "$API_BASE_URL/actions/stats" >/dev/null
@@ -185,7 +177,7 @@ jobs:
 
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ steps.functionapp.outputs.function_name }}" \
+            --name "$FUNCTION_APP_NAME" \
             --rule-name "AllowGitHubRunnerE2E" \
             --action Allow \
             --ip-address "$runnerIp/32" \
@@ -202,8 +194,6 @@ jobs:
       - name: Run E2E tests against deployed site
         working-directory: src/frontend
         env:
-          FRONTEND_BASE_URL: https://${{ steps.swa.outputs.swa_host }}
-          API_BASE_URL: https://${{ steps.functionapp.outputs.function_host }}/api
           PLAYWRIGHT_WORKERS: 4
         run: npm run test:e2e
 
@@ -213,7 +203,7 @@ jobs:
           set +e
           az functionapp config access-restriction remove \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ steps.functionapp.outputs.function_name }}" \
+            --name "$FUNCTION_APP_NAME" \
             --rule-name "AllowGitHubRunnerE2E"
           exit 0
 
