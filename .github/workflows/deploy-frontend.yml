@@ -68,12 +68,22 @@ jobs:
 
       - name: Resolve Function App host
         run: |
-          read -r funcName funcHost < <(az functionapp list \
+          funcName=$(az functionapp list \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "[0].[name, defaultHostName]" -o tsv)
+            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
 
-          if [ -z "$funcHost" ] || [ -z "$funcName" ]; then
+          if [ -z "$funcName" ]; then
             echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
+            exit 1
+          fi
+
+          funcHost=$(az functionapp show \
+            --name "$funcName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "defaultHostName" -o tsv)
+
+          if [ -z "$funcHost" ]; then
+            echo "::error::Failed to resolve Function App hostname for $funcName"
             exit 1
           fi
           echo "FUNCTION_APP_NAME=$funcName" >> $GITHUB_ENV
