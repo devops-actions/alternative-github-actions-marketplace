@@ -407,17 +407,29 @@ jobs:
 
           echo "Using allow rule priority: $priority"
 
-          ruleName="AllowGitHubRunnerValidate-${GITHUB_RUN_ID}"
+          # Short rule names avoid SKU-specific limits
+          ruleName="AllowRunner-${GITHUB_RUN_ID}"
           echo "ALLOW_VALIDATE_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
 
-          az functionapp config access-restriction add \
+          echo "Adding allow rule via az functionapp ..."
+          if ! az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
             --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
             --priority "$priority" \
-            --description "Temporary allow for GitHub Actions validate (smoke + E2E)"
+            --description "Temporary allow for GitHub Actions validate (smoke + E2E)"; then
+            echo "functionapp add failed; trying webapp flavor" >&2
+            az webapp config access-restriction add \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$FUNCTION_APP_NAME" \
+              --rule-name "$ruleName" \
+              --action Allow \
+              --ip-address "$runnerIp/32" \
+              --priority "$priority" \
+              --description "Temporary allow for GitHub Actions validate (smoke + E2E)"
+          fi
 
           sleep 10
           echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
