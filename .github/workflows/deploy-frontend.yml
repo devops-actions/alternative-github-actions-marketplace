@@ -226,7 +226,7 @@ jobs:
 
       - name: Diagnose API access + CORS (runner + browser origin)
         run: |
-          set -e
+          set -euo pipefail
           echo "FRONTEND_BASE_URL=$FRONTEND_BASE_URL"
           echo "API_BASE_URL=$API_BASE_URL"
           echo "FUNCTION_APP_NAME=$FUNCTION_APP_NAME"
@@ -243,18 +243,28 @@ jobs:
             --query "[?name=='CORS_ALLOWED_ORIGINS' || name=='CORS_ALLOW_ORIGINS'].{name:name,value:value}" -o table || true
 
           echo "--- GET /actions/list with Origin header ---"
-          curl -fsS -D - -o /tmp/actions-list.json \
+          getCode=$(curl -sS -D /tmp/actions-list.headers -o /tmp/actions-list.json -w "%{http_code}" \
             -H "Origin: $FRONTEND_BASE_URL" \
-            "$API_BASE_URL/actions/list" | sed -n '1,25p'
+            "$API_BASE_URL/actions/list" || true)
+          sed -n '1,25p' /tmp/actions-list.headers || true
+          if [ "$getCode" != "200" ]; then
+            echo "::error::GET /actions/list failed (http=$getCode)"
+            exit 1
+          fi
           head -c 200 /tmp/actions-list.json || true
           echo
 
           echo "--- OPTIONS preflight /actions/list ---"
-          curl -fsS -D - -o /dev/null -X OPTIONS \
+          optCode=$(curl -sS -D /tmp/actions-list.options.headers -o /dev/null -w "%{http_code}" -X OPTIONS \
             -H "Origin: $FRONTEND_BASE_URL" \
             -H "Access-Control-Request-Method: GET" \
             -H "Access-Control-Request-Headers: content-type" \
-            "$API_BASE_URL/actions/list" | sed -n '1,25p'
+            "$API_BASE_URL/actions/list" || true)
+          sed -n '1,25p' /tmp/actions-list.options.headers || true
+          if [ "$optCode" != "204" ]; then
+            echo "::error::OPTIONS preflight for /actions/list failed (http=$optCode). Browser requests may fail due to CORS preflight."
+            exit 1
+          fi
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
