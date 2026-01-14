@@ -196,6 +196,22 @@ class ActionsService {
     return await fetchPromise;
   }
 
+  async fetchActionsPage(limit: number): Promise<Action[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/actions/list?limit=${limit}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch actions page: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const items = extractArrayFromUnknown(data);
+      return items.map(normalizeAction);
+    } catch (error) {
+      console.error('Error fetching actions page:', error);
+      throw error;
+    }
+  }
+
   async fetchStats(force: boolean = false): Promise<ActionStats> {
     const now = Date.now();
     if (!force && this.stats.total > 0 && (now - this.lastStatsFetch) < REFRESH_INTERVAL) {

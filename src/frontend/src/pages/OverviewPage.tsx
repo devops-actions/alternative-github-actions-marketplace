@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
+import { AnimatedCounter } from '../components/AnimatedCounter';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -134,14 +135,25 @@ export const OverviewPage: React.FC = () => {
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const force = attempt > 0;
-        const [statsData, actionsData] = await Promise.all([
+        
+        // First, fetch stats and initial page of actions for quick display
+        const [statsData, initialActions] = await Promise.all([
           actionsService.fetchStats(force),
-          actionsService.fetchActions(force)
+          actionsService.fetchActionsPage(50)
         ]);
+        
         setStats(statsData);
-        setActions(actionsData);
+        setActions(initialActions);
         setError(null);
         setLoading(false);
+        
+        // Then fetch the full list in the background
+        actionsService.fetchActions(force).then(fullActions => {
+          setActions(fullActions);
+        }).catch(err => {
+          console.warn('Failed to load full actions list in background:', err);
+        });
+        
         return;
       } catch (err) {
         lastErr = err;
@@ -317,7 +329,7 @@ export const OverviewPage: React.FC = () => {
     <div className="app">
       <div className="header">
         <h1>Alternative GitHub Actions Marketplace</h1>
-        <p>Browse and search through {stats.total.toLocaleString()} GitHub Actions</p>
+        <p>Browse and search through <AnimatedCounter value={stats.total} /> GitHub Actions</p>
       </div>
 
       <div className="stats-bar">
@@ -328,7 +340,7 @@ export const OverviewPage: React.FC = () => {
           aria-label="Show all actions"
         >
           <span className="stat-label">Total Actions</span>
-          <span className="stat-value">{stats.total.toLocaleString()}</span>
+          <span className="stat-value"><AnimatedCounter value={stats.total} /></span>
         </button>
 
         <button
@@ -338,7 +350,7 @@ export const OverviewPage: React.FC = () => {
           aria-label="Show verified actions"
         >
           <span className="stat-label">Verified Actions</span>
-          <span className="stat-value">{stats.verified.toLocaleString()}</span>
+          <span className="stat-value"><AnimatedCounter value={stats.verified} /></span>
         </button>
 
         {Object.entries(stats.byType).map(([type, count]) => (
@@ -350,7 +362,7 @@ export const OverviewPage: React.FC = () => {
             aria-label={`Filter by ${type} actions`}
           >
             <span className="stat-label">{type} Actions</span>
-            <span className="stat-value">{count.toLocaleString()}</span>
+            <span className="stat-value"><AnimatedCounter value={count} /></span>
           </button>
         ))}
         
@@ -361,7 +373,7 @@ export const OverviewPage: React.FC = () => {
           aria-label="Include archived actions"
         >
           <span className="stat-label">Archived Actions</span>
-          <span className="stat-value">{stats.archived.toLocaleString()}</span>
+          <span className="stat-value"><AnimatedCounter value={stats.archived} /></span>
         </button>
       </div>
 

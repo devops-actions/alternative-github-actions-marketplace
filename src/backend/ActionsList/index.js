@@ -23,6 +23,16 @@ module.exports = async function actionsList(context, req) {
   const owner = (req && req.query && req.query.owner)
     ? String(req.query.owner)
     : (context.bindingData && context.bindingData.owner);
+  
+  // Parse limit parameter for pagination
+  let limit = null;
+  if (req.query && req.query.limit) {
+    const parsed = parseInt(req.query.limit, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      limit = parsed;
+    }
+  }
+  
   const tableClient = getTableClient();
   const tableUrl = tableClient && tableClient.url ? tableClient.url.split('?')[0] : 'unknown';
   let entities = [];
@@ -34,6 +44,13 @@ module.exports = async function actionsList(context, req) {
       const entityOwner = e.Owner || (e.PayloadJson && JSON.parse(e.PayloadJson).owner);
       return owner ? entityOwner === owner : true;
     });
+    
+    // Apply limit if specified
+    const totalCount = entities.length;
+    if (limit !== null && limit < entities.length) {
+      entities = entities.slice(0, limit);
+    }
+    
     const results = entities.map(e => {
       try {
         return ActionRecord.fromEntity(e).toActionInfo(true, {
@@ -47,7 +64,7 @@ module.exports = async function actionsList(context, req) {
       }
     }).filter(Boolean);
 
-    context.log(`ActionsList: returning ${results.length} entities (fake client), table ${tableUrl}`);
+    context.log(`ActionsList: returning ${results.length} of ${totalCount} entities (fake client), table ${tableUrl}`);
 
     context.res = {
       status: 200,
@@ -74,6 +91,10 @@ module.exports = async function actionsList(context, req) {
     
     for await (const entity of tableClient.listEntities(queryOptions)) {
       entities.push(entity);
+      // Apply limit during iteration for better performance
+      if (limit !== null && entities.length >= limit) {
+        break;
+      }
     }
 
     const results = entities.map(e => {
@@ -89,7 +110,7 @@ module.exports = async function actionsList(context, req) {
       }
     }).filter(Boolean);
 
-    context.log(`ActionsList: returning ${results.length} entities, table ${tableUrl}`);
+    context.log(`ActionsList: returning ${results.length} entities${limit !== null ? ` (limited to ${limit})` : ''}, table ${tableUrl}`);
 
     context.res = {
       status: 200,
