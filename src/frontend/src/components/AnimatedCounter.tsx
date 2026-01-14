@@ -11,6 +11,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
 }) => {
   const [displayValue, setDisplayValue] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
+  const previousValueRef = useRef(0);
 
   useEffect(() => {
     // Cancel any ongoing animation
@@ -19,14 +20,16 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
       animationFrameRef.current = null;
     }
 
-    if (value === 0) {
-      setDisplayValue(0);
+    const startTime = Date.now();
+    const startValue = previousValueRef.current;
+    const valueChange = value - startValue;
+
+    // If no change, just update and return
+    if (valueChange === 0) {
+      setDisplayValue(value);
+      previousValueRef.current = value;
       return;
     }
-
-    const startTime = Date.now();
-    const startValue = displayValue;
-    const valueChange = value - startValue;
 
     const animate = () => {
       const now = Date.now();
@@ -43,6 +46,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         animationFrameRef.current = null;
+        previousValueRef.current = value;
       }
     };
 
@@ -55,7 +59,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [value, duration, displayValue]);
+  }, [value, duration]);
 
   return <>{displayValue.toLocaleString()}</>;
 };
