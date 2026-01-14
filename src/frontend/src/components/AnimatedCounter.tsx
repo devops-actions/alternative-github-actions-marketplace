@@ -9,11 +9,20 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   value, 
   duration = 1500 
 }) => {
-  const [displayValue, setDisplayValue] = useState(0);
+  const [displayValue, setDisplayValue] = useState(value);
   const animationFrameRef = useRef<number | null>(null);
-  const previousValueRef = useRef(0);
+  const previousValueRef = useRef(value);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
+    // Skip animation on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      previousValueRef.current = value;
+      setDisplayValue(value);
+      return;
+    }
+
     // Cancel any ongoing animation
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -40,7 +49,12 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       const currentValue = Math.round(startValue + valueChange * easeOutQuart);
       
-      setDisplayValue(currentValue);
+      // Ensure we stay within bounds
+      const boundedValue = valueChange > 0 
+        ? Math.min(currentValue, value)
+        : Math.max(currentValue, value);
+      
+      setDisplayValue(boundedValue);
       
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);

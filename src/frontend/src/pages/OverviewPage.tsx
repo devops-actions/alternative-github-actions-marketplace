@@ -151,7 +151,7 @@ export const OverviewPage: React.FC = () => {
         actionsService.fetchActions(force).then(fullActions => {
           setActions(fullActions);
         }).catch(err => {
-          console.warn('Failed to load full actions list in background:', err);
+          console.warn('Failed to load complete actions list in background. Limited view active:', err);
         });
         
         return;
