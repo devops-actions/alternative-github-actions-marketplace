@@ -134,14 +134,14 @@ export const DetailPage: React.FC = () => {
         </div>
 
         <div className="info-grid">
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Used by</h3>
             <div className="value dependents-highlight">
               {dependentsCount.toLocaleString()}
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Latest Release</h3>
             <div className="value">
               {action.releaseInfo && action.releaseInfo.length > 0
@@ -150,14 +150,14 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>OpenSSF Score</h3>
             <div className="value">
               {action.ossf ? action.ossfScore.toFixed(1) : 'N/A'}
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Last Updated</h3>
             <div className="value">
               {new Date(action.repoInfo.updated_at).toLocaleDateString()}
@@ -166,7 +166,7 @@ export const DetailPage: React.FC = () => {
         </div>
 
         <div className="info-grid">
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Action Type Details</h3>
             <div className="value" style={{ fontSize: '14px' }}>
               {action.actionType.actionType}
@@ -179,7 +179,7 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Repository Info</h3>
             <div className="value" style={{ fontSize: '14px' }}>
               {action.forkFound ? 'Fork' : 'Original'}
