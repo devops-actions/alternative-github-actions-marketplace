@@ -26,6 +26,7 @@
     "@playwright/test": "^1.49.0",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
+    "@types/node": "^22.10.2",
     "@vitejs/plugin-react": "^5.1.2",
     "dotenv": "^17.2.3",
     "typescript": "^5.9.3",
