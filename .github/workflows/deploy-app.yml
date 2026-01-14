@@ -342,30 +342,6 @@ jobs:
             sleep 5
           done
 
-      - name: Pre-warm API endpoints
-        env:
-          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
-        run: |
-          set -e
-          echo "Warming up API at $API_BASE_URL"
-
-          for i in $(seq 1 60); do
-            echo "Attempt $i/60"
-            code=$(curl -sS -o /tmp/actions-stats.json -w "%{http_code}" \
-              --connect-timeout 5 --max-time 30 \
-              "$API_BASE_URL/actions/stats" || true)
-            if [ "$code" = "200" ]; then
-              if head -c 200 /tmp/actions-stats.json | grep -q '"total"'; then
-                echo "API stats ready"
-                break
-              fi
-              echo "Stats returned 200 but did not include expected payload yet"
-            else
-              echo "Stats not ready yet (http=$code)"
-            fi
-            sleep 5
-          done
-
       - name: Temporarily allow GitHub runner IP (for smoke + E2E)
         env:
           FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
@@ -433,6 +409,48 @@ jobs:
 
           sleep 10
           echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
+
+      - name: Pre-warm API endpoints
+        env:
+          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
+        run: |
+          set -e
+          echo "Warming up API at $API_BASE_URL"
+
+          # Warm up /actions/stats (small payload, quick).
+          for i in $(seq 1 60); do
+            echo "Attempt $i/60 - stats"
+            code=$(curl -sS -o /tmp/actions-stats.json -w "%{http_code}" \
+              --connect-timeout 5 --max-time 30 \
+              "$API_BASE_URL/actions/stats" || true)
+            if [ "$code" = "200" ]; then
+              if head -c 200 /tmp/actions-stats.json | grep -q '"total"'; then
+                echo "API stats ready"
+                break
+              fi
+              echo "Stats returned 200 but did not include expected payload yet"
+            else
+              echo "Stats not ready yet (http=$code)"
+            fi
+            sleep 5
+          done
+
+          # Warm up /actions/list (large 16MB+ payload). Give it more time.
+          echo "Warming up /actions/list (large payload, may take a while)..."
+          for i in $(seq 1 10); do
+            echo "Attempt $i/10 - list"
+            code=$(curl -sS -o /tmp/actions-list.json -w "%{http_code}" \
+              --connect-timeout 10 --max-time 180 \
+              "$API_BASE_URL/actions/list" || true)
+            if [ "$code" = "200" ]; then
+              listSize=$(stat -c%s /tmp/actions-list.json 2>/dev/null || stat -f%z /tmp/actions-list.json 2>/dev/null || echo "0")
+              echo "Actions list ready (size: ${listSize} bytes)"
+              break
+            else
+              echo "List not ready yet (http=$code)"
+            fi
+            sleep 10
+          done
 
       - name: Diagnose API access + CORS (runner + browser origin)
         env:

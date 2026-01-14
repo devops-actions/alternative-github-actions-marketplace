@@ -75,6 +75,10 @@ function typeFilterGroup(page: Page) {
   return page.locator('.filter-group').filter({ hasText: 'Type:' }).first();
 }
 
+function statsBar(page: Page) {
+  return page.locator('.stats-bar').first();
+}
+
 async function waitForOverviewSettled(page: Page) {
   const start = Date.now();
   const overallTimeoutMs = 240000;
@@ -83,9 +87,11 @@ async function waitForOverviewSettled(page: Page) {
   const cards = page.locator('.action-card').first();
   const noResults = page.locator('.no-results').first();
   const errorMessage = page.locator('.error-message').first();
+  const loadingIndicator = page.locator('.loading').first();
 
   let errorSince: number | null = null;
   let lastErrorText = '';
+  let wasLoading = false;
 
   while (Date.now() - start < overallTimeoutMs) {
     if (await cards.isVisible().catch(() => false)) {
@@ -93,6 +99,11 @@ async function waitForOverviewSettled(page: Page) {
     }
     if (await noResults.isVisible().catch(() => false)) {
       return;
+    }
+
+    // Track if we ever saw the loading indicator (helps diagnose stuck states).
+    if (await loadingIndicator.isVisible().catch(() => false)) {
+      wasLoading = true;
     }
 
     if (await errorMessage.isVisible().catch(() => false)) {
@@ -111,7 +122,11 @@ async function waitForOverviewSettled(page: Page) {
     await page.waitForTimeout(1000);
   }
 
-  throw new Error(`Overview did not settle within ${overallTimeoutMs}ms. lastError=${lastErrorText || '(none)'}`);
+  const stillLoading = await loadingIndicator.isVisible().catch(() => false);
+  throw new Error(
+    `Overview did not settle within ${overallTimeoutMs}ms. ` +
+    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}`
+  );
 }
 
 type PageDiagnostics = {
@@ -130,6 +145,19 @@ async function goHome(page: Page, diagnostics?: PageDiagnostics) {
 
   try {
     await waitForOverviewSettled(page);
+
+    // If the API has actions but the UI is still showing an empty state,
+    // give it a little extra time (large payload / slower rendering), then fail.
+    if (cachedActions.length > 0) {
+      const cards = page.locator('.action-card').first();
+      const noResults = page.locator('.no-results').first();
+      if (await noResults.isVisible().catch(() => false)) {
+        await page.waitForTimeout(5000);
+        if (!(await cards.isVisible().catch(() => false))) {
+          throw new Error(`UI shows no results but API reports ${cachedActions.length} actions`);
+        }
+      }
+    }
   } catch (err) {
     const url = page.url();
     const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
@@ -154,27 +182,32 @@ async function waitForResults(page: Page) {
   ]);
 }
 
+async function ensureActionsVisible(page: Page) {
+  // Wait until at least one action card or no-results is visible (loading finished).
+  await waitForResults(page);
+}
+
 async function resetFilters(page: Page) {
   await typeFilterGroup(page).getByRole('button', { name: 'All', exact: true }).click();
 
-  const verifiedOnly = page.getByRole('button', { name: 'Verified only' });
+  const verifiedOnly = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
   if (await verifiedOnly.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
     await verifiedOnly.click();
   }
 
-  const archived = page.getByRole('button', { name: 'Archived' });
+  const archived = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
   if (await archived.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
     await archived.click();
   }
 }
 
 async function assertTypeFilterActive(page: Page, label: string) {
-  const button = page.getByRole('button', { name: label });
+  const button = typeFilterGroup(page).getByRole('button', { name: label, exact: true });
   await expect(button).toHaveClass(/active/);
 }
 
 async function assertVerifiedOnlyActive(page: Page, active: boolean) {
-  const button = page.getByRole('button', { name: 'Verified only' });
+  const button = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
   if (active) {
     await expect(button).toHaveClass(/active/);
   } else {
@@ -183,7 +216,7 @@ async function assertVerifiedOnlyActive(page: Page, active: boolean) {
 }
 
 async function assertArchivedToggleActive(page: Page, active: boolean) {
-  const button = page.getByRole('button', { name: 'Archived' });
+  const button = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
   if (active) {
     await expect(button).toHaveClass(/active/);
   } else {
@@ -220,7 +253,12 @@ async function assertCardsAreVerified(page: Page) {
 }
 
 async function assertAtLeastOneArchivedCardVisible(page: Page) {
-  await expect(page.locator('.action-card').getByText('Archived')).toBeVisible({ timeout: 45000 });
+  await expect(
+    page
+      .locator('.action-card')
+      .locator('.meta-item')
+      .getByText('Archived', { exact: true })
+  ).toBeVisible({ timeout: 45000 });
 }
 
 async function assertCardsAreArchived(page: Page) {
@@ -232,7 +270,12 @@ async function assertCardsAreArchived(page: Page) {
   }
 
   for (let i = 0; i < sample; i += 1) {
-    await expect(cards.nth(i).getByText('Archived')).toBeVisible();
+    await expect(
+      cards
+        .nth(i)
+        .locator('.meta-item')
+        .getByText('Archived', { exact: true })
+    ).toBeVisible();
   }
 }
 
@@ -376,11 +419,12 @@ test.describe('Stats panel filters (persist across refresh)', () => {
 
   for (const c of statsPanelCases) {
     test(c.name, async ({ page }) => {
-      const items = await fetchActionsList();
+      // Use cached actions from beforeEach to avoid redundant 16MB API calls.
+      const items = cachedActions;
       await waitForResults(page);
       await resetFilters(page);
 
-      await typeFilterGroup(page).getByRole('button', { name: c.ariaLabel, exact: true }).click();
+      await statsBar(page).getByRole('button', { name: c.ariaLabel, exact: true }).click();
       await waitForResults(page);
 
       // Refresh (simulates F5) and ensure state is preserved.
@@ -404,7 +448,8 @@ test.describe('Filter buttons (persist across refresh)', () => {
 
   for (const { type, label } of typeCases) {
     test(`Type filter ${label} persists on refresh`, async ({ page }) => {
-      const items = await fetchActionsList();
+      // Use cached actions from beforeEach to avoid redundant 16MB API calls.
+      const items = cachedActions;
       await waitForResults(page);
       await resetFilters(page);
 
@@ -430,7 +475,8 @@ test.describe('Filter buttons (persist across refresh)', () => {
   }
 
   test('Verified only persists on refresh', async ({ page }) => {
-    const items = await fetchActionsList();
+    // Use cached actions from beforeEach to avoid redundant 16MB API calls.
+    const items = cachedActions;
     const hasVerified = items.some(a => a.verified === true);
     if (!hasVerified) {
       test.skip(true, 'No verified actions available to validate verified-only filter');
@@ -451,7 +497,8 @@ test.describe('Filter buttons (persist across refresh)', () => {
   });
 
   test('Archived toggle persists on refresh', async ({ page }) => {
-    const items = await fetchActionsList();
+    // Use cached actions from beforeEach to avoid redundant 16MB API calls.
+    const items = cachedActions;
     const hasArchived = items.some(a => a?.repoInfo?.archived === true);
     if (!hasArchived) {
       test.skip(true, 'No archived actions available to validate archived toggle');
@@ -460,7 +507,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await ensureActionsVisible(page);
     await resetFilters(page);
 
-    await page.getByRole('button', { name: 'Archived' }).click();
+    await typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true }).click();
     await ensureActionsVisible(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });

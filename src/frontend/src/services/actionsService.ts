@@ -109,6 +109,8 @@ class ActionsService {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private stats: ActionStats = { total: 0, byType: {}, verified: 0, archived: 0 };
   private lastStatsFetch: number = 0;
+  private inFlightActionsFetch: Promise<Action[]> | null = null;
+  private inFlightStatsFetch: Promise<ActionStats> | null = null;
 
   constructor() {
     this.startAutoRefresh();
@@ -141,80 +143,97 @@ class ActionsService {
       return this.actions;
     }
 
-    if (this.loading) {
-      return this.actions;
+    if (this.inFlightActionsFetch) {
+      return await this.inFlightActionsFetch;
     }
 
     this.loading = true;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch actions: ${response.statusText}`);
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch actions: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        const items = extractArrayFromUnknown(data);
+        const hasCountHeader = response.headers.has('x-actions-count');
+        const declaredCount = Number(response.headers.get('x-actions-count') || '0');
+
+        const serverExplicitlyEmpty =
+          (hasCountHeader && declaredCount === 0) ||
+          (Array.isArray(data) && data.length === 0);
+
+        // If the server claims there are results but we couldn't extract them,
+        // keep any previously cached actions instead of wiping the UI.
+        if (items.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
+          const responseType = Array.isArray(data) ? 'array' : typeof data;
+          const keys = (data && typeof data === 'object' && !Array.isArray(data))
+            ? Object.keys(data)
+            : [];
+          console.warn(
+            `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
+          );
+        } else {
+          this.actions = items.map(normalizeAction);
+        }
+
+        this.lastFetch = now;
+        this.notify();
+        return this.actions;
+      } catch (error) {
+        console.error('Error fetching actions:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+        this.inFlightActionsFetch = null;
       }
-      
-      const data = await response.json();
+    })();
 
-      const items = extractArrayFromUnknown(data);
-      const hasCountHeader = response.headers.has('x-actions-count');
-      const declaredCount = Number(response.headers.get('x-actions-count') || '0');
-
-      const serverExplicitlyEmpty =
-        (hasCountHeader && declaredCount === 0) ||
-        (Array.isArray(data) && data.length === 0);
-
-      // If the server claims there are results but we couldn't extract them,
-      // keep any previously cached actions instead of wiping the UI.
-      if (items.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
-        const responseType = Array.isArray(data) ? 'array' : typeof data;
-        const keys = (data && typeof data === 'object' && !Array.isArray(data))
-          ? Object.keys(data)
-          : [];
-        console.warn(
-          `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
-        );
-      } else {
-        this.actions = items.map(normalizeAction);
-      }
-      this.lastFetch = now;
-      this.notify();
-      
-      return this.actions;
-    } catch (error) {
-      console.error('Error fetching actions:', error);
-      throw error;
-    } finally {
-      this.loading = false;
-    }
+    this.inFlightActionsFetch = fetchPromise;
+    return await fetchPromise;
   }
 
   async fetchStats(force: boolean = false): Promise<ActionStats> {
-    try {
-      const now = Date.now();
-      if (!force && this.stats.total > 0 && (now - this.lastStatsFetch) < REFRESH_INTERVAL) {
-        return this.stats;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/actions/stats`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stats: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const stats: ActionStats = {
-        total: Number(data?.total) || 0,
-        byType: data?.byType || {},
-        verified: Number(data?.verified) || 0,
-        archived: Number(data?.archived) || 0
-      };
-      this.stats = stats;
-      this.lastStatsFetch = now;
-      this.notify();
-      return stats;
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-      throw error;
+    const now = Date.now();
+    if (!force && this.stats.total > 0 && (now - this.lastStatsFetch) < REFRESH_INTERVAL) {
+      return this.stats;
     }
+
+    if (this.inFlightStatsFetch) {
+      return await this.inFlightStatsFetch;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/actions/stats`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch stats: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const stats: ActionStats = {
+          total: Number(data?.total) || 0,
+          byType: data?.byType || {},
+          verified: Number(data?.verified) || 0,
+          archived: Number(data?.archived) || 0
+        };
+        this.stats = stats;
+        this.lastStatsFetch = now;
+        this.notify();
+        return stats;
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        throw error;
+      } finally {
+        this.inFlightStatsFetch = null;
+      }
+    })();
+
+    this.inFlightStatsFetch = fetchPromise;
+    return await fetchPromise;
   }
 
   getActions(): Action[] {
