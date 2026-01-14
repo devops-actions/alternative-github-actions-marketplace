@@ -276,6 +276,27 @@ class ActionsService {
     return this.stats;
   }
 
+  async fetchReadme(owner: string, name: string, version?: string): Promise<string | null> {
+    try {
+      const versionParam = version ? `?version=${encodeURIComponent(version)}` : '';
+      const response = await fetch(
+        `${API_BASE_URL}/actions/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/readme${versionParam}`,
+        { cache: 'no-store' }
+      );
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error(`Failed to fetch README: ${response.statusText}`);
+      }
+
+      return await response.text();
+    } catch (error) {
+      console.error('Error fetching README:', error);
+      throw error;
+    }
+  }
+
   destroy() {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
