@@ -10,6 +10,9 @@ export const DetailPage: React.FC = () => {
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [readmeContent, setReadmeContent] = useState<string>('');
+  const [readmeLoading, setReadmeLoading] = useState(false);
+  const [readmeError, setReadmeError] = useState<string | null>(null);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -28,6 +31,35 @@ export const DetailPage: React.FC = () => {
 
     loadAction();
   }, [owner, name]);
+
+  useEffect(() => {
+    if (action && owner && name) {
+      loadReadme();
+    }
+  }, [action, selectedVersion, owner, name]);
+
+  const loadReadme = async () => {
+    if (!owner || !name) return;
+
+    try {
+      setReadmeLoading(true);
+      setReadmeError(null);
+      const content = await actionsService.fetchReadme(owner, name, selectedVersion);
+      
+      if (content) {
+        setReadmeContent(content);
+      } else {
+        setReadmeError('README not found');
+        setReadmeContent('');
+      }
+    } catch (err) {
+      setReadmeError('Failed to load README');
+      setReadmeContent('');
+      console.error(err);
+    } finally {
+      setReadmeLoading(false);
+    }
+  };
 
   const loadAction = async () => {
     if (!owner || !name) return;
@@ -70,12 +102,6 @@ export const DetailPage: React.FC = () => {
       default:
         return '';
     }
-  };
-
-  const getReadmeUrl = () => {
-    if (!action) return '';
-    const version = selectedVersion || 'main';
-    return `https://github.com/${action.owner}/${action.name}/blob/${version}/README.md`;
   };
 
   if (loading) {
@@ -210,12 +236,18 @@ export const DetailPage: React.FC = () => {
 
         <div className="readme-section">
           <h2>README</h2>
-          <iframe
-            className="readme-iframe"
-            src={getReadmeUrl()}
-            title="Action README"
-            sandbox="allow-same-origin allow-scripts"
-          />
+          {readmeLoading && (
+            <div className="loading">Loading README...</div>
+          )}
+          {readmeError && !readmeLoading && (
+            <div className="error-message">{readmeError}</div>
+          )}
+          {!readmeLoading && !readmeError && readmeContent && (
+            <div 
+              className="readme-content"
+              dangerouslySetInnerHTML={{ __html: readmeContent }}
+            />
+          )}
         </div>
       </div>
     </div>
