@@ -1,17 +1,14 @@
 const { withCorsHeaders } = require('../lib/cors');
+const { getGitHubAuthHeaders } = require('../lib/githubAuth');
+const { getCachedReadme, cacheReadme, isCacheValid } = require('../lib/readmeCache');
+const { getActionEntity } = require('../lib/tableStorage');
+const { ActionRecord } = require('../lib/actionRecord');
 
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
   const url = `https://api.github.com/repos/${owner}/${name}/readme?ref=${ref}`;
   
-  const headers = {
-    'Accept': 'application/vnd.github.v3.html',
-    'User-Agent': 'Alternative-GitHub-Actions-Marketplace'
-  };
-
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
-  }
+  const headers = await getGitHubAuthHeaders();
 
   const response = await fetch(url, { headers });
   
@@ -23,6 +20,30 @@ async function fetchReadmeFromGitHub(owner, name, version) {
   }
 
   return await response.text();
+}
+
+async function getRepoUpdatedAt(owner, name) {
+  const partitionKey = ActionRecord.normalizeKey(owner);
+  const rowKey = ActionRecord.normalizeKey(name);
+  
+  try {
+    const entity = await getActionEntity(partitionKey, rowKey);
+    if (!entity) {
+      return null;
+    }
+
+    const record = ActionRecord.fromEntity(entity);
+    const payload = JSON.parse(record.canonicalJson);
+    
+    if (payload.repoInfo && payload.repoInfo.updated_at) {
+      return new Date(payload.repoInfo.updated_at);
+    }
+  } catch (error) {
+    // If we can't get the action data, just proceed without caching
+    return null;
+  }
+  
+  return null;
 }
 
 module.exports = async function actionsReadme(context, req) {
@@ -57,6 +78,28 @@ module.exports = async function actionsReadme(context, req) {
   }
 
   try {
+    // Get repository update timestamp
+    const repoUpdatedAt = await getRepoUpdatedAt(owner, name);
+    
+    // Try to get cached README
+    const cachedReadme = await getCachedReadme(owner, name, version);
+    
+    // Check if cache is still valid
+    if (cachedReadme && isCacheValid(cachedReadme, repoUpdatedAt)) {
+      context.log.info(`Serving cached README for ${owner}/${name}@${version || 'main'}`);
+      context.res = {
+        status: 200,
+        headers: withCorsHeaders(req, { 
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Cache': 'HIT'
+        }),
+        body: cachedReadme.content
+      };
+      return;
+    }
+
+    // Fetch fresh README from GitHub
+    context.log.info(`Fetching README from GitHub for ${owner}/${name}@${version || 'main'}`);
     const readmeHtml = await fetchReadmeFromGitHub(owner, name, version);
 
     if (!readmeHtml) {
@@ -68,9 +111,21 @@ module.exports = async function actionsReadme(context, req) {
       return;
     }
 
+    // Cache the README for future requests
+    try {
+      await cacheReadme(owner, name, version, readmeHtml, repoUpdatedAt);
+      context.log.info(`Cached README for ${owner}/${name}@${version || 'main'}`);
+    } catch (cacheError) {
+      // Log but don't fail if caching fails
+      context.log.warn(`Failed to cache README: ${cacheError.message}`);
+    }
+
     context.res = {
       status: 200,
-      headers: withCorsHeaders(req, { 'Content-Type': 'text/html; charset=utf-8' }),
+      headers: withCorsHeaders(req, { 
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Cache': 'MISS'
+      }),
       body: readmeHtml
     };
   } catch (error) {

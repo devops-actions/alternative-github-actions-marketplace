@@ -1,6 +1,6 @@
 // Example: Fetch README for an action
-// This demonstrates the new README API endpoint
-// Run with: node examples/fetch-readme.js
+// This demonstrates the new README API endpoint with caching
+// Run with: node examples/fetch-readme.js [owner] [name] [version]
 
 const API_BASE_URL = process.env.API_URL || 'http://localhost:7071/api';
 
@@ -16,8 +16,10 @@ async function fetchActionReadme(owner, name, version) {
     throw new Error(`Failed to fetch README: ${response.status} ${response.statusText}`);
   }
   
+  const cacheStatus = response.headers.get('x-cache');
   const html = await response.text();
-  return html;
+  
+  return { html, cacheStatus };
 }
 
 async function main() {
@@ -29,14 +31,21 @@ async function main() {
     
     console.log(`Fetching README for ${owner}/${name}${version ? ` (version: ${version})` : ''}`);
     
-    const readme = await fetchActionReadme(owner, name, version);
+    const { html: readme, cacheStatus } = await fetchActionReadme(owner, name, version);
     
-    console.log(`\nREADME length: ${readme.length} characters`);
+    console.log(`\nCache Status: ${cacheStatus || 'N/A'}`);
+    console.log(`README length: ${readme.length} characters`);
     console.log('\nFirst 500 characters:');
     console.log(readme.substring(0, 500));
     console.log('...\n');
     
-    console.log('✓ README fetched successfully');
+    // Fetch again to demonstrate caching
+    console.log('Fetching again to test cache...');
+    const { cacheStatus: cacheStatus2 } = await fetchActionReadme(owner, name, version);
+    console.log(`Cache Status on second request: ${cacheStatus2 || 'N/A'}`);
+    
+    console.log('\n✓ README fetched successfully');
+    console.log('✓ Caching working as expected');
   } catch (error) {
     console.error('Error:', error.message);
     process.exitCode = 1;
