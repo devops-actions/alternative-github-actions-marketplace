@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 
@@ -33,10 +34,10 @@ export const DetailPage: React.FC = () => {
   }, [owner, name]);
 
   useEffect(() => {
-    if (action && owner && name) {
+    if (owner && name && selectedVersion !== undefined) {
       loadReadme();
     }
-  }, [action, selectedVersion, owner, name]);
+  }, [selectedVersion, owner, name]);
 
   const loadReadme = async () => {
     if (!owner || !name) return;
@@ -245,7 +246,7 @@ export const DetailPage: React.FC = () => {
           {!readmeLoading && !readmeError && readmeContent && (
             <div 
               className="readme-content"
-              dangerouslySetInnerHTML={{ __html: readmeContent }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(readmeContent) }}
             />
           )}
         </div>
