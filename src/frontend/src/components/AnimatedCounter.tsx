@@ -9,20 +9,11 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   value, 
   duration = 1500 
 }) => {
-  const [displayValue, setDisplayValue] = useState(value);
+  const [displayValue, setDisplayValue] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
-  const previousValueRef = useRef(value);
-  const isInitialMount = useRef(true);
+  const previousValueRef = useRef(0);
 
   useEffect(() => {
-    // Skip animation on initial mount
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      previousValueRef.current = value;
-      setDisplayValue(value);
-      return;
-    }
-
     // Cancel any ongoing animation
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
