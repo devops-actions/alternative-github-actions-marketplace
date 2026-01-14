@@ -187,6 +187,15 @@ export const DetailPage: React.FC = () => {
               {action.repoSize
                 ? `${(action.repoSize / 1024).toFixed(1)} MB`
                 : 'Size N/A'}
+              <br />
+              <a
+                href={`https://github.com/${action.owner}/${action.name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="repo-link"
+              >
+                View on GitHub →
+              </a>
             </div>
           </div>
         </div>
