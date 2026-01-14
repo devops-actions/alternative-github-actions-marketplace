@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface AnimatedCounterProps {
   value: number;
@@ -10,8 +10,15 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   duration = 1500 
 }) => {
   const [displayValue, setDisplayValue] = useState(0);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Cancel any ongoing animation
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
     if (value === 0) {
       setDisplayValue(0);
       return;
@@ -33,12 +40,22 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
       setDisplayValue(currentValue);
       
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
       }
     };
 
-    requestAnimationFrame(animate);
-  }, [value, duration]);
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    // Cleanup function to cancel animation on unmount or value change
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [value, duration, displayValue]);
 
   return <>{displayValue.toLocaleString()}</>;
 };

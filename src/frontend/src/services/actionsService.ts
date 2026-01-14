@@ -197,6 +197,10 @@ class ActionsService {
   }
 
   async fetchActionsPage(limit: number): Promise<Action[]> {
+    if (!Number.isFinite(limit) || limit <= 0) {
+      throw new Error('Invalid limit parameter: must be a positive number');
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/actions/list?limit=${limit}`, { cache: 'no-store' });
       if (!response.ok) {
