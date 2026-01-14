@@ -190,6 +190,16 @@ body {
   transform: translateY(-2px);
 }
 
+.action-card.archived {
+  border: 2px solid #d73a49;
+  background: #ffeef0;
+}
+
+.action-card.archived:hover {
+  border-color: #d73a49;
+  box-shadow: 0 4px 12px rgba(215, 58, 73, 0.3);
+}
+
 .action-header {
   display: flex;
   align-items: flex-start;
@@ -396,6 +406,11 @@ body {
   background: #f6f8fa;
   border-radius: 6px;
   border: 1px solid #e1e4e8;
+}
+
+.info-card.archived {
+  border: 2px solid #d73a49;
+  background: #ffeef0;
 }
 
 .info-card h3 {

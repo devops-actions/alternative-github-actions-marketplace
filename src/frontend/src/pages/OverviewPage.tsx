@@ -480,7 +480,7 @@ export const OverviewPage: React.FC = () => {
             {pagedActions.map(action => (
               <div
                 key={`${action.owner}/${action.name}`}
-                className="action-card"
+                className={`action-card ${action.repoInfo.archived ? 'archived' : ''}`}
                 onClick={() => handleActionClick(action)}
               >
                 <div className="action-header">
