@@ -34,33 +34,34 @@ export const DetailPage: React.FC = () => {
   }, [owner, name]);
 
   useEffect(() => {
+    const loadReadme = async () => {
+      if (!owner || !name) return;
+
+      try {
+        setReadmeLoading(true);
+        setReadmeError(null);
+        const version = selectedVersion || undefined;
+        const content = await actionsService.fetchReadme(owner, name, version);
+        
+        if (content) {
+          setReadmeContent(content);
+        } else {
+          setReadmeError('README not found');
+          setReadmeContent('');
+        }
+      } catch (err) {
+        setReadmeError('Failed to load README');
+        setReadmeContent('');
+        console.error(err);
+      } finally {
+        setReadmeLoading(false);
+      }
+    };
+
     if (owner && name && selectedVersion !== undefined) {
       loadReadme();
     }
   }, [selectedVersion, owner, name]);
-
-  const loadReadme = async () => {
-    if (!owner || !name) return;
-
-    try {
-      setReadmeLoading(true);
-      setReadmeError(null);
-      const content = await actionsService.fetchReadme(owner, name, selectedVersion);
-      
-      if (content) {
-        setReadmeContent(content);
-      } else {
-        setReadmeError('README not found');
-        setReadmeContent('');
-      }
-    } catch (err) {
-      setReadmeError('Failed to load README');
-      setReadmeContent('');
-      console.error(err);
-    } finally {
-      setReadmeLoading(false);
-    }
-  };
 
   const loadAction = async () => {
     if (!owner || !name) return;
