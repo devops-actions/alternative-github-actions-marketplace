@@ -74,7 +74,16 @@ export const DetailPage: React.FC = () => {
 
   const getReadmeUrl = () => {
     if (!action) return '';
-    const version = selectedVersion || 'main';
+
+    const availableVersions = action.releaseInfo || [];
+    let version = 'main';
+
+    if (selectedVersion && availableVersions.includes(selectedVersion)) {
+      version = selectedVersion;
+    } else if (availableVersions.length > 0) {
+      version = availableVersions[0];
+    }
+
     return `https://github.com/${action.owner}/${action.name}/blob/${version}/README.md`;
   };
 
