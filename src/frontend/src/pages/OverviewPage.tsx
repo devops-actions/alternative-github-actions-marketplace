@@ -1,88 +1,255 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Action, ActionTypeFilter } from '../types/Action';
+import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 
 const PAGE_SIZE = 12;
+const OVERVIEW_STATE_KEY = 'overviewState:v1';
+
+type OverviewUiState = {
+  searchQuery: string;
+  typeFilter: ActionTypeFilter;
+  showVerifiedOnly: boolean;
+  includeArchived: boolean;
+  sortBy: 'updated' | 'dependents';
+  currentPage: number;
+  scrollY?: number;
+};
+
+function readOverviewState(): Partial<OverviewUiState> | null {
+  try {
+    const raw = sessionStorage.getItem(OVERVIEW_STATE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeOverviewState(state: OverviewUiState) {
+  try {
+    sessionStorage.setItem(OVERVIEW_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 export const OverviewPage: React.FC = () => {
-  const [actions, setActions] = useState<Action[]>([]);
+  const initialPersisted = readOverviewState();
+  const initialActions = actionsService.getActions();
+  const initialStats = actionsService.getStats();
+
+  const [actions, setActions] = useState<Action[]>(initialActions);
   const [filteredActions, setFilteredActions] = useState<Action[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>('All');
-  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<'updated' | 'dependents'>('updated');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState(() => (initialPersisted?.searchQuery ?? ''));
+  const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>(() => {
+    const candidate = initialPersisted?.typeFilter;
+    const supported: ActionTypeFilter[] = ['All', 'Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
+    return candidate && supported.includes(candidate) ? candidate : 'All';
+  });
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(() => Boolean(initialPersisted?.showVerifiedOnly));
+  const [includeArchived, setIncludeArchived] = useState(() => Boolean(initialPersisted?.includeArchived));
+  const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
+  const [currentPage, setCurrentPage] = useState(() => {
+    const candidate = Number(initialPersisted?.currentPage);
+    return Number.isFinite(candidate) && candidate > 0 ? candidate : 1;
+  });
+  const [loading, setLoading] = useState(() => initialActions.length === 0 && initialStats.total === 0);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<ActionStats>(initialStats);
   const navigate = useNavigate();
+
+  const prevFiltersRef = useRef({
+    searchQuery,
+    typeFilter,
+    showVerifiedOnly,
+    includeArchived,
+    sortBy
+  });
+  const restoredScrollRef = useRef(false);
+
+  const setTypeFilterFromStats = (type: string) => {
+    if (type === 'All') {
+      setTypeFilter('All');
+      return;
+    }
+
+    if (type === 'Verified') {
+      setShowVerifiedOnly(true);
+      return;
+    }
+
+    if (type === 'Archived') {
+      setIncludeArchived(true);
+      return;
+    }
+
+    const supportedTypes: ActionTypeFilter[] = ['Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
+    if (supportedTypes.includes(type as ActionTypeFilter)) {
+      setTypeFilter(type as ActionTypeFilter);
+      return;
+    }
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('All');
+    setShowVerifiedOnly(false);
+    setIncludeArchived(false);
+    setSortBy('updated');
+    setCurrentPage(1);
+    try {
+      sessionStorage.removeItem(OVERVIEW_STATE_KEY);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = actionsService.subscribe(() => {
       setActions(actionsService.getActions());
+      setStats(actionsService.getStats());
     });
 
-    loadActions();
+    loadData();
 
     return () => {
       unsubscribe();
     };
   }, []);
 
-  const loadActions = async () => {
-    try {
+  const loadData = async (options?: { retries?: number }) => {
+    // Cold starts + large payloads can take a while; retry a bit longer before showing an error.
+    const retries = Math.max(0, options?.retries ?? 5);
+    const hadNoData = actionsService.getActions().length === 0 && actionsService.getStats().total === 0;
+
+    if (hadNoData) {
       setLoading(true);
-      const data = await actionsService.fetchActions();
-      setActions(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load actions. Please try again later.');
-      console.error(err);
-    } finally {
-      setLoading(false);
     }
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const force = attempt > 0;
+        const [statsData, actionsData] = await Promise.all([
+          actionsService.fetchStats(force),
+          actionsService.fetchActions(force)
+        ]);
+        setStats(statsData);
+        setActions(actionsData);
+        setError(null);
+        setLoading(false);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt >= retries) {
+          break;
+        }
+        const delayMs = Math.min(2500 * (attempt + 1), 15000);
+        console.warn(`Overview load failed (attempt ${attempt + 1}/${retries + 1}); retrying in ${delayMs}ms`, err);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    setError('Failed to load actions. Please try again later.');
+    console.error(lastErr);
+    setLoading(false);
   };
+
+  useEffect(() => {
+    writeOverviewState({
+      searchQuery,
+      typeFilter,
+      showVerifiedOnly,
+      includeArchived,
+      sortBy,
+      currentPage
+    });
+  }, [searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy, currentPage]);
 
   useEffect(() => {
     let filtered = actions;
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        action =>
-          action.name.toLowerCase().includes(query) ||
-          action.owner.toLowerCase().includes(query)
-      );
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery) {
+      filtered = filtered.filter(action => {
+        const name = String(action?.name || '').toLowerCase();
+        const owner = String(action?.owner || '').toLowerCase();
+        return name.includes(normalizedQuery) || owner.includes(normalizedQuery);
+      });
     }
 
     if (typeFilter !== 'All') {
       filtered = filtered.filter(
-        action => action.actionType.actionType === typeFilter
+        action => action?.actionType?.actionType === typeFilter
       );
     }
     if (showVerifiedOnly) {
       filtered = filtered.filter(action => action.verified === true);
     }
 
+    if (includeArchived) {
+      filtered = filtered.filter(action => action?.repoInfo?.archived === true);
+    }
+
     // Apply sorting
     filtered = [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
-        const aDeps = parseInt(a.dependents.dependents) || 0;
-        const bDeps = parseInt(b.dependents.dependents) || 0;
+        const aDeps = parseInt(a?.dependents?.dependents || '') || 0;
+        const bDeps = parseInt(b?.dependents?.dependents || '') || 0;
         return bDeps - aDeps; // Descending
       } else {
         // Sort by updated date
-        const aDate = new Date(a.repoInfo.updated_at).getTime();
-        const bDate = new Date(b.repoInfo.updated_at).getTime();
+        const aDate = new Date(a?.repoInfo?.updated_at || 0).getTime();
+        const bDate = new Date(b?.repoInfo?.updated_at || 0).getTime();
         return bDate - aDate; // Descending (most recent first)
       }
     });
 
     setFilteredActions(filtered);
-    setCurrentPage(1);
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, sortBy]);
 
-  const stats = actionsService.getStats();
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.searchQuery !== searchQuery ||
+      prev.typeFilter !== typeFilter ||
+      prev.showVerifiedOnly !== showVerifiedOnly ||
+      prev.includeArchived !== includeArchived ||
+      prev.sortBy !== sortBy;
+
+    prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy };
+
+    const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (filtersChanged) {
+      setCurrentPage(1);
+    } else {
+      setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
+    }
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy]);
+
+  useEffect(() => {
+    if (restoredScrollRef.current) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const persisted = readOverviewState();
+    const scrollY = Number(persisted?.scrollY);
+    if (!Number.isFinite(scrollY) || scrollY <= 0) {
+      restoredScrollRef.current = true;
+      return;
+    }
+
+    restoredScrollRef.current = true;
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+  }, [loading]);
 
   const totalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
   const pagedActions = filteredActions.slice(
@@ -99,6 +266,15 @@ export const OverviewPage: React.FC = () => {
   const showingTo = Math.min(currentPage * PAGE_SIZE, filteredActions.length);
 
   const handleActionClick = (action: Action) => {
+    writeOverviewState({
+      searchQuery,
+      typeFilter,
+      showVerifiedOnly,
+      includeArchived,
+      sortBy,
+      currentPage,
+      scrollY: window.scrollY
+    });
     navigate(`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`);
   };
 
@@ -124,9 +300,15 @@ export const OverviewPage: React.FC = () => {
   }
 
   if (error) {
+    const empty = actions.length === 0 && stats.total === 0;
     return (
       <div className="app">
         <div className="error-message">{error}</div>
+        {empty && (
+          <button type="button" onClick={() => loadData()} style={{ marginTop: 12 }}>
+            Retry
+          </button>
+        )}
       </div>
     );
   }
@@ -139,16 +321,48 @@ export const OverviewPage: React.FC = () => {
       </div>
 
       <div className="stats-bar">
-        <div className="stat-item">
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('All')}
+          aria-label="Show all actions"
+        >
           <span className="stat-label">Total Actions</span>
           <span className="stat-value">{stats.total.toLocaleString()}</span>
-        </div>
+        </button>
+
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('Verified')}
+          aria-label="Show verified actions"
+        >
+          <span className="stat-label">Verified Actions</span>
+          <span className="stat-value">{stats.verified.toLocaleString()}</span>
+        </button>
+
         {Object.entries(stats.byType).map(([type, count]) => (
-          <div key={type} className="stat-item">
+          <button
+            key={type}
+            type="button"
+            className="stat-item stat-button"
+            onClick={() => setTypeFilterFromStats(type)}
+            aria-label={`Filter by ${type} actions`}
+          >
             <span className="stat-label">{type} Actions</span>
             <span className="stat-value">{count.toLocaleString()}</span>
-          </div>
+          </button>
         ))}
+        
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setTypeFilterFromStats('Archived')}
+          aria-label="Include archived actions"
+        >
+          <span className="stat-label">Archived Actions</span>
+          <span className="stat-value">{stats.archived.toLocaleString()}</span>
+        </button>
       </div>
 
       <div className="controls">
@@ -183,28 +397,49 @@ export const OverviewPage: React.FC = () => {
             className={typeFilter === 'All' ? 'active' : ''}
             onClick={() => {
               setTypeFilter('All');
-              setShowVerifiedOnly(false);
             }}
           >
             All
           </button>
           <button
             className={typeFilter === 'Node' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node')}
+            onClick={() => {
+              setTypeFilter(typeFilter === 'Node' ? 'All' : 'Node');
+            }}
           >
             Node/JS
           </button>
           <button
             className={typeFilter === 'Docker' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker')}
+            onClick={() => {
+              setTypeFilter(typeFilter === 'Docker' ? 'All' : 'Docker');
+            }}
           >
             Docker
           </button>
           <button
             className={typeFilter === 'Composite' ? 'active' : ''}
-            onClick={() => setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite')}
+            onClick={() => {
+              setTypeFilter(typeFilter === 'Composite' ? 'All' : 'Composite');
+            }}
           >
             Composite
+          </button>
+          <button
+            className={typeFilter === 'Unknown' ? 'active' : ''}
+            onClick={() => {
+              setTypeFilter(typeFilter === 'Unknown' ? 'All' : 'Unknown');
+            }}
+          >
+            Unknown
+          </button>
+          <button
+            className={typeFilter === 'No file found' ? 'active' : ''}
+            onClick={() => {
+              setTypeFilter(typeFilter === 'No file found' ? 'All' : 'No file found');
+            }}
+          >
+            No file found
           </button>
           <button
             className={showVerifiedOnly ? 'active' : ''}
@@ -213,13 +448,31 @@ export const OverviewPage: React.FC = () => {
           >
             Verified only
           </button>
+
+          <button
+            className={`${includeArchived ? 'active' : ''} danger`}
+            onClick={() => setIncludeArchived(v => !v)}
+          >
+            Archived
+          </button>
         </div>
       </div>
 
       {filteredActions.length === 0 ? (
         <div className="no-results">
           <h2>No actions found</h2>
-          <p>Try adjusting your search or filters</p>
+          <p>
+            Try adjusting your search or filters. ({actions.length.toLocaleString()} loaded,{' '}
+            {filteredActions.length.toLocaleString()} matching)
+          </p>
+          <button
+            type="button"
+            className="back-button"
+            onClick={clearFilters}
+            style={{ marginTop: '12px' }}
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
         <>
@@ -237,10 +490,10 @@ export const OverviewPage: React.FC = () => {
                   </div>
                   <span
                     className={`action-badge ${getActionTypeBadgeClass(
-                      action.actionType.actionType
+                      action?.actionType?.actionType
                     )}`}
                   >
-                    {action.actionType.actionType}
+                    {action?.actionType?.actionType || 'Unknown'}
                   </span>
                 </div>
 
@@ -248,7 +501,7 @@ export const OverviewPage: React.FC = () => {
                   <div className="meta-item">
                     <span>👥</span>
                     <strong className="dependents-highlight">
-                      {parseInt(action.dependents.dependents).toLocaleString()}
+                      {(parseInt(action?.dependents?.dependents || '') || 0).toLocaleString()}
                     </strong>
                     <span>Used by</span>
                   </div>
@@ -274,7 +527,12 @@ export const OverviewPage: React.FC = () => {
                     </div>
                     <div className="meta-item">
                       <span>🕐</span>
-                      <span>Updated: {new Date(action.repoInfo.updated_at).toLocaleDateString()}</span>
+                      <span>
+                        Updated:{' '}
+                        {action?.repoInfo?.updated_at
+                          ? new Date(action.repoInfo.updated_at).toLocaleDateString()
+                          : 'Unknown'}
+                      </span>
                     </div>
                   </div>
                 )}

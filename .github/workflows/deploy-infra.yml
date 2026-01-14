@@ -1,9 +1,13 @@
 name: Deploy IaC
 
+concurrency:
+  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   push:
-    branches:
+    #branches:
       #- main
     paths:
       - 'IAC/**'
@@ -23,6 +27,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    name: Deploy Infrastructure
     environment: prod
     permissions:
       id-token: write
@@ -37,6 +42,12 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Bicep template (az bicep build)
+        run: |
+          set -e
+          az bicep version || az bicep install
+          az bicep build --file IAC/main.bicep
 
       - name: Discover Static Web App outbound IPs
         id: swa-ips

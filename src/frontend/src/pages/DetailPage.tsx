@@ -11,6 +11,14 @@ export const DetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  };
+
   useEffect(() => {
     if (!owner || !name) {
       setError('Invalid action parameters');
@@ -81,7 +89,7 @@ export const DetailPage: React.FC = () => {
   if (error || !action) {
     return (
       <div className="app">
-        <button className="back-button" onClick={() => navigate('/')}>
+        <button className="back-button" onClick={handleBack}>
           ← Back to Overview
         </button>
         <div className="error-message">{error || 'Action not found'}</div>
@@ -98,7 +106,7 @@ export const DetailPage: React.FC = () => {
         <p>Browse and search through GitHub Actions</p>
       </div>
 
-      <button className="back-button" onClick={() => navigate('/')}>
+      <button className="back-button" onClick={handleBack}>
         ← Back to Overview
       </button>
 

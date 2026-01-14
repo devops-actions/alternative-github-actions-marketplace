@@ -25,3 +25,5 @@ Thumbs.db
 .funcignore
 bin/
 obj/
+src/frontend/test-results/
+src/frontend/playwright-report/

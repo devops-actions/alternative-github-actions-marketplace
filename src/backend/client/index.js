@@ -175,13 +175,17 @@ class ActionsMarketplaceClient {
   async _listViaHttp(options = {}) {
     const owner = options.owner;
     let url = `${this.apiUrl}/api/actions/list`;
-    
+
+    const query = new URLSearchParams();
     if (owner) {
-      url += `/${encodeURIComponent(owner)}`;
+      query.set('owner', owner);
     }
-    
     if (this.functionKey) {
-      url += `?code=${encodeURIComponent(this.functionKey)}`;
+      query.set('code', this.functionKey);
+    }
+    const queryString = query.toString();
+    if (queryString) {
+      url += `?${queryString}`;
     }
     
     const response = await fetch(url, {

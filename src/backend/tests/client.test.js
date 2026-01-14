@@ -375,7 +375,7 @@ describe('ActionsMarketplaceClient', () => {
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockFetch).toHaveBeenCalledWith(
-          'https://example.com/api/actions/list/actions',
+          'https://example.com/api/actions/list?owner=actions',
           expect.objectContaining({
             method: 'GET'
           })

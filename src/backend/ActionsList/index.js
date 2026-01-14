@@ -1,18 +1,30 @@
 const { getTableClient } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
+const { withCorsHeaders } = require('../lib/cors');
 
 module.exports = async function actionsList(context, req) {
+  if (req.method === 'OPTIONS') {
+    context.res = {
+      status: 204,
+      headers: withCorsHeaders(req, { 'Allow': 'GET,OPTIONS' })
+    };
+    return;
+  }
+
   if (req.method !== 'GET') {
     context.res = {
       status: 405,
-      headers: { 'Allow': 'GET' },
+      headers: withCorsHeaders(req, { 'Allow': 'GET,OPTIONS' }),
       body: { error: 'Method not allowed.' }
     };
     return;
   }
 
-  const owner = context.bindingData && context.bindingData.owner;
+  const owner = (req && req.query && req.query.owner)
+    ? String(req.query.owner)
+    : (context.bindingData && context.bindingData.owner);
   const tableClient = getTableClient();
+  const tableUrl = tableClient && tableClient.url ? tableClient.url.split('?')[0] : 'unknown';
   let entities = [];
 
   // For now, only support in-memory/fake client for integration tests
@@ -22,21 +34,31 @@ module.exports = async function actionsList(context, req) {
       const entityOwner = e.Owner || (e.PayloadJson && JSON.parse(e.PayloadJson).owner);
       return owner ? entityOwner === owner : true;
     });
+    const results = entities.map(e => {
+      try {
+        return ActionRecord.fromEntity(e).toActionInfo(true, {
+          etag: e.etag,
+          lastSyncedUtc: e.LastSyncedUtc,
+          partitionKey: e.partitionKey || e.PartitionKey,
+          rowKey: e.rowKey || e.RowKey
+        });
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    context.log(`ActionsList: returning ${results.length} entities (fake client), table ${tableUrl}`);
+
     context.res = {
       status: 200,
-      body: entities.map(e => {
-        try {
-          return ActionRecord.fromEntity(e).toActionInfo(true, {
-            etag: e.etag,
-            lastSyncedUtc: e.LastSyncedUtc,
-            partitionKey: e.partitionKey || e.PartitionKey,
-            rowKey: e.rowKey || e.RowKey
-          });
-        } catch {
-          return null;
-        }
-      }).filter(Boolean)
+      headers: {
+        'X-Actions-Count': results.length,
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json'
+      },
+      body: results
     };
+    context.res.headers = withCorsHeaders(req, context.res.headers);
     return;
   }
 
@@ -54,25 +76,36 @@ module.exports = async function actionsList(context, req) {
       entities.push(entity);
     }
 
+    const results = entities.map(e => {
+      try {
+        return ActionRecord.fromEntity(e).toActionInfo(true, {
+          etag: e.etag,
+          lastSyncedUtc: e.LastSyncedUtc,
+          partitionKey: e.partitionKey,
+          rowKey: e.rowKey
+        });
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    context.log(`ActionsList: returning ${results.length} entities, table ${tableUrl}`);
+
     context.res = {
       status: 200,
-      body: entities.map(e => {
-        try {
-          return ActionRecord.fromEntity(e).toActionInfo(true, {
-            etag: e.etag,
-            lastSyncedUtc: e.LastSyncedUtc,
-            partitionKey: e.partitionKey,
-            rowKey: e.rowKey
-          });
-        } catch {
-          return null;
-        }
-      }).filter(Boolean)
+      headers: {
+        'X-Actions-Count': results.length,
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json'
+      },
+      body: results
     };
+    context.res.headers = withCorsHeaders(req, context.res.headers);
   } catch (error) {
     context.log.error('Error querying actions table:', error);
     context.res = {
       status: 500,
+      headers: withCorsHeaders(req),
       body: { error: 'Failed to query actions from table storage.' }
     };
   }

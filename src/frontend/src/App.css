@@ -57,6 +57,28 @@ body {
   flex-direction: column;
 }
 
+.stat-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-button:hover .stat-label {
+  color: #24292e;
+}
+
+.stat-button:hover .stat-value {
+  text-decoration: underline;
+}
+
+.stat-button:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .stat-label {
   font-size: 14px;
   color: #666;
@@ -129,6 +151,21 @@ body {
   background: #0366d6;
   color: white;
   border-color: #0366d6;
+}
+
+.filter-group button.danger {
+  border-color: #d73a49;
+  color: #d73a49;
+}
+
+.filter-group button.danger:hover {
+  background: #fff5f0;
+}
+
+.filter-group button.danger.active {
+  background: #d73a49;
+  border-color: #d73a49;
+  color: white;
 }
 
 .actions-grid {

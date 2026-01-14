@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test"
   },
   "keywords": [],
   "author": "",
   "license": "CC0-1.0",
   "description": "Frontend for the alternative GitHub Actions marketplace",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@microsoft/applicationinsights-web": "^3.0.6",
     "react": "^19.2.3",
@@ -19,9 +23,11 @@
     "react-router-dom": "^7.12.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "dotenv": "^17.2.3",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
   }
