@@ -74,7 +74,6 @@ export const DetailPage: React.FC = () => {
 
   const getReadmeUrl = () => {
     if (!action) return '';
-
     const availableVersions = action.releaseInfo || [];
     let version = 'main';
 
@@ -84,7 +83,11 @@ export const DetailPage: React.FC = () => {
       version = availableVersions[0];
     }
 
-    return `https://github.com/${action.owner}/${action.name}/blob/${version}/README.md`;
+    const repoName = action.name.startsWith(`${action.owner}_`)
+      ? action.name.substring(action.owner.length + 1)
+      : action.name;
+
+    return `https://github.com/${action.owner}/${repoName}/blob/${version}/README.md`;
   };
 
   if (loading) {
@@ -198,7 +201,7 @@ export const DetailPage: React.FC = () => {
                 : 'Size N/A'}
               <br />
               <a
-                href={`https://github.com/${action.owner}/${action.name}`}
+                href={`https://github.com/${action.owner}/${(action.name.startsWith(`${action.owner}_`) ? action.name.substring(action.owner.length + 1) : action.name)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="repo-link"
