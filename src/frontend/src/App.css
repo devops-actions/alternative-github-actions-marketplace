@@ -427,6 +427,26 @@ body {
   color: #24292e;
 }
 
+/* Age indicators for Last Updated */
+.info-card .value.aged {
+  color: #d9822b; /* orange-ish */
+}
+
+.info-card .value.stale {
+  color: #d73a49; /* red */
+}
+
+/* Make the whole info-card panel stand out when aged/stale */
+.info-card.aged {
+  border-color: #d9822b;
+  background: rgba(217,130,43,0.06);
+}
+
+.info-card.stale {
+  border-color: #d73a49;
+  background: rgba(215,58,73,0.06);
+}
+
 .version-selector {
   margin-bottom: 30px;
 }

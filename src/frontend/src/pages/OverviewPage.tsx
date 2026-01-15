@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
+import { normalizeRepoName } from '../services/utils';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -317,7 +318,7 @@ export const OverviewPage: React.FC = () => {
     <div className="app">
       <div className="header">
         <h1>Alternative GitHub Actions Marketplace</h1>
-        <p>Browse and search through {stats.total.toLocaleString()} GitHub Actions</p>
+        <p>Browse and search through {stats.total.toLocaleString()} GitHub Actions with more information</p>
       </div>
 
       <div className="stats-bar">
@@ -485,8 +486,8 @@ export const OverviewPage: React.FC = () => {
               >
                 <div className="action-header">
                   <div className="action-title">
-                    <div className="action-owner">{action.owner}</div>
-                    <div className="action-name">{action.name}</div>
+                      <div className="action-owner">{action.owner}</div>
+                      <div className="action-name">{normalizeRepoName(action.owner, action.name)}</div>
                   </div>
                   <span
                     className={`action-badge ${getActionTypeBadgeClass(
@@ -519,23 +520,23 @@ export const OverviewPage: React.FC = () => {
                   )}
                 </div>
 
-                {action.releaseInfo && action.releaseInfo.length > 0 && (
-                  <div className="action-meta">
+                <div className="action-meta">
+                  {action.releaseInfo && action.releaseInfo.length > 0 && (
                     <div className="meta-item">
                       <span>🏷️</span>
                       <span>Latest: {action.releaseInfo[0]}</span>
                     </div>
-                    <div className="meta-item">
-                      <span>🕐</span>
-                      <span>
-                        Updated:{' '}
-                        {action?.repoInfo?.updated_at
-                          ? new Date(action.repoInfo.updated_at).toLocaleDateString()
-                          : 'Unknown'}
-                      </span>
-                    </div>
+                  )}
+                  <div className="meta-item">
+                    <span>🕐</span>
+                    <span>
+                      Updated:{' '}
+                      {action?.repoInfo?.updated_at
+                        ? new Date(action.repoInfo.updated_at).toLocaleDateString()
+                        : 'Unknown'}
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
             ))}
           </div>

@@ -517,3 +517,37 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await assertCardsAreArchived(page);
   });
 });
+
+test('shows Updated for actions without releaseInfo', async ({ page }) => {
+  // Find any cached action that has no releaseInfo (or empty array)
+  const target = cachedActions.find(a => !a.releaseInfo || a.releaseInfo.length === 0);
+  if (!target) {
+    test.skip(true, 'No action without releaseInfo available from API');
+  }
+
+  await waitForResults(page);
+
+  // Find the card that matches owner/displayed name (normalize owner_ prefix)
+  const cards = page.locator('.action-card');
+  const count = await cards.count();
+  let found = false;
+  // compute displayed repo name the same way the UI does
+  const displayedName = (target.owner && target.name && target.name.startsWith(`${target.owner}_`))
+    ? target.name.substring(target.owner.length + 1)
+    : target.name;
+
+  for (let i = 0; i < count; i += 1) {
+    const card = cards.nth(i);
+    const text = (await card.innerText()).replace(/\s+/g, ' ');
+    if (text.includes(target.owner) && text.includes(displayedName || '')) {
+      // The card should contain an Updated: label
+      await expect(card.getByText(/Updated:/)).toBeVisible();
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    test.skip(true, 'Matching action card not found in rendered UI');
+  }
+});
