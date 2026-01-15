@@ -354,8 +354,12 @@ test('detail page renders for first action', async ({ page }) => {
     `/action/${encodeURIComponent(first.owner)}/${encodeURIComponent(first.name)}`
   );
   await page.goto(detailUrl, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.detail-owner')).toHaveText(first.owner, { timeout: 45000 });
-  await expect(page.locator('.detail-title')).toContainText(first.name);
+  // Title now displays "owner / repo" on one line; assert both parts are present
+  await expect(page.locator('.detail-title')).toContainText(first.owner, { timeout: 45000 });
+  const displayedName = (first.owner && first.name && first.name.startsWith(`${first.owner}_`))
+    ? first.name.substring(first.owner.length + 1)
+    : first.name;
+  await expect(page.locator('.detail-title')).toContainText(displayedName);
 });
 
 test.describe('Stats panel filters (persist across refresh)', () => {

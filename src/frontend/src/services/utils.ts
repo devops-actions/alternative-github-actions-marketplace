@@ -18,3 +18,21 @@ export function normalizeRepoName(owner?: string, name?: string) {
 }
 
 export default { splitOwnerRepo, normalizeRepoName };
+
+export function matchesSearchQuery(item: { owner?: string; name?: string }, rawQuery?: string) {
+  if (!rawQuery) return true;
+  const q = String(rawQuery).trim().toLowerCase();
+  if (!q) return true;
+
+  // Normalize searchable text: owner + name, replace non-alphanum with spaces
+  const owner = String(item.owner || '').toLowerCase();
+  const name = String(item.name || '').toLowerCase();
+  const searchable = `${owner} ${name}`.replace(/[^a-z0-9]+/g, ' ').trim();
+
+  // Normalize query: replace non-alphanum with space and split tokens
+  const tokens = q.replace(/[^a-z0-9]+/g, ' ').split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  // Every token must appear somewhere in the searchable string
+  return tokens.every(t => searchable.includes(t));
+}

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
-import { normalizeRepoName } from '../services/utils';
+import { normalizeRepoName, matchesSearchQuery } from '../services/utils';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -174,13 +174,9 @@ export const OverviewPage: React.FC = () => {
   useEffect(() => {
     let filtered = actions;
 
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim();
     if (normalizedQuery) {
-      filtered = filtered.filter(action => {
-        const name = String(action?.name || '').toLowerCase();
-        const owner = String(action?.owner || '').toLowerCase();
-        return name.includes(normalizedQuery) || owner.includes(normalizedQuery);
-      });
+      filtered = filtered.filter(action => matchesSearchQuery({ owner: action.owner, name: action.name }, normalizedQuery));
     }
 
     if (typeFilter !== 'All') {
