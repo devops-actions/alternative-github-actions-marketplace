@@ -40,7 +40,9 @@ npm run dev
 
 The application will be available at `http://localhost:3000`.
 
-By default, it will proxy API requests to `http://localhost:7071/api`. You can override this with the `VITE_API_BASE_URL` environment variable.
+By default, the app calls the API at `/api/*` and the Vite dev server proxies those requests to `http://localhost:7071`.
+
+If you want to proxy to a different backend origin while developing, set `VITE_API_PROXY_TARGET` (for example, `http://localhost:7072`).
 
 ### Build for production
 
@@ -52,7 +54,8 @@ The built files will be in the `dist` directory.
 
 ### Environment Variables
 
-- `VITE_API_BASE_URL`: Base URL for the API (default: `/api`)
+- `VITE_API_BASE_URL`: Base URL for the API from the browser (default: `/api`)
+- `VITE_API_PROXY_TARGET`: Backend origin the Vite dev server should proxy `/api/*` requests to (default: `http://localhost:7071`)
 
 ## Architecture
 
