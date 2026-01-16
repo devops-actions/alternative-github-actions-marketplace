@@ -59,8 +59,6 @@ export const OverviewPage: React.FC = () => {
     return persisted || 'all';
   });
   const [archivedFilter, setArchivedFilter] = useState<'hide' | 'show' | 'only'>(() => {
-    const candidate = initialPersisted?.openssfFilter as unknown as string | undefined;
-    // if there's an explicit persisted archivedFilter use it, otherwise default to 'hide'
     const persisted = (initialPersisted as any)?.archivedFilter as 'hide' | 'show' | 'only' | undefined;
     return persisted || 'hide';
   });
@@ -259,7 +257,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, sortBy, openssfFilter]);
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, verifiedFilter, sortBy, openssfFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
