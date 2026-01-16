@@ -29,12 +29,13 @@ module.exports = async function actionsStats(context, req) {
 
   try {
     for await (const entity of tableClient.listEntities()) {
-      total += 1;
-
       try {
         const payload = typeof entity.PayloadJson === 'string'
           ? JSON.parse(entity.PayloadJson)
           : (entity.PayloadJson || {});
+
+        // Only count entities that we can successfully parse and inspect.
+        total += 1;
 
         const type = payload.actionType && payload.actionType.actionType;
         if (type) {
@@ -49,7 +50,7 @@ module.exports = async function actionsStats(context, req) {
           archived += 1;
         }
       } catch (parseErr) {
-        // skip malformed payloads
+        // skip malformed payloads entirely (don't include in totals)
       }
     }
 

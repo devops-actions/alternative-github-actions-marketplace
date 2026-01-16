@@ -1,7 +1,7 @@
 [
 	{
 		"owner": "Owner1",
-		"name": "Owner1_github-actions-jwt-generator",
+		"name": "github-actions-jwt-generator",
 		"dependabot": null,
 		"vulnerabilityStatus": { "lastUpdated": "2022-11-25T14:24:07.8339363Z", "critical": 0, "high": 0 },
 		"forkFound": true,
@@ -21,7 +21,7 @@
 	},
 	{
 		"owner": "Owner2",
-		"name": "Owner2_container-audit",
+		"name": "container-audit",
 		"dependabot": { "alerts": 2, "open": 1 },
 		"vulnerabilityStatus": { "lastUpdated": "2023-03-10T08:11:00Z", "critical": 1, "high": 2 },
 		"forkFound": false,
@@ -41,7 +41,7 @@
 	},
 	{
 		"owner": "Owner3",
-		"name": "Owner3_codeql-bootstrap",
+		"name": "codeql-bootstrap",
 		"dependabot": null,
 		"vulnerabilityStatus": { "lastUpdated": "2024-08-22T15:00:00Z", "critical": 0, "high": 1 },
 		"forkFound": true,
@@ -61,7 +61,7 @@
 	},
 	{
 		"owner": "Owner4",
-		"name": "Owner4_secret-auditor",
+		"name": "secret-auditor",
 		"dependabot": { "alerts": 0, "open": 0 },
 		"vulnerabilityStatus": { "lastUpdated": "2025-06-30T06:30:00Z", "critical": 0, "high": 0 },
 		"forkFound": false,
@@ -81,7 +81,7 @@
 	},
 	{
 		"owner": "Owner1",
-		"name": "Owner1_deprecated-cache",
+		"name": "deprecated-cache",
 		"dependabot": null,
 		"vulnerabilityStatus": { "lastUpdated": "2021-07-14T00:00:00Z", "critical": 0, "high": 0 },
 		"forkFound": false,
