@@ -190,15 +190,13 @@ async function ensureActionsVisible(page: Page) {
 async function resetFilters(page: Page) {
   await typeFilterGroup(page).getByRole('button', { name: 'All', exact: true }).click();
 
-  const verifiedOnly = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
-  if (await verifiedOnly.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
-    await verifiedOnly.click();
-  }
+  // Reset verified select to 'all'
+  const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+  await verifiedSelect.selectOption('all');
 
-  const archived = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
-  if (await archived.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
-    await archived.click();
-  }
+  // Reset archived select to 'hide'
+  const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+  await archivedSelect.selectOption('hide');
 }
 
 async function assertTypeFilterActive(page: Page, label: string) {
@@ -207,20 +205,31 @@ async function assertTypeFilterActive(page: Page, label: string) {
 }
 
 async function assertVerifiedOnlyActive(page: Page, active: boolean) {
-  const button = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
+  const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+  const val = await verifiedSelect.inputValue();
   if (active) {
-    await expect(button).toHaveClass(/active/);
+    if (val !== 'verified') {
+      throw new Error('Expected verified filter to be active but it is not');
+    }
   } else {
-    await expect(button).not.toHaveClass(/active/);
+    if (val === 'verified') {
+      throw new Error('Expected verified filter to not be active but it is');
+    }
   }
 }
 
 async function assertArchivedToggleActive(page: Page, active: boolean) {
-  const button = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
+  // active=true means archived is not hidden (either 'show' or 'only')
+  const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+  const val = await archivedSelect.inputValue();
   if (active) {
-    await expect(button).toHaveClass(/active/);
+    if (val === 'hide') {
+      throw new Error('Expected archived filter to be active but it is set to hide');
+    }
   } else {
-    await expect(button).not.toHaveClass(/active/);
+    if (val !== 'hide') {
+      throw new Error('Expected archived filter to be hide but it is not');
+    }
   }
 }
 
@@ -416,7 +425,9 @@ test.describe('Stats panel filters (persist across refresh)', () => {
       if (!hasArchived) {
         test.skip(true, 'No archived actions available to validate archived toggle');
       }
-      await assertArchivedToggleActive(page, true);
+      // set archived select to 'only'
+      const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+      await archivedSelect.selectOption('only');
       await assertCardsAreArchived(page);
     }
   });
@@ -489,7 +500,8 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await waitForResults(page);
     await resetFilters(page);
 
-    await page.getByRole('button', { name: 'Verified only' }).click();
+    const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+    await verifiedSelect.selectOption('verified');
     await waitForResults(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -511,7 +523,8 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await ensureActionsVisible(page);
     await resetFilters(page);
 
-    await typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true }).click();
+    const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+    await archivedSelect.selectOption('only');
     await ensureActionsVisible(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });

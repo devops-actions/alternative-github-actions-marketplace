@@ -36,3 +36,13 @@ export function matchesSearchQuery(item: { owner?: string; name?: string }, rawQ
   // Every token must appear somewhere in the searchable string
   return tokens.every(t => searchable.includes(t));
 }
+
+export function isActionVerified(action: Partial<Action> | { verified?: unknown }) {
+  const v = (action && (action as any).verified) as unknown;
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') {
+    const s = v.toLowerCase().trim();
+    return s === 'true' || s === '1';
+  }
+  return false;
+}
