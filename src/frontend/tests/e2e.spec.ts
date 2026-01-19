@@ -123,10 +123,44 @@ async function waitForOverviewSettled(page: Page) {
   }
 
   const stillLoading = await loadingIndicator.isVisible().catch(() => false);
+  // Collect quick API diagnostics from the browser to aid CI debugging.
+  let apiDiag = '';
+  try {
+    const apiBase = getApiBaseUrl();
+    const diag = await reqEval();
+    apiDiag = `API diagnostics: list=${diag.listStatus||diag.listError}, stats=${diag.statsStatus||diag.statsError}`;
+  } catch (e) {
+    apiDiag = `API diagnostics unavailable: ${String(e)}`;
+  }
+
   throw new Error(
     `Overview did not settle within ${overallTimeoutMs}ms. ` +
-    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}`
+    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}. ${apiDiag}`
   );
+
+  // Evaluate inside the browser to fetch API endpoints and return statuses/snippets.
+  async function reqEval() {
+    return await (async () => {
+      try {
+        return await page.evaluate(async (base) => {
+          const wrap = async (path) => {
+            try {
+              const resp = await fetch(base + path, { cache: 'no-store' });
+              const text = await resp.text().catch(() => '');
+              return { status: resp.status, body: text.slice(0, 1000) };
+            } catch (err) {
+              return { error: String(err) };
+            }
+          };
+          const list = await wrap('/actions/list');
+          const stats = await wrap('/actions/stats');
+          return { listStatus: list.status, listError: list.error, listBody: list.body, statsStatus: stats.status, statsError: stats.error, statsBody: stats.body };
+        }, apiBase);
+      } catch (e) {
+        return { error: String(e) };
+      }
+    })();
+  }
 }
 
 type PageDiagnostics = {
@@ -172,6 +206,9 @@ async function goHome(page: Page, diagnostics?: PageDiagnostics) {
     );
   }
 }
+
+// Export helpers for other test files to reuse (keeps waiting/diagnostics consistent)
+export { waitForResults, goHome };
 
 async function waitForResults(page: Page) {
   const card = page.locator('.action-card').first();
@@ -458,7 +495,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
 
       // Refresh (simulates F5) and ensure state is preserved.
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+      await waitForResults(page);
 
       await c.assert(page, items);
     });
@@ -493,7 +530,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
       await waitForResults(page);
 
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+      await waitForResults(page);
 
       await assertTypeFilterActive(page, label);
       if (type !== 'All') {
@@ -519,7 +556,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await waitForResults(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+    await waitForResults(page);
 
     await assertVerifiedOnlyActive(page, true);
     await waitForResults(page);
@@ -542,7 +579,7 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await ensureActionsVisible(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+    await waitForResults(page);
 
     await assertArchivedToggleActive(page, true);
     await assertCardsAreArchived(page);
