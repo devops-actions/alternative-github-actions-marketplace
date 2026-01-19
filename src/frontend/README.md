@@ -59,6 +59,25 @@ The built files will be in the `dist` directory.
 
 ## Architecture
 
+### Running Playwright tests (important note)
+
+- When running the built frontend and Playwright tests, start the static server and the Playwright test runner in separate terminal sessions. Do NOT start the server and then run tests in the same shell session where the server is running in the foreground — Playwright will try to connect to the server but if you stop or cancel the server process to continue work in that same terminal, the tests will fail with connection errors.
+- Example (terminal A): start the static server serving the `dist` folder
+
+```powershell
+cd src/frontend
+npx http-server ./dist -p 3000
+```
+
+- Example (terminal B): run Playwright tests while the server is running
+
+```powershell
+cd src/frontend
+npx playwright test
+```
+
+- Rationale: Running the server in one session and tests in another keeps the server process alive while the Playwright runner connects. If you start the server in the same terminal and then cancel it to run tests, the server will be stopped and Playwright will receive `ERR_CONNECTION_REFUSED` errors.
+
 ### Data Service
 
 The `actionsService` is a singleton service that:

@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForResults } from './e2e.spec';
-
-const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
+import { waitForResults, getFrontendBaseUrl } from './test-helpers';
 
 test('fuzzy search finds owner actions', async ({ page }) => {
   await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });

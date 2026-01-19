@@ -1,4 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
+import { waitForResults, goHome, getFrontendBaseUrl, getApiBaseUrl, joinUrl } from './test-helpers';
+import type { PageDiagnostics } from './test-helpers';
 
 type ActionListItem = {
   owner: string;
@@ -12,24 +14,6 @@ const OVERVIEW_STATE_KEY = 'overviewState:v1';
 let cachedActions: ActionListItem[] = [];
 let apiReady = false;
 let apiError: Error | null = null;
-
-const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
-
-function joinUrl(baseUrl: string, path: string) {
-  const base = baseUrl.replace(/\/+$/, '');
-  const suffix = path.replace(/^\/+/, '');
-  return `${base}/${suffix}`;
-}
-
-const getApiBaseUrl = () => {
-  const explicit = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL;
-  if (explicit) {
-    return explicit;
-  }
-
-  // Fallback for local setups that serve Functions behind /api.
-  return joinUrl(getFrontendBaseUrl(), '/api');
-};
 
 async function fetchActionsList(): Promise<ActionListItem[]> {
   const apiBaseUrl = getApiBaseUrl();
@@ -168,70 +152,7 @@ type PageDiagnostics = {
   network: string[];
 };
 
-async function goHome(page: Page, diagnostics?: PageDiagnostics) {
-  const response = await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
-  const status = response?.status();
-  if (typeof status === 'number' && status >= 400) {
-    throw new Error(`Frontend navigation failed with HTTP ${status}`);
-  }
-
-  await expect(page).toHaveTitle(/Alternative GitHub Actions Marketplace/, { timeout: 60000 });
-
-  try {
-    await waitForOverviewSettled(page);
-
-    // If the API has actions but the UI is still showing an empty state,
-    // give it a little extra time (large payload / slower rendering), then fail.
-    if (cachedActions.length > 0) {
-      const cards = page.locator('.action-card').first();
-      const noResults = page.locator('.no-results').first();
-      if (await noResults.isVisible().catch(() => false)) {
-        await page.waitForTimeout(5000);
-        if (!(await cards.isVisible().catch(() => false))) {
-          throw new Error(`UI shows no results but API reports ${cachedActions.length} actions`);
-        }
-      }
-    }
-  } catch (err) {
-    const url = page.url();
-    const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
-    const rootLen = (rootHtml || '').trim().length;
-
-    const consoleTail = diagnostics?.console?.slice(-30).join('\n') || '(none)';
-    const networkTail = diagnostics?.network?.slice(-30).join('\n') || '(none)';
-    throw new Error(
-      `Overview did not render. url=${url}, httpStatus=${String(status)}, rootHtmlLength=${rootLen}. ${String(err)}\n\n` +
-      `--- Browser console (tail) ---\n${consoleTail}\n\n` +
-      `--- Network (tail) ---\n${networkTail}`
-    );
-  }
-}
-
-// Export helpers for other test files to reuse (keeps waiting/diagnostics consistent)
-export { waitForResults, goHome };
-
-async function waitForResults(page: Page) {
-  const card = page.locator('.action-card').first();
-  const empty = page.locator('.no-results').first();
-
-  // Wait for either an action card or the no-results placeholder.
-  const timeoutMs = 120000;
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await card.isVisible().catch(() => false)) return;
-    if (await empty.isVisible().catch(() => false)) return;
-    await page.waitForTimeout(1000);
-  }
-
-  // Collect some diagnostics from the page to help CI logs.
-  const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
-  const rootLen = (rootHtml || '').trim().length;
-  const errEl = page.locator('.error-message').first();
-  const errText = (await errEl.innerText().catch(() => '')).trim();
-  throw new Error(
-    `waitForResults: no .action-card or .no-results visible after ${timeoutMs}ms. rootHtmlLength=${rootLen}. errorMessage=${errText || '(none)'} `
-  );
-}
+// Note: `goHome`, `waitForResults` and related helpers are provided by ./test-helpers
 
 async function ensureActionsVisible(page: Page) {
   // Wait until at least one action card or no-results is visible (loading finished).

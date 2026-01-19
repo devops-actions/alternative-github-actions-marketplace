@@ -1,11 +1,10 @@
 import { test, expect } from '@playwright/test';
-
-const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
+import { getFrontendBaseUrl, waitForResults } from './test-helpers';
 
 test.describe('OpenSSF filter', () => {
   test('filter dropdown hides actions below threshold', async ({ page }) => {
     await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.action-card', { timeout: 60000 });
+    await waitForResults(page);
 
     // Count cards with a score <= 5 (low-score) and >7 (high-score)
     const cards = page.locator('.action-card');
