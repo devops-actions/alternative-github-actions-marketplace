@@ -176,10 +176,24 @@ async function goHome(page: Page, diagnostics?: PageDiagnostics) {
 async function waitForResults(page: Page) {
   const card = page.locator('.action-card').first();
   const empty = page.locator('.no-results').first();
-  await Promise.race([
-    card.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined),
-    empty.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined)
-  ]);
+
+  // Wait for either an action card or the no-results placeholder.
+  const timeoutMs = 120000;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await card.isVisible().catch(() => false)) return;
+    if (await empty.isVisible().catch(() => false)) return;
+    await page.waitForTimeout(1000);
+  }
+
+  // Collect some diagnostics from the page to help CI logs.
+  const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
+  const rootLen = (rootHtml || '').trim().length;
+  const errEl = page.locator('.error-message').first();
+  const errText = (await errEl.innerText().catch(() => '')).trim();
+  throw new Error(
+    `waitForResults: no .action-card or .no-results visible after ${timeoutMs}ms. rootHtmlLength=${rootLen}. errorMessage=${errText || '(none)'} `
+  );
 }
 
 async function ensureActionsVisible(page: Page) {

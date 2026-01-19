@@ -491,8 +491,11 @@ jobs:
             -H "Access-Control-Request-Headers: content-type" \
             "$API_BASE_URL/actions/list" || true)
           sed -n '1,25p' /tmp/actions-list.options.headers || true
-          if [ "$optCode" != "204" ]; then
+          # Accept 204 or 200 from some hosting configurations; treat other codes as failure.
+          if [ "$optCode" != "204" ] && [ "$optCode" != "200" ]; then
             echo "::error::OPTIONS preflight for /actions/list failed (http=$optCode)."
+            echo "--- OPTIONS response headers ---"
+            sed -n '1,200p' /tmp/actions-list.options.headers || true
             exit 1
           fi
 
@@ -513,8 +516,10 @@ jobs:
             -H "Access-Control-Request-Headers: content-type" \
             "$API_BASE_URL/actions/stats" || true)
           sed -n '1,25p' /tmp/actions-stats.options.headers || true
-          if [ "$statsOptCode" != "204" ]; then
+          if [ "$statsOptCode" != "204" ] && [ "$statsOptCode" != "200" ]; then
             echo "::error::OPTIONS preflight for /actions/stats failed (http=$statsOptCode)."
+            echo "--- OPTIONS response headers ---"
+            sed -n '1,200p' /tmp/actions-stats.options.headers || true
             exit 1
           fi
 
