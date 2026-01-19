@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 import { waitForResults, goHome, getFrontendBaseUrl, getApiBaseUrl, joinUrl } from './test-helpers';
-import type { PageDiagnostics } from './test-helpers';
 
 type ActionListItem = {
   owner: string;
@@ -12,38 +13,52 @@ type ActionListItem = {
 };
 
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
+const CACHE_FILE = path.join(process.cwd(), 'test-results', 'actions-cache.json');
+
 let cachedActions: ActionListItem[] = [];
-let apiReady = false;
-let apiError: Error | null = null;
+let cacheLoaded = false;
+let cacheError: string | null = null;
 
-async function fetchActionsList(): Promise<ActionListItem[]> {
-  const apiBaseUrl = getApiBaseUrl();
-  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'), {
-    headers: {
-      'Cache-Control': 'no-cache'
-    }
-  });
-
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch actions list: ${resp.status}`);
+/**
+ * Load actions from the cache file created by global-setup.
+ * This avoids each worker hitting the 16MB API endpoint.
+ */
+function loadCachedActions(): ActionListItem[] {
+  if (cacheLoaded) {
+    return cachedActions;
   }
 
-  const data = (await resp.json()) as unknown;
-  return Array.isArray(data) ? (data as ActionListItem[]) : [];
-}
-
-async function fetchActionsListWithRetry(retries: number = 8, delayMs: number = 5000): Promise<ActionListItem[]> {
-  let lastErr: unknown;
-  for (let i = 0; i < retries; i += 1) {
-    try {
-      return await fetchActionsList();
-    } catch (err) {
-      lastErr = err;
-      console.log(`API fetch attempt ${i + 1}/${retries} failed, retrying in ${delayMs}ms...`);
-      await new Promise(res => setTimeout(res, delayMs));
+  try {
+    if (!fs.existsSync(CACHE_FILE)) {
+      cacheError = 'Cache file not found - global setup may have failed';
+      cacheLoaded = true;
+      return [];
     }
+
+    const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+
+    if (data && typeof data === 'object' && 'error' in data) {
+      cacheError = String(data.error);
+      cacheLoaded = true;
+      return [];
+    }
+
+    if (!Array.isArray(data)) {
+      cacheError = 'Cache file does not contain an array';
+      cacheLoaded = true;
+      return [];
+    }
+
+    cachedActions = data as ActionListItem[];
+    cacheLoaded = true;
+    console.log(`[e2e] Loaded ${cachedActions.length} actions from cache`);
+    return cachedActions;
+  } catch (err) {
+    cacheError = String(err);
+    cacheLoaded = true;
+    return [];
   }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function clearPersistedOverviewState(page: Page) {
@@ -109,44 +124,11 @@ async function waitForOverviewSettled(page: Page) {
   }
 
   const stillLoading = await loadingIndicator.isVisible().catch(() => false);
-  // Collect quick API diagnostics from the browser to aid CI debugging.
-  let apiDiag = '';
-  try {
-    const apiBase = getApiBaseUrl();
-    const diag = await reqEval();
-    apiDiag = `API diagnostics: list=${diag.listStatus||diag.listError}, stats=${diag.statsStatus||diag.statsError}`;
-  } catch (e) {
-    apiDiag = `API diagnostics unavailable: ${String(e)}`;
-  }
 
   throw new Error(
     `Overview did not settle within ${overallTimeoutMs}ms. ` +
-    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}. ${apiDiag}`
+    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}.`
   );
-
-  // Evaluate inside the browser to fetch API endpoints and return statuses/snippets.
-  async function reqEval() {
-    return await (async () => {
-      try {
-        return await page.evaluate(async (base) => {
-          const wrap = async (path) => {
-            try {
-              const resp = await fetch(base + path, { cache: 'no-store' });
-              const text = await resp.text().catch(() => '');
-              return { status: resp.status, body: text.slice(0, 1000) };
-            } catch (err) {
-              return { error: String(err) };
-            }
-          };
-          const list = await wrap('/actions/list');
-          const stats = await wrap('/actions/stats');
-          return { listStatus: list.status, listError: list.error, listBody: list.body, statsStatus: stats.status, statsError: stats.error, statsBody: stats.body };
-        }, apiBase);
-      } catch (e) {
-        return { error: String(e) };
-      }
-    })();
-  }
 }
 
 type PageDiagnostics = {
@@ -285,17 +267,14 @@ test.beforeEach(async ({ page }) => {
     }
   });
 
-  if (!apiReady) {
-    if (apiError) {
-      test.skip(true, `API unavailable: ${apiError.message}`);
-    }
-    try {
-      cachedActions = await fetchActionsListWithRetry();
-      apiReady = true;
-    } catch (err) {
-      apiError = err as Error;
-      test.skip(true, `API unavailable: ${apiError.message}`);
-    }
+  // Load actions from cache (created by global-setup) instead of fetching from API.
+  // This avoids each worker independently hitting the 16MB endpoint.
+  const actions = loadCachedActions();
+  if (cacheError) {
+    test.skip(true, `Actions cache unavailable: ${cacheError}`);
+  }
+  if (actions.length === 0) {
+    test.skip(true, 'No actions in cache - global setup may have failed');
   }
 
   // Clear persisted state once before the first document load for this test.
@@ -511,9 +490,11 @@ test.describe('Filter buttons (persist across refresh)', () => {
 
 test('shows Updated for actions without releaseInfo', async ({ page }) => {
   // Find any cached action that has no releaseInfo (or empty array)
-  const target = cachedActions.find(a => !a.releaseInfo || a.releaseInfo.length === 0);
+  const actions = loadCachedActions();
+  const target = actions.find(a => !a.releaseInfo || (Array.isArray(a.releaseInfo) && a.releaseInfo.length === 0));
   if (!target) {
     test.skip(true, 'No action without releaseInfo available from API');
+    return; // Explicit return for TypeScript narrowing
   }
 
   await waitForResults(page);

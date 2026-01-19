@@ -15,6 +15,7 @@ const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0
   : (process.env.CI ? Math.min(2, os.cpus().length || 1) : undefined);
 
 export default defineConfig({
+  globalSetup: './tests/global-setup.ts',
   fullyParallel: true,
   workers,
   retries: process.env.CI ? 1 : 0,
