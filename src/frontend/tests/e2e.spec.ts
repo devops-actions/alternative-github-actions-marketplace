@@ -359,11 +359,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
     statsPanelCases.push({
       name: `${type} Actions sets type filter`,
       ariaLabel,
-      assert: async (page, items) => {
-        const hasAny = items.some(a => a?.actionType?.actionType === type);
-        if (!hasAny) {
-          test.skip(true, `No ${type} actions available to validate filter`);
-        }
+      assert: async (page) => {
         await assertTypeFilterActive(page, buttonLabel);
         await assertCardsMatchType(page, type);
       }
@@ -389,6 +385,17 @@ test.describe('Stats panel filters (persist across refresh)', () => {
     test(c.name, async ({ page }) => {
       // Use cached actions from beforeEach to avoid redundant 16MB API calls.
       const items = cachedActions;
+
+      // Early skip for type filters if no matching actions exist
+      if (c.ariaLabel.startsWith('Filter by ')) {
+        const typeName = c.ariaLabel.replace('Filter by ', '').replace(' actions', '');
+        const hasAny = items.some(a => a?.actionType?.actionType === typeName);
+        if (!hasAny) {
+          test.skip(true, `No ${typeName} actions available to validate filter`);
+          return;
+        }
+      }
+
       await waitForResults(page);
       await resetFilters(page);
 
@@ -418,15 +425,18 @@ test.describe('Filter buttons (persist across refresh)', () => {
     test(`Type filter ${label} persists on refresh`, async ({ page }) => {
       // Use cached actions from beforeEach to avoid redundant 16MB API calls.
       const items = cachedActions;
-      await waitForResults(page);
-      await resetFilters(page);
 
+      // Early skip if no matching actions exist
       if (type !== 'All') {
         const hasAny = items.some(a => a?.actionType?.actionType === type);
         if (!hasAny) {
           test.skip(true, `No ${type} actions available to validate filter`);
+          return;
         }
       }
+
+      await waitForResults(page);
+      await resetFilters(page);
 
       await typeFilterGroup(page).getByRole('button', { name: label, exact: true }).click();
       await waitForResults(page);
