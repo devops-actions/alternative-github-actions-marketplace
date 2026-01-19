@@ -32,7 +32,11 @@ function buildCorsHeaders(req) {
   // Default to wildcard unless a specific allow list is provided.
   // In CI environments we prefer permissive behavior to avoid flakiness
   // caused by mismatched FRONTEND_BASE_URL values during E2E runs.
-  const runningInCI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.AZURE_PIPELINE);
+  // Only enable the permissive CI behavior for known CI providers where the
+  // runtime origin may be dynamic (GitHub Actions / Azure Pipelines).
+  // Do NOT treat the generic `CI` env (set by test runners) as a signal to
+  // enable permissive behavior because that breaks unit tests.
+  const runningInCI = Boolean(process.env.GITHUB_ACTIONS || process.env.AZURE_PIPELINE);
 
   let allowOrigin = '*';
   if (allowedOrigins) {
