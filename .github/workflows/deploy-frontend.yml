@@ -295,7 +295,7 @@ jobs:
       - name: Run E2E tests against deployed site
         working-directory: src/frontend
         env:
-          PLAYWRIGHT_WORKERS: 12
+          PLAYWRIGHT_WORKERS: 4
         run: npm run test:e2e
 
       - name: Remove temporary GitHub runner allow rule

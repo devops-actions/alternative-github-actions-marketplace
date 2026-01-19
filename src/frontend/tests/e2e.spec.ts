@@ -8,6 +8,7 @@ type ActionListItem = {
   verified?: boolean;
   actionType?: { actionType?: string };
   repoInfo?: { archived?: boolean };
+  releaseInfo?: unknown;
 };
 
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -31,13 +32,14 @@ async function fetchActionsList(): Promise<ActionListItem[]> {
   return Array.isArray(data) ? (data as ActionListItem[]) : [];
 }
 
-async function fetchActionsListWithRetry(retries: number = 5, delayMs: number = 3000): Promise<ActionListItem[]> {
+async function fetchActionsListWithRetry(retries: number = 8, delayMs: number = 5000): Promise<ActionListItem[]> {
   let lastErr: unknown;
   for (let i = 0; i < retries; i += 1) {
     try {
       return await fetchActionsList();
     } catch (err) {
       lastErr = err;
+      console.log(`API fetch attempt ${i + 1}/${retries} failed, retrying in ${delayMs}ms...`);
       await new Promise(res => setTimeout(res, delayMs));
     }
   }
@@ -65,8 +67,8 @@ function statsBar(page: Page) {
 
 async function waitForOverviewSettled(page: Page) {
   const start = Date.now();
-  const overallTimeoutMs = 240000;
-  const errorGraceMs = 90000;
+  const overallTimeoutMs = 90000;
+  const errorGraceMs = 30000;
 
   const cards = page.locator('.action-card').first();
   const noResults = page.locator('.no-results').first();

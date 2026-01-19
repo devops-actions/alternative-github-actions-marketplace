@@ -26,12 +26,12 @@ export async function waitForResults(page: Page) {
   const empty = page.locator('.no-results').first();
 
   // Wait for either an action card or the no-results placeholder.
-  const timeoutMs = 120000;
+  const timeoutMs = 60000;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (await card.isVisible().catch(() => false)) return;
     if (await empty.isVisible().catch(() => false)) return;
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
   }
 
   // Collect some diagnostics from the page to help CI logs.

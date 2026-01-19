@@ -557,7 +557,10 @@ jobs:
         env:
           FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
           API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
-          PLAYWRIGHT_WORKERS: 12
+          # Avoid overwhelming the Function App + browser with concurrent 40MB+ list downloads.
+          # Playwright defaults to 2 workers in CI (see src/frontend/playwright.config.ts),
+          # but we set this explicitly to keep CI behavior stable.
+          PLAYWRIGHT_WORKERS: 2
         run: npm run test:e2e -- --reporter=list
 
       - name: Remove temporary GitHub runner allow rule
