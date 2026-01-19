@@ -34,9 +34,9 @@ function buildCorsHeaders(req) {
   // caused by mismatched FRONTEND_BASE_URL values during E2E runs.
   // Only enable the permissive CI behavior for known CI providers where the
   // runtime origin may be dynamic (GitHub Actions / Azure Pipelines).
-  // Do NOT treat the generic `CI` env (set by test runners) as a signal to
-  // enable permissive behavior because that breaks unit tests.
-  const runningInCI = Boolean(process.env.GITHUB_ACTIONS || process.env.AZURE_PIPELINE);
+  // When running unit tests (Jest) we should NOT enable the permissive
+  // behavior even if the CI env var is present. Jest sets `JEST_WORKER_ID`.
+  const runningInCI = Boolean((process.env.GITHUB_ACTIONS || process.env.AZURE_PIPELINE) && !process.env.JEST_WORKER_ID);
 
   let allowOrigin = '*';
   if (allowedOrigins) {
