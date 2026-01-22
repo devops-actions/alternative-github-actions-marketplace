@@ -1,0 +1,329 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "5577597717756576965"
+    }
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "metadata": {
+        "description": "Deployment environment label, used for naming (e.g., dev, prod)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "Primary Azure region for regional resources."
+      }
+    },
+    "staticWebAppLocation": {
+      "type": "string",
+      "defaultValue": "West Europe",
+      "metadata": {
+        "description": "Region for Static Web App deployment. Must be a supported Static Web Apps region."
+      }
+    },
+    "tableName": {
+      "type": "string",
+      "defaultValue": "actions",
+      "metadata": {
+        "description": "Table Storage table name for GitHub Actions metadata."
+      }
+    },
+    "assignTableDataContributor": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Assign Storage Table Data Contributor role to the function app managed identity. Requires role assignment permissions on the storage account scope."
+      }
+    },
+    "functionAllowedIpCidrs": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "IP CIDRs allowed to reach the Function App (e.g., Static Web Apps outbound IPs). Leave empty to allow all."
+      }
+    },
+    "functionDebugAllowedIpCidrs": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Additional IP CIDRs allowed to reach the Function App for debugging/validation (e.g., your public IP as /32). Leave empty to disable."
+      }
+    },
+    "functionCorsAllowedOrigins": {
+      "type": "array",
+      "defaultValue": [
+        "https://portal.azure.com"
+      ],
+      "metadata": {
+        "description": "CORS allowed origins for the Function App. Include https://portal.azure.com to enable Azure Portal Test/Run. Add your SWA origin if calling the Function App directly from the browser."
+      }
+    },
+    "githubAppId": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "GitHub App ID for API authentication. If provided along with privateKey and installationId, the app will use GitHub App authentication instead of PAT."
+      }
+    },
+    "githubAppPrivateKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "GitHub App private key for API authentication (PEM format)."
+      }
+    },
+    "githubAppInstallationId": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "GitHub App installation ID for API authentication."
+      }
+    }
+  },
+  "variables": {
+    "copy": [
+      {
+        "name": "functionDebugIpSecurityRestrictions",
+        "count": "[length(parameters('functionDebugAllowedIpCidrs'))]",
+        "input": {
+          "name": "[format('AllowDebug{0}', copyIndex('functionDebugIpSecurityRestrictions'))]",
+          "ipAddress": "[parameters('functionDebugAllowedIpCidrs')[copyIndex('functionDebugIpSecurityRestrictions')]]",
+          "action": "Allow",
+          "priority": "[add(90, copyIndex('functionDebugIpSecurityRestrictions'))]",
+          "description": "Temporary debug access (e.g., Azure Portal Test/Run)"
+        }
+      },
+      {
+        "name": "functionSwaIpSecurityRestrictions",
+        "count": "[length(parameters('functionAllowedIpCidrs'))]",
+        "input": {
+          "name": "[format('AllowSWA{0}', copyIndex('functionSwaIpSecurityRestrictions'))]",
+          "ipAddress": "[parameters('functionAllowedIpCidrs')[copyIndex('functionSwaIpSecurityRestrictions')]]",
+          "action": "Allow",
+          "priority": "[add(100, copyIndex('functionSwaIpSecurityRestrictions'))]",
+          "description": "Static Web Apps outbound IP"
+        }
+      }
+    ],
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('environment'))]",
+    "storageAccountName": "[toLower(format('st{0}', variables('uniqueSuffix')))]",
+    "functionAppName": "[format('func-{0}', variables('uniqueSuffix'))]",
+    "staticWebAppName": "[format('swa-{0}', variables('uniqueSuffix'))]",
+    "hostingPlanName": "[format('plan-{0}', variables('uniqueSuffix'))]",
+    "insightsName": "[format('appi-{0}', variables('uniqueSuffix'))]",
+    "fileShareName": "[toLower(format('func{0}', variables('uniqueSuffix')))]",
+    "functionIpSecurityRestrictions": "[concat(variables('functionDebugIpSecurityRestrictions'), variables('functionSwaIpSecurityRestrictions'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot",
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": true,
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/{1}', variables('storageAccountName'), parameters('tableName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName'))]",
+      "properties": {
+        "shareQuota": 1
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('insightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "IngestionMode": "ApplicationInsights"
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
+        "reserved": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "properties": {
+        "httpsOnly": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "siteConfig": {
+          "nodeVersion": "~22",
+          "cors": {
+            "allowedOrigins": "[parameters('functionCorsAllowedOrigins')]"
+          },
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', variables('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', variables('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[split(format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName')), '/')[2]]"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~22"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "ACTIONS_TABLE_NAME",
+              "value": "[parameters('tableName')]"
+            },
+            {
+              "name": "ACTIONS_TABLE_URL",
+              "value": "[format('https://{0}.table.{1}', variables('storageAccountName'), environment().suffixes.storage)]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "1"
+            },
+            {
+              "name": "GITHUB_APP_ID",
+              "value": "[parameters('githubAppId')]"
+            },
+            {
+              "name": "GITHUB_APP_PRIVATE_KEY",
+              "value": "[parameters('githubAppPrivateKey')]"
+            },
+            {
+              "name": "GITHUB_APP_INSTALLATION_ID",
+              "value": "[parameters('githubAppInstallationId')]"
+            }
+          ],
+          "ipSecurityRestrictions": "[variables('functionIpSecurityRestrictions')]",
+          "ipSecurityRestrictionsDefaultAction": "[if(or(greater(length(parameters('functionAllowedIpCidrs')), 0), greater(length(parameters('functionDebugAllowedIpCidrs')), 0)), 'Deny', 'Allow')]",
+          "scmIpSecurityRestrictionsUseMain": false
+        }
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', variables('insightsName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName')), '/')[0], split(format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName')), '/')[1], split(format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName')), '/')[2])]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('assignTableDataContributor')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'StorageTableDataContributor', resourceId('Microsoft.Web/sites', variables('functionAppName')))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b8fa-4a7e-88f8-87b6abefc6c0')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/staticSites",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('staticWebAppName')]",
+      "location": "[parameters('staticWebAppLocation')]",
+      "sku": {
+        "name": "Free",
+        "tier": "Free"
+      },
+      "properties": {
+        "buildProperties": {
+          "appLocation": "src/frontend",
+          "outputLocation": "dist"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "staticWebAppDefaultHostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/staticSites', variables('staticWebAppName')), '2022-09-01').defaultHostname]"
+    },
+    "functionAppDefaultHostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01').defaultHostName]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "tableEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').primaryEndpoints.table]"
+    },
+    "applicationInsightsConnection": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), '2020-02-02').ConnectionString]"
+    }
+  }
+}

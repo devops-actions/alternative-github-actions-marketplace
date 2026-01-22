@@ -91,6 +91,9 @@ jobs:
             location=${{ vars.DEPLOY_LOCATION }}
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
             functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
+            githubAppId=${{ vars.RUNTIME_APP_ID }}
+            githubAppPrivateKey=${{ secrets.RUNTIME_APP_KEY }}
+            githubAppInstallationId=${{ secrets.RUNTIME_APP_INSTALLATION_ID }}
           failOnStdErr: false
 
       - name: Retrieve host default function key (optional)
