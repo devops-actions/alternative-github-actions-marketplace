@@ -43,11 +43,20 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate Bicep template (az bicep build)
+      - name: Lint Bicep template
         run: |
           set -e
+          echo "Installing/upgrading Azure Bicep CLI..."
           az bicep version || az bicep install
-          az bicep build --file IAC/main.bicep
+          az bicep upgrade
+          
+          echo "Linting Bicep template..."
+          az bicep lint --file IAC/main.bicep
+          
+          echo "Building Bicep template to validate syntax..."
+          az bicep build --file IAC/main.bicep --outdir /tmp
+          
+          echo "Bicep template validation successful"
 
       - name: Discover Static Web App outbound IPs
         id: swa-ips
@@ -91,10 +100,31 @@ jobs:
             location=${{ vars.DEPLOY_LOCATION }}
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
             functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
-            githubAppId=${{ vars.RUNTIME_APP_ID }}
-            githubAppPrivateKey=${{ secrets.RUNTIME_APP_KEY }}
-            githubAppInstallationId=${{ secrets.RUNTIME_APP_INSTALLATION_ID }}
           failOnStdErr: false
+
+      - name: Configure GitHub App settings
+        if: vars.RUNTIME_APP_ID != '' && secrets.RUNTIME_APP_KEY != ''
+        run: |
+          functionAppName="${{ steps.deploy.outputs.functionAppName }}"
+          
+          if [ -z "$functionAppName" ]; then
+            echo "::warning::Function app name not available, skipping GitHub App configuration"
+            exit 0
+          fi
+
+          echo "Configuring GitHub App settings for $functionAppName..."
+          
+          # Set GitHub App settings - these contain multi-line values that can't be passed as Bicep parameters
+          az functionapp config appsettings set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$functionAppName" \
+            --settings \
+              "GITHUB_APP_ID=${{ vars.RUNTIME_APP_ID }}" \
+              "GITHUB_APP_PRIVATE_KEY=${{ secrets.RUNTIME_APP_KEY }}" \
+              "GITHUB_APP_INSTALLATION_ID=${{ secrets.RUNTIME_APP_INSTALLATION_ID }}" \
+            > /dev/null
+
+          echo "GitHub App settings configured successfully"
 
       - name: Retrieve host default function key (optional)
         id: fetch_host_key

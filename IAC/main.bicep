@@ -24,18 +24,6 @@ param functionCorsAllowedOrigins array = [
   'https://portal.azure.com'
 ]
 
-@description('GitHub App ID for API authentication. If provided along with privateKey and installationId, the app will use GitHub App authentication instead of PAT.')
-@secure()
-param githubAppId string = ''
-
-@description('GitHub App private key for API authentication. Must be the full PEM content including -----BEGIN/END RSA PRIVATE KEY----- headers and line breaks.')
-@secure()
-param githubAppPrivateKey string = ''
-
-@description('GitHub App installation ID for API authentication.')
-@secure()
-param githubAppInstallationId string = ''
-
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -167,18 +155,6 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: '1'
-        }
-        {
-          name: 'GITHUB_APP_ID'
-          value: githubAppId
-        }
-        {
-          name: 'GITHUB_APP_PRIVATE_KEY'
-          value: githubAppPrivateKey
-        }
-        {
-          name: 'GITHUB_APP_INSTALLATION_ID'
-          value: githubAppInstallationId
         }
       ]
       ipSecurityRestrictions: functionIpSecurityRestrictions
