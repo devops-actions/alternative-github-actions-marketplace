@@ -106,6 +106,24 @@ export const DetailPage: React.FC = () => {
     }
   };
 
+  const getReadmeUrl = () => {
+    if (!action) return '';
+    const availableVersions = action.releaseInfo || [];
+    let version = 'main';
+
+    if (selectedVersion && availableVersions.includes(selectedVersion)) {
+      version = selectedVersion;
+    } else if (availableVersions.length > 0) {
+      version = availableVersions[0];
+    }
+
+    const repoName = action.name.startsWith(`${action.owner}_`)
+      ? action.name.substring(action.owner.length + 1)
+      : action.name;
+
+    return `https://github.com/${action.owner}/${repoName}/blob/${version}/README.md`;
+  };
+
   if (loading) {
     return (
       <div className="app">
@@ -162,14 +180,14 @@ export const DetailPage: React.FC = () => {
         </div>
 
         <div className="info-grid">
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Used by</h3>
             <div className="value dependents-highlight">
               {dependentsCount.toLocaleString()}
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Latest Release</h3>
             <div className="value">
               {action.releaseInfo && action.releaseInfo.length > 0
@@ -178,14 +196,14 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>OpenSSF Score</h3>
             <div className="value">
               {action.ossf ? action.ossfScore.toFixed(1) : 'N/A'}
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Last Updated</h3>
             <div className="value">
               {new Date(action.repoInfo.updated_at).toLocaleDateString()}
@@ -194,7 +212,7 @@ export const DetailPage: React.FC = () => {
         </div>
 
         <div className="info-grid">
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Action Type Details</h3>
             <div className="value" style={{ fontSize: '14px' }}>
               {action.actionType.actionType}
@@ -207,7 +225,7 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="info-card">
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Repository Info</h3>
             <div className="value" style={{ fontSize: '14px' }}>
               {action.forkFound ? 'Fork' : 'Original'}
@@ -215,6 +233,15 @@ export const DetailPage: React.FC = () => {
               {action.repoSize
                 ? `${(action.repoSize / 1024).toFixed(1)} MB`
                 : 'Size N/A'}
+              <br />
+              <a
+                href={`https://github.com/${action.owner}/${(action.name.startsWith(`${action.owner}_`) ? action.name.substring(action.owner.length + 1) : action.name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="repo-link"
+              >
+                View on GitHub →
+              </a>
             </div>
           </div>
         </div>

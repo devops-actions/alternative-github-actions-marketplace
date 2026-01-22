@@ -1,7 +1,37 @@
 import { Action, ActionStats } from '../types/Action';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+function getApiBaseUrl(): string {
+  const fallback = '/api';
+  const configured = import.meta.env.VITE_API_BASE_URL;
+
+  if (!configured) {
+    return fallback;
+  }
+
+  const trimmed = String(configured).trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  // If someone accidentally configures the API base as the frontend origin
+  // (e.g. `http://localhost:3000/`), requests like `/actions/list` will hit the
+  // SPA dev server and return HTML. In that case, use the dev proxy path.
+  try {
+    const resolved = new URL(trimmed, window.location.origin);
+    if (resolved.origin === window.location.origin) {
+      return fallback;
+    }
+
+    return resolved.toString().replace(/\/+$/, '');
+  } catch {
+    // If it's not a URL, assume it's a path like `/api`.
+    return trimmed.replace(/\/+$/, '') || fallback;
+  }
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -194,6 +224,26 @@ class ActionsService {
 
     this.inFlightActionsFetch = fetchPromise;
     return await fetchPromise;
+  }
+
+  async fetchActionsPage(limit: number): Promise<Action[]> {
+    if (!Number.isFinite(limit) || limit <= 0) {
+      throw new Error('Invalid limit parameter: must be a positive number');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/actions/list?limit=${limit}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch actions page: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const items = extractArrayFromUnknown(data);
+      return items.map(normalizeAction);
+    } catch (error) {
+      console.error('Error fetching actions page:', error);
+      throw error;
+    }
   }
 
   async fetchStats(force: boolean = false): Promise<ActionStats> {
