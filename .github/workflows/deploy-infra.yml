@@ -180,3 +180,4 @@ jobs:
           fi
 
           bash IAC/smoke-test-actions.sh "$FUNCTION_HOST" "$FUNCTION_KEY"
+
