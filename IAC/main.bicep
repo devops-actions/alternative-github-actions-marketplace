@@ -28,7 +28,7 @@ param functionCorsAllowedOrigins array = [
 @secure()
 param githubAppId string = ''
 
-@description('GitHub App private key for API authentication (PEM format).')
+@description('GitHub App private key for API authentication. Must be the full PEM content including -----BEGIN/END RSA PRIVATE KEY----- headers and line breaks.')
 @secure()
 param githubAppPrivateKey string = ''
 

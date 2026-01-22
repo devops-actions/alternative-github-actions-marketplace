@@ -28,7 +28,5 @@ obj/
 src/frontend/test-results/
 src/frontend/playwright-report/
 
-# Bicep build output
-*.json
-!package*.json
-!tsconfig*.json
+# Bicep compiled ARM templates
+IAC/*.json
