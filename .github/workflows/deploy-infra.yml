@@ -103,12 +103,21 @@ jobs:
           failOnStdErr: false
 
       - name: Configure GitHub App settings
-        if: vars.RUNTIME_APP_ID != '' && secrets.RUNTIME_APP_KEY != ''
+        if: vars.RUNTIME_APP_ID != ''
+        env:
+          GITHUB_APP_ID: ${{ vars.RUNTIME_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.RUNTIME_APP_KEY }}
+          GITHUB_APP_INSTALLATION_ID: ${{ secrets.RUNTIME_APP_INSTALLATION_ID }}
         run: |
           functionAppName="${{ steps.deploy.outputs.functionAppName }}"
           
           if [ -z "$functionAppName" ]; then
             echo "::warning::Function app name not available, skipping GitHub App configuration"
+            exit 0
+          fi
+
+          if [ -z "$GITHUB_APP_ID" ] || [ -z "$GITHUB_APP_PRIVATE_KEY" ]; then
+            echo "::warning::GitHub App credentials not configured, skipping"
             exit 0
           fi
 
@@ -119,9 +128,9 @@ jobs:
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$functionAppName" \
             --settings \
-              "GITHUB_APP_ID=${{ vars.RUNTIME_APP_ID }}" \
-              "GITHUB_APP_PRIVATE_KEY=${{ secrets.RUNTIME_APP_KEY }}" \
-              "GITHUB_APP_INSTALLATION_ID=${{ secrets.RUNTIME_APP_INSTALLATION_ID }}" \
+              "GITHUB_APP_ID=$GITHUB_APP_ID" \
+              "GITHUB_APP_PRIVATE_KEY=$GITHUB_APP_PRIVATE_KEY" \
+              "GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID" \
             > /dev/null
 
           echo "GitHub App settings configured successfully"
