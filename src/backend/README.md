@@ -25,6 +25,51 @@ npm install @devops-actions/actions-marketplace-client
 
 See the [examples/upload-actions.js](examples/upload-actions.js) file for uploading actions and the [examples/list-actions.js](examples/list-actions.js) file for listing actions.
 
+## Backend Configuration
+
+### Environment Variables
+
+The backend Azure Functions support the following environment variables:
+
+#### GitHub Authentication
+
+- **`GITHUB_TOKEN`** - GitHub Personal Access Token for API requests
+- **`GITHUB_APP_ID`** - GitHub App ID (preferred over PAT)
+- **`GITHUB_APP_PRIVATE_KEY`** - GitHub App private key (PEM format)
+- **`GITHUB_APP_INSTALLATION_ID`** - GitHub App installation ID
+
+**GitHub App vs Personal Access Token:**
+- GitHub Apps have higher rate limits and better security
+- If both are configured, GitHub App authentication is preferred
+- Falls back to PAT if GitHub App authentication fails
+
+#### Storage Configuration
+
+- **`ACTIONS_TABLE_NAME`** - Table name for action metadata (default: `actions`)
+- **`README_TABLE_NAME`** - Table name for README cache (default: `readmes`)
+- **`ACTIONS_TABLE_CONNECTION`** or **`AzureWebJobsStorage`** - Storage connection string
+- **`ACTIONS_TABLE_URL`** or **`ACTIONS_TABLE_ENDPOINT`** - Table endpoint URL for Azure Identity authentication
+
+### README Endpoint with Caching
+
+The `/api/actions/{owner}/{name}/readme` endpoint fetches and caches README content:
+
+**Features:**
+- Caches README content in Azure Table Storage
+- Only re-fetches if the action repository was updated
+- Returns cached content with `X-Cache: HIT` header
+- Returns fresh content with `X-Cache: MISS` header
+- Supports version parameter: `?version=v1.0.0`
+
+**Cache Invalidation:**
+- README is re-fetched when `repoInfo.updated_at` changes
+- Falls back to 1-hour cache if repository timestamp unavailable
+
+**Example:**
+```bash
+curl https://your-api.azurewebsites.net/api/actions/actions/checkout/readme?version=v4
+```
+
 ## Usage
 
 The client supports two modes of operation:
