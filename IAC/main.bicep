@@ -19,7 +19,10 @@ param functionAllowedIpCidrs array = []
 @description('Additional IP CIDRs allowed to reach the Function App for debugging/validation (e.g., your public IP as /32). Leave empty to disable.')
 param functionDebugAllowedIpCidrs array = []
 
-@description('CORS allowed origins for the Function App. Include https://portal.azure.com to enable Azure Portal Test/Run. Add your SWA origin if calling the Function App directly from the browser.')
+@description('Static Web App hostname to allow CORS from. If provided, will be added to CORS allowed origins.')
+param staticWebAppHostname string = ''
+
+@description('CORS allowed origins for the Function App. Include https://portal.azure.com to enable Azure Portal Test/Run. The Static Web App origin is automatically added if staticWebAppHostname is provided.')
 param functionCorsAllowedOrigins array = [
   'https://portal.azure.com'
 ]
@@ -49,6 +52,11 @@ var functionSwaIpSecurityRestrictions = [for (cidr, i) in functionAllowedIpCidrs
 }]
 
 var functionIpSecurityRestrictions = concat(functionDebugIpSecurityRestrictions, functionSwaIpSecurityRestrictions)
+
+// Build complete CORS origins list, adding Static Web App if provided
+var completeCorsOrigins = !empty(staticWebAppHostname) 
+  ? union(functionCorsAllowedOrigins, ['https://${staticWebAppHostname}'])
+  : functionCorsAllowedOrigins
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -109,7 +117,8 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
     siteConfig: {
       nodeVersion: '~22'
       cors: {
-        allowedOrigins: functionCorsAllowedOrigins
+        allowedOrigins: completeCorsOrigins
+        supportCredentials: false
       }
       appSettings: [
         {

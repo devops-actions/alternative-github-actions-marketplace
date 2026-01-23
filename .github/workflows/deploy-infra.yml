@@ -67,6 +67,12 @@ jobs:
             exit 1
           fi
 
+          # Get Static Web App hostname for CORS configuration
+          swaHostname=$(az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" --query "defaultHostname" -o tsv)
+          if [ -z "$swaHostname" ]; then
+            echo "::warning::No hostname found for $swaName; CORS will not include SWA origin."
+          fi
+
           if [ -n "${{ vars.FUNCTION_ALLOWED_IP_CIDRS }}" ]; then
             outboundIps="${{ vars.FUNCTION_ALLOWED_IP_CIDRS }}"
             echo "Using FUNCTION_ALLOWED_IP_CIDRS override from environment."
@@ -85,6 +91,7 @@ jobs:
           fi
 
           echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+          echo "swa_hostname=$swaHostname" >> $GITHUB_OUTPUT
           echo "outbound_ips=$outboundIps" >> $GITHUB_OUTPUT
           echo "outbound_ips_json=$outboundIpsJson" >> $GITHUB_OUTPUT
 
@@ -99,6 +106,7 @@ jobs:
             environment=${{ vars.DEPLOY_ENVIRONMENT }}
             location=${{ vars.DEPLOY_LOCATION }}
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
+            staticWebAppHostname=${{ steps.swa-ips.outputs.swa_hostname }}
             functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
           failOnStdErr: false
 
