@@ -204,6 +204,13 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   }
 }
 
+resource staticWebAppCustomDomain 'Microsoft.Web/staticSites/customDomains@2022-09-01' = if (!empty(plausibleTrackingDomain)) {
+  name: '${staticWebApp.name}/${plausibleTrackingDomain}'
+  properties: {
+    validationMethod: 'cname-delegation'
+  }
+}
+
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
 output functionAppDefaultHostname string = functionApp.properties.defaultHostName
 output functionAppName string = functionApp.name
