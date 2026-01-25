@@ -126,6 +126,7 @@ jobs:
         run: |
           VITE_API_BASE_URL="$API_BASE_URL" \
           VITE_APPINSIGHTS_CONNECTION_STRING="${{ steps.appinsights.outputs.connection_string }}" \
+          VITE_PLAUSIBLE_TRACKING_DOMAIN="${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}" \
           npm run build
         working-directory: src/frontend
 

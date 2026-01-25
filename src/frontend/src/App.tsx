@@ -2,14 +2,16 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { OverviewPage } from './pages/OverviewPage';
 import { DetailPage } from './pages/DetailPage';
-import { trackPageView } from './telemetry';
+import { trackPageView as trackAppInsights } from './telemetry';
+import { trackPageView as trackPlausible } from './plausible';
 import './App.css';
 
 const AnalyticsTracker: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    trackPageView(document.title || location.pathname, window.location.href);
+    trackAppInsights(document.title || location.pathname, window.location.href);
+    trackPlausible();
   }, [location]);
 
   return null;
