@@ -537,7 +537,7 @@ export const OverviewPage: React.FC = () => {
             {pagedActions.map(action => (
               <div
                 key={`${action.owner}/${action.name}`}
-                className={`action-card ${action.repoInfo.archived ? 'archived' : ''}`}
+                className={`action-card ${action.repoInfo?.archived ? 'archived' : ''}`}
                 onClick={() => handleActionClick(action)}
               >
                 <div className="action-header">
@@ -575,7 +575,7 @@ export const OverviewPage: React.FC = () => {
                       <span>OpenSSF: <strong>{action.ossfScore.toFixed(1)}</strong></span>
                     </div>
                   )}
-                  {action.repoInfo.archived && (
+                  {action.repoInfo?.archived && (
                     <div className="meta-item">
                       <span>📦</span>
                       <span>Archived</span>
