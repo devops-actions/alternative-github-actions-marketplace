@@ -209,6 +209,9 @@ resource staticWebAppCustomDomain 'Microsoft.Web/staticSites/customDomains@2022-
   properties: {
     validationMethod: 'cname-delegation'
   }
+  dependsOn: [
+    staticWebApp
+  ]
 }
 
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
