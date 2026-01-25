@@ -56,16 +56,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
-      - name: Filter paths
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            frontend:
-              - 'src/frontend/**'
-            backend:
-              - 'src/backend/**'
-
   resolve:
     name: Resolve Azure resource hosts
     runs-on: ubuntu-latest
