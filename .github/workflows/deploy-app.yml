@@ -356,25 +356,39 @@ jobs:
             
             # Add both variants of the SWA origin
             set +e
-            az functionapp cors add \
+            addOutput=$(az functionapp cors add \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --name "$FUNCTION_APP_NAME" \
-              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" 2>&1
+              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" 2>&1)
             addStatus=$?
             set -e
             
             if [ $addStatus -ne 0 ]; then
+              echo "CORS add command failed with status $addStatus"
+              echo "Output: $addOutput"
+              
               # Check if the failure was because origins already exist
+              set +e
               updatedOrigins=$(az functionapp cors show \
                 --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
                 --name "$FUNCTION_APP_NAME" \
-                --query "allowedOrigins[]" -o tsv)
+                --query "allowedOrigins[]" -o tsv 2>&1)
+              showStatus=$?
+              set -e
+              
+              if [ $showStatus -ne 0 ]; then
+                echo "::error::Failed to verify CORS configuration after add failure"
+                echo "::error::Add output: $addOutput"
+                echo "::error::Show output: $updatedOrigins"
+                exit 1
+              fi
               
               if echo "$updatedOrigins" | grep -qF "$SWA_BASE_URL" && \
                  echo "$updatedOrigins" | grep -qF "${SWA_BASE_URL}/"; then
-                echo "CORS origins already present despite add command failure"
+                echo "CORS origins already present despite add command failure (benign)"
               else
                 echo "::error::Failed to add CORS origins and they are not present in configuration"
+                echo "::error::Add output: $addOutput"
                 exit 1
               fi
             else
