@@ -27,6 +27,9 @@ param functionCorsAllowedOrigins array = [
   'https://portal.azure.com'
 ]
 
+@description('Plausible Analytics tracking domain. This domain will be used for analytics tracking on the frontend. Leave empty to disable Plausible tracking.')
+param plausibleTrackingDomain string = ''
+
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -206,3 +209,4 @@ output functionAppDefaultHostname string = functionApp.properties.defaultHostNam
 output functionAppName string = functionApp.name
 output tableEndpoint string = storageAccount.properties.primaryEndpoints.table
 output applicationInsightsConnection string = appInsights.properties.ConnectionString
+output plausibleTrackingDomain string = plausibleTrackingDomain

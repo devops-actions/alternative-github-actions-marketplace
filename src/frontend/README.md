@@ -56,7 +56,7 @@ The built files will be in the `dist` directory.
 
 - `VITE_API_BASE_URL`: Base URL for the API from the browser (default: `/api`)
 - `VITE_API_PROXY_TARGET`: Backend origin the Vite dev server should proxy `/api/*` requests to (default: `http://localhost:7071`)
-- `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Domain for Plausible Analytics tracking (automatically set to the Static Web App hostname during deployment)
+- `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Domain for Plausible Analytics tracking (configured via `PLAUSIBLE_TRACKING_DOMAIN` repository variable)
 - `VITE_APPINSIGHTS_CONNECTION_STRING`: Application Insights connection string for telemetry
 
 ## Architecture
@@ -86,10 +86,15 @@ The workflow:
 3. Builds the application with environment variables:
    - `VITE_API_BASE_URL`: Backend API URL (resolved from Azure Function App hostname)
    - `VITE_APPINSIGHTS_CONNECTION_STRING`: Application Insights connection string for telemetry
-   - `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Static Web App hostname for Plausible Analytics tracking (automatically configured)
+   - `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Plausible Analytics tracking domain (from `PLAUSIBLE_TRACKING_DOMAIN` repository variable)
 4. Deploys to Azure Static Web Apps
 
-The Plausible tracking domain is automatically set to the Static Web App's hostname during deployment, ensuring analytics track the correct domain without manual configuration.
+### Configuration
+
+The Plausible tracking domain is configured via the `PLAUSIBLE_TRACKING_DOMAIN` repository variable. This variable is:
+- Passed to the Bicep template during infrastructure deployment (see `.github/workflows/deploy-infra.yml`)
+- Used at build time to configure the Plausible Analytics client
+- Typically set to your custom domain or the Static Web App's default hostname
 
 ## API Integration
 

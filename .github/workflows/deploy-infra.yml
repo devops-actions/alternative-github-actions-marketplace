@@ -108,6 +108,7 @@ jobs:
             staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
             staticWebAppHostname=${{ steps.swa-ips.outputs.swa_hostname }}
             functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
+            plausibleTrackingDomain=${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
           failOnStdErr: false
 
       - name: Configure GitHub App settings
