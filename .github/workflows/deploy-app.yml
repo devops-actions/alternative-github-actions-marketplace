@@ -322,10 +322,20 @@ jobs:
           fi
           
           echo "Checking current CORS configuration for $FUNCTION_APP_NAME..."
+          
+          # Get current CORS origins, handling empty list gracefully
+          set +e
           currentOrigins=$(az functionapp cors show \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
-            --query "allowedOrigins" -o tsv | tr '\t' '\n' || echo "")
+            --query "allowedOrigins[]" -o tsv 2>&1)
+          corsShowStatus=$?
+          set -e
+          
+          if [ $corsShowStatus -ne 0 ]; then
+            echo "::error::Failed to retrieve CORS configuration: $currentOrigins"
+            exit 1
+          fi
           
           echo "Current CORS origins:"
           echo "$currentOrigins"
@@ -345,13 +355,31 @@ jobs:
             echo "Updating CORS configuration to include Static Web App origins..."
             
             # Add both variants of the SWA origin
+            set +e
             az functionapp cors add \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --name "$FUNCTION_APP_NAME" \
-              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" \
-              || echo "::warning::Failed to add CORS origins (they may already exist)"
+              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" 2>&1
+            addStatus=$?
+            set -e
             
-            echo "CORS configuration updated"
+            if [ $addStatus -ne 0 ]; then
+              # Check if the failure was because origins already exist
+              updatedOrigins=$(az functionapp cors show \
+                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+                --name "$FUNCTION_APP_NAME" \
+                --query "allowedOrigins[]" -o tsv)
+              
+              if echo "$updatedOrigins" | grep -qF "$SWA_BASE_URL" && \
+                 echo "$updatedOrigins" | grep -qF "${SWA_BASE_URL}/"; then
+                echo "CORS origins already present despite add command failure"
+              else
+                echo "::error::Failed to add CORS origins and they are not present in configuration"
+                exit 1
+              fi
+            else
+              echo "CORS configuration updated successfully"
+            fi
             
             # Show final configuration
             echo "Updated CORS origins:"
