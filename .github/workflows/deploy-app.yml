@@ -308,6 +308,61 @@ jobs:
           skip_app_build: true
           skip_api_build: true
 
+      - name: Ensure Function App CORS includes Static Web App origin
+        if: ${{ env.DO_FRONTEND == 'true' }}
+        run: |
+          set -euo pipefail
+          
+          FUNCTION_APP_NAME="${{ needs.resolve.outputs.function_app_name }}"
+          SWA_BASE_URL="${{ needs.resolve.outputs.frontend_base_url }}"
+          
+          if [ -z "$FUNCTION_APP_NAME" ] || [ -z "$SWA_BASE_URL" ]; then
+            echo "::warning::Missing Function App name or SWA URL, skipping CORS update"
+            exit 0
+          fi
+          
+          echo "Checking current CORS configuration for $FUNCTION_APP_NAME..."
+          currentOrigins=$(az functionapp cors show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$FUNCTION_APP_NAME" \
+            --query "allowedOrigins" -o tsv | tr '\t' '\n' || echo "")
+          
+          echo "Current CORS origins:"
+          echo "$currentOrigins"
+          
+          # Check if both SWA origins (with and without trailing slash) are present
+          needsUpdate=false
+          if ! echo "$currentOrigins" | grep -qF "$SWA_BASE_URL"; then
+            echo "Missing origin: $SWA_BASE_URL"
+            needsUpdate=true
+          fi
+          if ! echo "$currentOrigins" | grep -qF "${SWA_BASE_URL}/"; then
+            echo "Missing origin: ${SWA_BASE_URL}/"
+            needsUpdate=true
+          fi
+          
+          if [ "$needsUpdate" = "true" ]; then
+            echo "Updating CORS configuration to include Static Web App origins..."
+            
+            # Add both variants of the SWA origin
+            az functionapp cors add \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$FUNCTION_APP_NAME" \
+              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" \
+              || echo "::warning::Failed to add CORS origins (they may already exist)"
+            
+            echo "CORS configuration updated"
+            
+            # Show final configuration
+            echo "Updated CORS origins:"
+            az functionapp cors show \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$FUNCTION_APP_NAME" \
+              --query "allowedOrigins" -o table
+          else
+            echo "CORS configuration already includes both Static Web App origins"
+          fi
+
   validate:
     name: Smoke + Diagnose + E2E
     runs-on: ubuntu-latest
