@@ -27,3 +27,6 @@ bin/
 obj/
 src/frontend/test-results/
 src/frontend/playwright-report/
+
+# Bicep compiled ARM templates
+IAC/*.json

@@ -24,6 +24,8 @@
 ## SWA + Functions integration notes
 - Browser calls from Static Web Apps require CORS + preflight: all HTTP Functions should respond to `OPTIONS` and include `Access-Control-Allow-*` headers.
   - Shared implementation lives in `/src/backend/lib/cors.js`.
-  - Optionally restrict origins via `CORS_ALLOWED_ORIGINS` (comma-separated). If unset, CORS defaults to `*`.
+  - CORS is configured at two levels:
+    1. **Azure Function App CORS** (recommended): `main.bicep` automatically adds the Static Web App origin to the Function App's CORS configuration during deployment.
+    2. **Application-level CORS** (optional fallback): Functions can optionally restrict origins via `CORS_ALLOWED_ORIGINS` env var (comma-separated). If unset, CORS defaults to `*`.
 - Production data can contain GitHub release/tag objects (e.g., `{ tag_name, target_commitish }`) where the UI expects strings.
   - Frontend normalizes `releaseInfo` / `tagInfo` to `string[]` in `/src/frontend/src/services/actionsService.ts`.

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService } from '../services/actionsService';
 import { splitOwnerRepo } from '../services/utils';
@@ -11,6 +12,9 @@ export const DetailPage: React.FC = () => {
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [readmeContent, setReadmeContent] = useState<string>('');
+  const [readmeLoading, setReadmeLoading] = useState(false);
+  const [readmeError, setReadmeError] = useState<string | null>(null);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -29,6 +33,36 @@ export const DetailPage: React.FC = () => {
 
     loadAction();
   }, [owner, name]);
+
+  useEffect(() => {
+    const loadReadme = async () => {
+      if (!owner || !name) return;
+
+      try {
+        setReadmeLoading(true);
+        setReadmeError(null);
+        const version = selectedVersion || undefined;
+        const content = await actionsService.fetchReadme(owner, name, version);
+        
+        if (content) {
+          setReadmeContent(content);
+        } else {
+          setReadmeError('README not found');
+          setReadmeContent('');
+        }
+      } catch (err) {
+        setReadmeError('Failed to load README');
+        setReadmeContent('');
+        console.error(err);
+      } finally {
+        setReadmeLoading(false);
+      }
+    };
+
+    if (owner && name && selectedVersion !== undefined) {
+      loadReadme();
+    }
+  }, [selectedVersion, owner, name]);
 
   const loadAction = async () => {
     if (!owner || !name) return;
@@ -72,8 +106,6 @@ export const DetailPage: React.FC = () => {
         return '';
     }
   };
-
-  // use shared splitOwnerRepo helper from services/utils
 
   const getAgeClass = (isoDate?: string) => {
     if (!isoDate) return '';
@@ -243,12 +275,18 @@ export const DetailPage: React.FC = () => {
 
         <div className="readme-section">
           <h2>README</h2>
-          <iframe
-            className="readme-iframe"
-            src={getReadmeUrl()}
-            title="Action README"
-            sandbox="allow-same-origin allow-scripts"
-          />
+          {readmeLoading && (
+            <div className="loading">Loading README...</div>
+          )}
+          {readmeError && !readmeLoading && (
+            <div className="error-message">{readmeError}</div>
+          )}
+          {!readmeLoading && !readmeError && readmeContent && (
+            <div 
+              className="readme-content"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(readmeContent) }}
+            />
+          )}
         </div>
       </div>
     </div>
