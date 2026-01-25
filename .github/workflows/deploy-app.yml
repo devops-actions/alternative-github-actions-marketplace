@@ -1,5 +1,9 @@
 name: Deploy App (Frontend + Backend)
 
+concurrency:
+  group: azure-deployment-${{ vars.AZURE_RESOURCE_GROUP }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
