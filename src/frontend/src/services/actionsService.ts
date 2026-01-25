@@ -73,11 +73,22 @@ function normalizeAction(raw: unknown): Action {
     dependents.dependents = String(dependents.dependents);
   }
 
+  // Ensure repoInfo always exists with sensible defaults
+  const repoInfo = action.repoInfo && typeof action.repoInfo === 'object'
+    ? action.repoInfo
+    : {
+        latest_release_published_at: '',
+        disabled: false,
+        updated_at: '',
+        archived: false
+      };
+
   return {
     ...action,
     releaseInfo,
     tagInfo,
-    dependents
+    dependents,
+    repoInfo
   } as Action;
 }
 
