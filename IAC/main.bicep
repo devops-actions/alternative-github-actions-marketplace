@@ -57,8 +57,10 @@ var functionSwaIpSecurityRestrictions = [for (cidr, i) in functionAllowedIpCidrs
 var functionIpSecurityRestrictions = concat(functionDebugIpSecurityRestrictions, functionSwaIpSecurityRestrictions)
 
 // Build complete CORS origins list, adding Static Web App if provided
+// Include both with and without trailing slash to handle browser Origin header variations
+// This addresses preflight CORS failures when browser sends Origin with trailing slash
 var completeCorsOrigins = !empty(staticWebAppHostname) 
-  ? union(functionCorsAllowedOrigins, ['https://${staticWebAppHostname}'])
+  ? union(functionCorsAllowedOrigins, ['https://${staticWebAppHostname}', 'https://${staticWebAppHostname}/'])
   : functionCorsAllowedOrigins
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {

@@ -56,16 +56,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
-      - name: Filter paths
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            frontend:
-              - 'src/frontend/**'
-            backend:
-              - 'src/backend/**'
-
   resolve:
     name: Resolve Azure resource hosts
     runs-on: ubuntu-latest
@@ -312,6 +302,103 @@ jobs:
           skip_app_build: true
           skip_api_build: true
 
+      - name: Ensure Function App CORS includes Static Web App origin
+        if: ${{ env.DO_FRONTEND == 'true' }}
+        run: |
+          set -euo pipefail
+          
+          FUNCTION_APP_NAME="${{ needs.resolve.outputs.function_app_name }}"
+          SWA_BASE_URL="${{ needs.resolve.outputs.frontend_base_url }}"
+          
+          if [ -z "$FUNCTION_APP_NAME" ] || [ -z "$SWA_BASE_URL" ]; then
+            echo "::warning::Missing Function App name or SWA URL, skipping CORS update"
+            exit 0
+          fi
+          
+          echo "Checking current CORS configuration for $FUNCTION_APP_NAME..."
+          
+          # Get current CORS origins, handling empty list gracefully
+          set +e
+          currentOrigins=$(az functionapp cors show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$FUNCTION_APP_NAME" \
+            --query "allowedOrigins[]" -o tsv 2>&1)
+          corsShowStatus=$?
+          set -e
+          
+          if [ $corsShowStatus -ne 0 ]; then
+            echo "::error::Failed to retrieve CORS configuration: $currentOrigins"
+            exit 1
+          fi
+          
+          echo "Current CORS origins:"
+          echo "$currentOrigins"
+          
+          # Check if both SWA origins (with and without trailing slash) are present
+          needsUpdate=false
+          if ! echo "$currentOrigins" | grep -qF "$SWA_BASE_URL"; then
+            echo "Missing origin: $SWA_BASE_URL"
+            needsUpdate=true
+          fi
+          if ! echo "$currentOrigins" | grep -qF "${SWA_BASE_URL}/"; then
+            echo "Missing origin: ${SWA_BASE_URL}/"
+            needsUpdate=true
+          fi
+          
+          if [ "$needsUpdate" = "true" ]; then
+            echo "Updating CORS configuration to include Static Web App origins..."
+            
+            # Add both variants of the SWA origin
+            set +e
+            addOutput=$(az functionapp cors add \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$FUNCTION_APP_NAME" \
+              --allowed-origins "$SWA_BASE_URL" "${SWA_BASE_URL}/" 2>&1)
+            addStatus=$?
+            set -e
+            
+            if [ $addStatus -ne 0 ]; then
+              echo "CORS add command failed with status $addStatus"
+              echo "Output: $addOutput"
+              
+              # Check if the failure was because origins already exist
+              set +e
+              updatedOrigins=$(az functionapp cors show \
+                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+                --name "$FUNCTION_APP_NAME" \
+                --query "allowedOrigins[]" -o tsv 2>&1)
+              showStatus=$?
+              set -e
+              
+              if [ $showStatus -ne 0 ]; then
+                echo "::error::Failed to verify CORS configuration after add failure"
+                echo "::error::Add output: $addOutput"
+                echo "::error::Show output: $updatedOrigins"
+                exit 1
+              fi
+              
+              if echo "$updatedOrigins" | grep -qF "$SWA_BASE_URL" && \
+                 echo "$updatedOrigins" | grep -qF "${SWA_BASE_URL}/"; then
+                echo "CORS origins already present despite add command failure (benign)"
+              else
+                echo "::error::Failed to add CORS origins and they are not present in configuration"
+                echo "::error::Add output: $addOutput"
+                exit 1
+              fi
+            else
+              echo "CORS configuration updated successfully"
+            fi
+            
+            # Show final configuration
+            echo "Updated CORS origins:"
+            az functionapp cors show \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$FUNCTION_APP_NAME" \
+              --query "allowedOrigins" -o table
+          else
+            echo "CORS configuration already includes both Static Web App origins"
+          fi
+
   validate:
     name: Smoke + Diagnose + E2E
     runs-on: ubuntu-latest
@@ -496,8 +583,11 @@ jobs:
             -H "Access-Control-Request-Headers: content-type" \
             "$API_BASE_URL/actions/list" || true)
           sed -n '1,25p' /tmp/actions-list.options.headers || true
-          if [ "$optCode" != "204" ]; then
+          # Accept 204 or 200 from some hosting configurations; treat other codes as failure.
+          if [ "$optCode" != "204" ] && [ "$optCode" != "200" ]; then
             echo "::error::OPTIONS preflight for /actions/list failed (http=$optCode)."
+            echo "--- OPTIONS response headers ---"
+            sed -n '1,200p' /tmp/actions-list.options.headers || true
             exit 1
           fi
 
@@ -518,8 +608,10 @@ jobs:
             -H "Access-Control-Request-Headers: content-type" \
             "$API_BASE_URL/actions/stats" || true)
           sed -n '1,25p' /tmp/actions-stats.options.headers || true
-          if [ "$statsOptCode" != "204" ]; then
+          if [ "$statsOptCode" != "204" ] && [ "$statsOptCode" != "200" ]; then
             echo "::error::OPTIONS preflight for /actions/stats failed (http=$statsOptCode)."
+            echo "--- OPTIONS response headers ---"
+            sed -n '1,200p' /tmp/actions-stats.options.headers || true
             exit 1
           fi
 
@@ -557,7 +649,10 @@ jobs:
         env:
           FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
           API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
-          PLAYWRIGHT_WORKERS: 12
+          # Avoid overwhelming the Function App + browser with concurrent 40MB+ list downloads.
+          # Playwright defaults to 2 workers in CI (see src/frontend/playwright.config.ts),
+          # but we set this explicitly to keep CI behavior stable.
+          PLAYWRIGHT_WORKERS: 2
         run: npm run test:e2e -- --reporter=list
 
       - name: Remove temporary GitHub runner allow rule

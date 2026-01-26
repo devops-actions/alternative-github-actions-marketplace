@@ -93,14 +93,29 @@ body {
 
 .controls {
   display: flex;
-  gap: 15px;
+  gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.controls-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Ensure controls-row spans full width under the search/type controls */
+.controls > .controls-row,
+.controls-row {
+  width: 100%;
 }
 
 .search-box {
-  flex: 1;
-  min-width: 300px;
+  flex: 1 1 420px;
+  min-width: 240px;
 }
 
 .search-box input {
@@ -118,7 +133,7 @@ body {
 }
 
 .filter-group {
-  display: flex;
+  display: inline-flex;
   gap: 8px;
   align-items: center;
   background: white;
@@ -166,6 +181,37 @@ body {
   background: #d73a49;
   border-color: #d73a49;
   color: white;
+}
+
+/* Styled select controls inside filter groups to match the rest of the UI */
+.filter-group select {
+  padding: 8px 36px 8px 12px;
+  font-size: 14px;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='%23666' d='M5 7l5 5 5-5z'/></svg>") no-repeat right 10px center;
+  background-size: 12px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  min-width: 120px;
+}
+
+.filter-group select:focus {
+  border-color: #0366d6;
+  box-shadow: 0 0 0 3px rgba(3,102,214,0.08);
+  outline: none;
+}
+
+/* Align labels and selects nicely */
+.filter-group label {
+  margin-right: 6px;
+}
+
+/* Remove default IE dropdown arrow */
+.filter-group select::-ms-expand {
+  display: none;
 }
 
 .actions-grid {
@@ -425,6 +471,26 @@ body {
   font-size: 20px;
   font-weight: 600;
   color: #24292e;
+}
+
+/* Age indicators for Last Updated */
+.info-card .value.aged {
+  color: #d9822b; /* orange-ish */
+}
+
+.info-card .value.stale {
+  color: #d73a49; /* red */
+}
+
+/* Make the whole info-card panel stand out when aged/stale */
+.info-card.aged {
+  border-color: #d9822b;
+  background: rgba(217,130,43,0.06);
+}
+
+.info-card.stale {
+  border-color: #d73a49;
+  background: rgba(215,58,73,0.06);
 }
 
 .version-selector {

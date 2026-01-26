@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService } from '../services/actionsService';
+import { splitOwnerRepo } from '../services/utils';
 
 export const DetailPage: React.FC = () => {
   const { owner, name } = useParams<{ owner: string; name: string }>();
@@ -106,6 +107,18 @@ export const DetailPage: React.FC = () => {
     }
   };
 
+  const getAgeClass = (isoDate?: string) => {
+    if (!isoDate) return '';
+    const then = new Date(isoDate);
+    if (Number.isNaN(then.getTime())) return '';
+    const now = new Date();
+    const days = Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (days > 365) return 'stale';
+    if (days > 90) return 'aged';
+    return '';
+  };
+
   if (loading) {
     return (
       <div className="app">
@@ -131,7 +144,7 @@ export const DetailPage: React.FC = () => {
     <div className="app">
       <div className="header">
         <h1>Alternative GitHub Actions Marketplace</h1>
-        <p>Browse and search through GitHub Actions</p>
+        <p>Browse and search through GitHub Actions with more information</p>
       </div>
 
       <button className="back-button" onClick={handleBack}>
@@ -140,8 +153,7 @@ export const DetailPage: React.FC = () => {
 
       <div className="detail-page">
         <div className="detail-header">
-          <div className="detail-owner">{action.owner}</div>
-          <h1 className="detail-title">{action.name}</h1>
+          <h1 className="detail-title">{`${action.owner} / ${splitOwnerRepo(action).repo}`}</h1>
           <div className="detail-badges">
             <span
               className={`action-badge ${getActionTypeBadgeClass(
@@ -185,10 +197,10 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
+          <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''} ${getAgeClass(action.repoInfo.updated_at)}`}>
             <h3>Last Updated</h3>
-            <div className="value">
-              {new Date(action.repoInfo.updated_at).toLocaleDateString()}
+            <div className={`value ${getAgeClass(action.repoInfo.updated_at)}`}>
+              {action.repoInfo.updated_at ? new Date(action.repoInfo.updated_at).toLocaleDateString() : 'Unknown'}
             </div>
           </div>
         </div>
@@ -197,12 +209,12 @@ export const DetailPage: React.FC = () => {
           <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Action Type Details</h3>
             <div className="value" style={{ fontSize: '14px' }}>
-              {action.actionType.actionType}
-              {action.actionType.nodeVersion && (
-                <div>Node: v{action.actionType.nodeVersion}</div>
-              )}
-              {action.actionType.actionDockerType && (
-                <div>Docker: {action.actionType.actionDockerType}</div>
+              {action.actionType.nodeVersion ? (
+                <div>{`Node: v${action.actionType.nodeVersion}`}</div>
+              ) : action.actionType.actionDockerType ? (
+                <div>{`Docker: ${action.actionType.actionDockerType}`}</div>
+              ) : (
+                <div>{action.actionType.actionType}</div>
               )}
             </div>
           </div>
@@ -217,7 +229,7 @@ export const DetailPage: React.FC = () => {
                 : 'Size N/A'}
               <br />
               <a
-                href={`https://github.com/${action.owner}/${(action.name.startsWith(`${action.owner}_`) ? action.name.substring(action.owner.length + 1) : action.name)}`}
+                href={`https://github.com/${action.owner}/${splitOwnerRepo(action).repo}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="repo-link"

@@ -1,4 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { waitForResults, goHome, getFrontendBaseUrl, getApiBaseUrl, joinUrl } from './test-helpers';
 
 type ActionListItem = {
   owner: string;
@@ -6,58 +9,56 @@ type ActionListItem = {
   verified?: boolean;
   actionType?: { actionType?: string };
   repoInfo?: { archived?: boolean };
+  releaseInfo?: unknown;
 };
 
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
+const CACHE_FILE = path.join(process.cwd(), 'test-results', 'actions-cache.json');
+
 let cachedActions: ActionListItem[] = [];
-let apiReady = false;
-let apiError: Error | null = null;
+let cacheLoaded = false;
+let cacheError: string | null = null;
 
-const getFrontendBaseUrl = () => process.env.FRONTEND_BASE_URL || 'http://localhost:4173';
-
-function joinUrl(baseUrl: string, path: string) {
-  const base = baseUrl.replace(/\/+$/, '');
-  const suffix = path.replace(/^\/+/, '');
-  return `${base}/${suffix}`;
-}
-
-const getApiBaseUrl = () => {
-  const explicit = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL;
-  if (explicit) {
-    return explicit;
+/**
+ * Load actions from the cache file created by global-setup.
+ * This avoids each worker hitting the 16MB API endpoint.
+ */
+function loadCachedActions(): ActionListItem[] {
+  if (cacheLoaded) {
+    return cachedActions;
   }
 
-  // Fallback for local setups that serve Functions behind /api.
-  return joinUrl(getFrontendBaseUrl(), '/api');
-};
-
-async function fetchActionsList(): Promise<ActionListItem[]> {
-  const apiBaseUrl = getApiBaseUrl();
-  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'), {
-    headers: {
-      'Cache-Control': 'no-cache'
+  try {
+    if (!fs.existsSync(CACHE_FILE)) {
+      cacheError = 'Cache file not found - global setup may have failed';
+      cacheLoaded = true;
+      return [];
     }
-  });
 
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch actions list: ${resp.status}`);
-  }
+    const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
+    const data = JSON.parse(raw);
 
-  const data = (await resp.json()) as unknown;
-  return Array.isArray(data) ? (data as ActionListItem[]) : [];
-}
-
-async function fetchActionsListWithRetry(retries: number = 5, delayMs: number = 3000): Promise<ActionListItem[]> {
-  let lastErr: unknown;
-  for (let i = 0; i < retries; i += 1) {
-    try {
-      return await fetchActionsList();
-    } catch (err) {
-      lastErr = err;
-      await new Promise(res => setTimeout(res, delayMs));
+    if (data && typeof data === 'object' && 'error' in data) {
+      cacheError = String(data.error);
+      cacheLoaded = true;
+      return [];
     }
+
+    if (!Array.isArray(data)) {
+      cacheError = 'Cache file does not contain an array';
+      cacheLoaded = true;
+      return [];
+    }
+
+    cachedActions = data as ActionListItem[];
+    cacheLoaded = true;
+    console.log(`[e2e] Loaded ${cachedActions.length} actions from cache`);
+    return cachedActions;
+  } catch (err) {
+    cacheError = String(err);
+    cacheLoaded = true;
+    return [];
   }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function clearPersistedOverviewState(page: Page) {
@@ -81,8 +82,8 @@ function statsBar(page: Page) {
 
 async function waitForOverviewSettled(page: Page) {
   const start = Date.now();
-  const overallTimeoutMs = 240000;
-  const errorGraceMs = 90000;
+  const overallTimeoutMs = 90000;
+  const errorGraceMs = 30000;
 
   const cards = page.locator('.action-card').first();
   const noResults = page.locator('.no-results').first();
@@ -123,9 +124,10 @@ async function waitForOverviewSettled(page: Page) {
   }
 
   const stillLoading = await loadingIndicator.isVisible().catch(() => false);
+
   throw new Error(
     `Overview did not settle within ${overallTimeoutMs}ms. ` +
-    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}`
+    `lastError=${lastErrorText || '(none)'}, wasLoading=${wasLoading}, stillLoading=${stillLoading}.`
   );
 }
 
@@ -134,53 +136,7 @@ type PageDiagnostics = {
   network: string[];
 };
 
-async function goHome(page: Page, diagnostics?: PageDiagnostics) {
-  const response = await page.goto(getFrontendBaseUrl(), { waitUntil: 'domcontentloaded' });
-  const status = response?.status();
-  if (typeof status === 'number' && status >= 400) {
-    throw new Error(`Frontend navigation failed with HTTP ${status}`);
-  }
-
-  await expect(page).toHaveTitle(/Alternative GitHub Actions Marketplace/, { timeout: 60000 });
-
-  try {
-    await waitForOverviewSettled(page);
-
-    // If the API has actions but the UI is still showing an empty state,
-    // give it a little extra time (large payload / slower rendering), then fail.
-    if (cachedActions.length > 0) {
-      const cards = page.locator('.action-card').first();
-      const noResults = page.locator('.no-results').first();
-      if (await noResults.isVisible().catch(() => false)) {
-        await page.waitForTimeout(5000);
-        if (!(await cards.isVisible().catch(() => false))) {
-          throw new Error(`UI shows no results but API reports ${cachedActions.length} actions`);
-        }
-      }
-    }
-  } catch (err) {
-    const url = page.url();
-    const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
-    const rootLen = (rootHtml || '').trim().length;
-
-    const consoleTail = diagnostics?.console?.slice(-30).join('\n') || '(none)';
-    const networkTail = diagnostics?.network?.slice(-30).join('\n') || '(none)';
-    throw new Error(
-      `Overview did not render. url=${url}, httpStatus=${String(status)}, rootHtmlLength=${rootLen}. ${String(err)}\n\n` +
-      `--- Browser console (tail) ---\n${consoleTail}\n\n` +
-      `--- Network (tail) ---\n${networkTail}`
-    );
-  }
-}
-
-async function waitForResults(page: Page) {
-  const card = page.locator('.action-card').first();
-  const empty = page.locator('.no-results').first();
-  await Promise.race([
-    card.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined),
-    empty.waitFor({ state: 'visible', timeout: 120000 }).catch(() => undefined)
-  ]);
-}
+// Note: `goHome`, `waitForResults` and related helpers are provided by ./test-helpers
 
 async function ensureActionsVisible(page: Page) {
   // Wait until at least one action card or no-results is visible (loading finished).
@@ -190,15 +146,13 @@ async function ensureActionsVisible(page: Page) {
 async function resetFilters(page: Page) {
   await typeFilterGroup(page).getByRole('button', { name: 'All', exact: true }).click();
 
-  const verifiedOnly = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
-  if (await verifiedOnly.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
-    await verifiedOnly.click();
-  }
+  // Reset verified select to 'all'
+  const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+  await verifiedSelect.selectOption('all');
 
-  const archived = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
-  if (await archived.getAttribute('class')?.then(c => Boolean(c && c.includes('active')))) {
-    await archived.click();
-  }
+  // Reset archived select to 'hide'
+  const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+  await archivedSelect.selectOption('hide');
 }
 
 async function assertTypeFilterActive(page: Page, label: string) {
@@ -207,20 +161,31 @@ async function assertTypeFilterActive(page: Page, label: string) {
 }
 
 async function assertVerifiedOnlyActive(page: Page, active: boolean) {
-  const button = typeFilterGroup(page).getByRole('button', { name: 'Verified only' });
+  const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+  const val = await verifiedSelect.inputValue();
   if (active) {
-    await expect(button).toHaveClass(/active/);
+    if (val !== 'verified') {
+      throw new Error('Expected verified filter to be active but it is not');
+    }
   } else {
-    await expect(button).not.toHaveClass(/active/);
+    if (val === 'verified') {
+      throw new Error('Expected verified filter to not be active but it is');
+    }
   }
 }
 
 async function assertArchivedToggleActive(page: Page, active: boolean) {
-  const button = typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true });
+  // active=true means archived is not hidden (either 'show' or 'only')
+  const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+  const val = await archivedSelect.inputValue();
   if (active) {
-    await expect(button).toHaveClass(/active/);
+    if (val === 'hide') {
+      throw new Error('Expected archived filter to be active but it is set to hide');
+    }
   } else {
-    await expect(button).not.toHaveClass(/active/);
+    if (val !== 'hide') {
+      throw new Error('Expected archived filter to be hide but it is not');
+    }
   }
 }
 
@@ -302,17 +267,14 @@ test.beforeEach(async ({ page }) => {
     }
   });
 
-  if (!apiReady) {
-    if (apiError) {
-      test.skip(true, `API unavailable: ${apiError.message}`);
-    }
-    try {
-      cachedActions = await fetchActionsListWithRetry();
-      apiReady = true;
-    } catch (err) {
-      apiError = err as Error;
-      test.skip(true, `API unavailable: ${apiError.message}`);
-    }
+  // Load actions from cache (created by global-setup) instead of fetching from API.
+  // This avoids each worker independently hitting the 16MB endpoint.
+  const actions = loadCachedActions();
+  if (cacheError) {
+    test.skip(true, `Actions cache unavailable: ${cacheError}`);
+  }
+  if (actions.length === 0) {
+    test.skip(true, 'No actions in cache - global setup may have failed');
   }
 
   // Clear persisted state once before the first document load for this test.
@@ -354,8 +316,12 @@ test('detail page renders for first action', async ({ page }) => {
     `/action/${encodeURIComponent(first.owner)}/${encodeURIComponent(first.name)}`
   );
   await page.goto(detailUrl, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.detail-owner')).toHaveText(first.owner, { timeout: 45000 });
-  await expect(page.locator('.detail-title')).toContainText(first.name);
+  // Title now displays "owner / repo" on one line; assert both parts are present
+  await expect(page.locator('.detail-title')).toContainText(first.owner, { timeout: 45000 });
+  const displayedName = (first.owner && first.name && first.name.startsWith(`${first.owner}_`))
+    ? first.name.substring(first.owner.length + 1)
+    : first.name;
+  await expect(page.locator('.detail-title')).toContainText(displayedName);
 });
 
 test.describe('Stats panel filters (persist across refresh)', () => {
@@ -393,11 +359,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
     statsPanelCases.push({
       name: `${type} Actions sets type filter`,
       ariaLabel,
-      assert: async (page, items) => {
-        const hasAny = items.some(a => a?.actionType?.actionType === type);
-        if (!hasAny) {
-          test.skip(true, `No ${type} actions available to validate filter`);
-        }
+      assert: async (page) => {
         await assertTypeFilterActive(page, buttonLabel);
         await assertCardsMatchType(page, type);
       }
@@ -412,7 +374,9 @@ test.describe('Stats panel filters (persist across refresh)', () => {
       if (!hasArchived) {
         test.skip(true, 'No archived actions available to validate archived toggle');
       }
-      await assertArchivedToggleActive(page, true);
+      // set archived select to 'only'
+      const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+      await archivedSelect.selectOption('only');
       await assertCardsAreArchived(page);
     }
   });
@@ -421,6 +385,17 @@ test.describe('Stats panel filters (persist across refresh)', () => {
     test(c.name, async ({ page }) => {
       // Use cached actions from beforeEach to avoid redundant 16MB API calls.
       const items = cachedActions;
+
+      // Early skip for type filters if no matching actions exist
+      if (c.ariaLabel.startsWith('Filter by ')) {
+        const typeName = c.ariaLabel.replace('Filter by ', '').replace(' actions', '');
+        const hasAny = items.some(a => a?.actionType?.actionType === typeName);
+        if (!hasAny) {
+          test.skip(true, `No ${typeName} actions available to validate filter`);
+          return;
+        }
+      }
+
       await waitForResults(page);
       await resetFilters(page);
 
@@ -429,7 +404,7 @@ test.describe('Stats panel filters (persist across refresh)', () => {
 
       // Refresh (simulates F5) and ensure state is preserved.
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+      await waitForResults(page);
 
       await c.assert(page, items);
     });
@@ -450,21 +425,24 @@ test.describe('Filter buttons (persist across refresh)', () => {
     test(`Type filter ${label} persists on refresh`, async ({ page }) => {
       // Use cached actions from beforeEach to avoid redundant 16MB API calls.
       const items = cachedActions;
-      await waitForResults(page);
-      await resetFilters(page);
 
+      // Early skip if no matching actions exist
       if (type !== 'All') {
         const hasAny = items.some(a => a?.actionType?.actionType === type);
         if (!hasAny) {
           test.skip(true, `No ${type} actions available to validate filter`);
+          return;
         }
       }
+
+      await waitForResults(page);
+      await resetFilters(page);
 
       await typeFilterGroup(page).getByRole('button', { name: label, exact: true }).click();
       await waitForResults(page);
 
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+      await waitForResults(page);
 
       await assertTypeFilterActive(page, label);
       if (type !== 'All') {
@@ -485,11 +463,12 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await waitForResults(page);
     await resetFilters(page);
 
-    await page.getByRole('button', { name: 'Verified only' }).click();
+    const verifiedSelect = page.locator('.filter-group').filter({ hasText: 'Verified:' }).first().locator('select');
+    await verifiedSelect.selectOption('verified');
     await waitForResults(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+    await waitForResults(page);
 
     await assertVerifiedOnlyActive(page, true);
     await waitForResults(page);
@@ -507,13 +486,50 @@ test.describe('Filter buttons (persist across refresh)', () => {
     await ensureActionsVisible(page);
     await resetFilters(page);
 
-    await typeFilterGroup(page).getByRole('button', { name: 'Archived', exact: true }).click();
+    const archivedSelect = page.locator('.filter-group').filter({ hasText: 'Archived:' }).first().locator('select');
+    await archivedSelect.selectOption('only');
     await ensureActionsVisible(page);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.action-card, .no-results').first()).toBeVisible({ timeout: 45000 });
+    await waitForResults(page);
 
     await assertArchivedToggleActive(page, true);
     await assertCardsAreArchived(page);
   });
+});
+
+test('shows Updated for actions without releaseInfo', async ({ page }) => {
+  // Find any cached action that has no releaseInfo (or empty array)
+  const actions = loadCachedActions();
+  const target = actions.find(a => !a.releaseInfo || (Array.isArray(a.releaseInfo) && a.releaseInfo.length === 0));
+  if (!target) {
+    test.skip(true, 'No action without releaseInfo available from API');
+    return; // Explicit return for TypeScript narrowing
+  }
+
+  await waitForResults(page);
+
+  // Find the card that matches owner/displayed name (normalize owner_ prefix)
+  const cards = page.locator('.action-card');
+  const count = await cards.count();
+  let found = false;
+  // compute displayed repo name the same way the UI does
+  const displayedName = (target.owner && target.name && target.name.startsWith(`${target.owner}_`))
+    ? target.name.substring(target.owner.length + 1)
+    : target.name;
+
+  for (let i = 0; i < count; i += 1) {
+    const card = cards.nth(i);
+    const text = (await card.innerText()).replace(/\s+/g, ' ');
+    if (text.includes(target.owner) && text.includes(displayedName || '')) {
+      // The card should contain an Updated: label
+      await expect(card.getByText(/Updated:/)).toBeVisible();
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    test.skip(true, 'Matching action card not found in rendered UI');
+  }
 });

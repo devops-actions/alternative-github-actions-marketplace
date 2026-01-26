@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService } from '../services/actionsService';
+import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 
 const PAGE_SIZE = 12;
@@ -11,10 +12,12 @@ type OverviewUiState = {
   searchQuery: string;
   typeFilter: ActionTypeFilter;
   showVerifiedOnly: boolean;
-  includeArchived: boolean;
+  verifiedFilter?: 'all' | 'verified' | 'unverified';
+  archivedFilter?: 'hide' | 'show' | 'only';
   sortBy: 'updated' | 'dependents';
   currentPage: number;
   scrollY?: number;
+  openssfFilter?: 'all' | 'above5' | 'above7';
 };
 
 function readOverviewState(): Partial<OverviewUiState> | null {
@@ -52,7 +55,18 @@ export const OverviewPage: React.FC = () => {
     return candidate && supported.includes(candidate) ? candidate : 'All';
   });
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(() => Boolean(initialPersisted?.showVerifiedOnly));
-  const [includeArchived, setIncludeArchived] = useState(() => Boolean(initialPersisted?.includeArchived));
+  const [verifiedFilter, setVerifiedFilter] = useState<'all' | 'verified' | 'unverified'>(() => {
+    const persisted = (initialPersisted as any)?.verifiedFilter as 'all' | 'verified' | 'unverified' | undefined;
+    return persisted || 'all';
+  });
+  const [archivedFilter, setArchivedFilter] = useState<'hide' | 'show' | 'only'>(() => {
+    const persisted = (initialPersisted as any)?.archivedFilter as 'hide' | 'show' | 'only' | undefined;
+    return persisted || 'hide';
+  });
+  const [openssfFilter, setOpenssfFilter] = useState<'all' | 'above5' | 'above7'>(() => {
+    const candidate = initialPersisted?.openssfFilter as string | undefined;
+    return candidate === 'above5' || candidate === 'above7' ? candidate : 'all';
+  });
   const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
   const [currentPage, setCurrentPage] = useState(() => {
     const candidate = Number(initialPersisted?.currentPage);
@@ -67,8 +81,10 @@ export const OverviewPage: React.FC = () => {
     searchQuery,
     typeFilter,
     showVerifiedOnly,
-    includeArchived,
-    sortBy
+    archivedFilter,
+    verifiedFilter,
+    sortBy,
+    openssfFilter
   });
   const restoredScrollRef = useRef(false);
 
@@ -79,12 +95,12 @@ export const OverviewPage: React.FC = () => {
     }
 
     if (type === 'Verified') {
-      setShowVerifiedOnly(true);
+      setVerifiedFilter('verified');
       return;
     }
 
     if (type === 'Archived') {
-      setIncludeArchived(true);
+      setArchivedFilter('only');
       return;
     }
 
@@ -99,7 +115,8 @@ export const OverviewPage: React.FC = () => {
     setSearchQuery('');
     setTypeFilter('All');
     setShowVerifiedOnly(false);
-    setIncludeArchived(false);
+    setArchivedFilter('hide');
+    setOpenssfFilter('all');
     setSortBy('updated');
     setCurrentPage(1);
     try {
@@ -176,22 +193,20 @@ export const OverviewPage: React.FC = () => {
       searchQuery,
       typeFilter,
       showVerifiedOnly,
-      includeArchived,
+      verifiedFilter,
+      archivedFilter,
       sortBy,
+      openssfFilter,
       currentPage
     });
-  }, [searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy, currentPage]);
+  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, sortBy, openssfFilter, currentPage]);
 
   useEffect(() => {
     let filtered = actions;
 
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim();
     if (normalizedQuery) {
-      filtered = filtered.filter(action => {
-        const name = String(action?.name || '').toLowerCase();
-        const owner = String(action?.owner || '').toLowerCase();
-        return name.includes(normalizedQuery) || owner.includes(normalizedQuery);
-      });
+      filtered = filtered.filter(action => matchesSearchQuery({ owner: action.owner, name: action.name }, normalizedQuery));
     }
 
     if (typeFilter !== 'All') {
@@ -199,12 +214,25 @@ export const OverviewPage: React.FC = () => {
         action => action?.actionType?.actionType === typeFilter
       );
     }
-    if (showVerifiedOnly) {
-      filtered = filtered.filter(action => action.verified === true);
+    if (verifiedFilter === 'verified') {
+      filtered = filtered.filter(action => isActionVerified(action));
+    } else if (verifiedFilter === 'unverified') {
+      filtered = filtered.filter(action => !isActionVerified(action));
     }
 
-    if (includeArchived) {
+    if (archivedFilter === 'only') {
       filtered = filtered.filter(action => action?.repoInfo?.archived === true);
+    } else if (archivedFilter === 'hide') {
+      filtered = filtered.filter(action => action?.repoInfo?.archived !== true);
+    }
+
+    // Filter by OpenSSF score threshold
+    if (openssfFilter && openssfFilter !== 'all') {
+      const threshold = openssfFilter === 'above7' ? 7 : 5;
+      filtered = filtered.filter(action => {
+        const score = typeof action.ossfScore === 'number' ? action.ossfScore : -1;
+        return score > threshold;
+      });
     }
 
     // Apply sorting
@@ -228,10 +256,12 @@ export const OverviewPage: React.FC = () => {
       prev.searchQuery !== searchQuery ||
       prev.typeFilter !== typeFilter ||
       prev.showVerifiedOnly !== showVerifiedOnly ||
-      prev.includeArchived !== includeArchived ||
-      prev.sortBy !== sortBy;
+      prev.verifiedFilter !== verifiedFilter ||
+      prev.archivedFilter !== archivedFilter ||
+      prev.sortBy !== sortBy ||
+      prev.openssfFilter !== openssfFilter;
 
-    prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy };
+      prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, archivedFilter, verifiedFilter, sortBy, openssfFilter };
 
     const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     if (filtersChanged) {
@@ -239,7 +269,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, includeArchived, sortBy]);
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, verifiedFilter, sortBy, openssfFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -282,7 +312,7 @@ export const OverviewPage: React.FC = () => {
       searchQuery,
       typeFilter,
       showVerifiedOnly,
-      includeArchived,
+      archivedFilter,
       sortBy,
       currentPage,
       scrollY: window.scrollY
@@ -328,8 +358,8 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="app">
       <div className="header">
-        <h1>Alternative GitHub Actions Marketplace</h1>
-        <p>Browse and search through <AnimatedCounter value={stats.total} /> GitHub Actions</p>
+        <h1>Alternative GitHub Actions Marketplace</h1>        
+        <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
       </div>
 
       <div className="stats-bar">
@@ -388,22 +418,6 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         <div className="filter-group">
-          <label>Sort by:</label>
-          <button
-            className={sortBy === 'updated' ? 'active' : ''}
-            onClick={() => setSortBy('updated')}
-          >
-            Last Updated
-          </button>
-          <button
-            className={sortBy === 'dependents' ? 'active' : ''}
-            onClick={() => setSortBy('dependents')}
-          >
-            Used by
-          </button>
-        </div>
-
-        <div className="filter-group">
           <label>Type:</label>
           <button
             className={typeFilter === 'All' ? 'active' : ''}
@@ -453,20 +467,51 @@ export const OverviewPage: React.FC = () => {
           >
             No file found
           </button>
-          <button
-            className={showVerifiedOnly ? 'active' : ''}
-            style={{ marginLeft: '20px' }}
-            onClick={() => setShowVerifiedOnly(v => !v)}
-          >
-            Verified only
-          </button>
+        </div>
 
-          <button
-            className={`${includeArchived ? 'active' : ''} danger`}
-            onClick={() => setIncludeArchived(v => !v)}
-          >
-            Archived
-          </button>
+        <div className="controls-row">
+          <div className="filter-group">
+            <label>Verified:</label>
+            <select data-testid="filter-verified" value={verifiedFilter} onChange={e => setVerifiedFilter(e.target.value as any)}>
+              <option value="all">All</option>
+              <option value="verified">Verified only</option>
+              <option value="unverified">Only unverified</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Archived:</label>
+            <select data-testid="filter-archived" value={archivedFilter} onChange={e => setArchivedFilter(e.target.value as any)}>
+              <option value="hide">Hide archived</option>
+              <option value="show">Show archived</option>
+              <option value="only">Only archived</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>OpenSSF score:</label>
+            <select data-testid="filter-ossf" value={openssfFilter} onChange={e => setOpenssfFilter(e.target.value as any)}>
+              <option value="all">All scores</option>
+              <option value="above5">Above 5</option>
+              <option value="above7">Above 7</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Sort by:</label>
+            <button data-testid="sort-updated"
+              className={sortBy === 'updated' ? 'active' : ''}
+              onClick={() => setSortBy('updated')}
+            >
+              Last Updated
+            </button>
+            <button data-testid="sort-dependents"
+              className={sortBy === 'dependents' ? 'active' : ''}
+              onClick={() => setSortBy('dependents')}
+            >
+              Used by
+            </button>
+          </div>
         </div>
       </div>
 
@@ -492,13 +537,13 @@ export const OverviewPage: React.FC = () => {
             {pagedActions.map(action => (
               <div
                 key={`${action.owner}/${action.name}`}
-                className={`action-card ${action.repoInfo.archived ? 'archived' : ''}`}
+                className={`action-card ${action.repoInfo?.archived ? 'archived' : ''}`}
                 onClick={() => handleActionClick(action)}
               >
                 <div className="action-header">
                   <div className="action-title">
-                    <div className="action-owner">{action.owner}</div>
-                    <div className="action-name">{action.name}</div>
+                      <div className="action-owner">{action.owner}</div>
+                      <div className="action-name">{normalizeRepoName(action.owner, action.name)}</div>
                   </div>
                   <span
                     className={`action-badge ${getActionTypeBadgeClass(
@@ -523,7 +568,14 @@ export const OverviewPage: React.FC = () => {
                       <span>Verified</span>
                     </div>
                   )}
-                  {action.repoInfo.archived && (
+                  {/* Show OpenSSF score if present */}
+                  {typeof action.ossfScore === 'number' && (
+                    <div className="meta-item">
+                      <span>🔒</span>
+                      <span>OpenSSF: <strong>{action.ossfScore.toFixed(1)}</strong></span>
+                    </div>
+                  )}
+                  {action.repoInfo?.archived && (
                     <div className="meta-item">
                       <span>📦</span>
                       <span>Archived</span>
@@ -531,23 +583,23 @@ export const OverviewPage: React.FC = () => {
                   )}
                 </div>
 
-                {action.releaseInfo && action.releaseInfo.length > 0 && (
-                  <div className="action-meta">
+                <div className="action-meta">
+                  {action.releaseInfo && action.releaseInfo.length > 0 && (
                     <div className="meta-item">
                       <span>🏷️</span>
                       <span>Latest: {action.releaseInfo[0]}</span>
                     </div>
-                    <div className="meta-item">
-                      <span>🕐</span>
-                      <span>
-                        Updated:{' '}
-                        {action?.repoInfo?.updated_at
-                          ? new Date(action.repoInfo.updated_at).toLocaleDateString()
-                          : 'Unknown'}
-                      </span>
-                    </div>
+                  )}
+                  <div className="meta-item">
+                    <span>🕐</span>
+                    <span>
+                      Updated:{' '}
+                      {action?.repoInfo?.updated_at
+                        ? new Date(action.repoInfo.updated_at).toLocaleDateString()
+                        : 'Unknown'}
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
             ))}
           </div>
