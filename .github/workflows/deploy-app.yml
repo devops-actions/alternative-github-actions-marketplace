@@ -1,5 +1,9 @@
 name: Deploy App (Frontend + Backend)
 
+concurrency:
+  group: azure-deployment-${{ vars.AZURE_RESOURCE_GROUP }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -51,16 +55,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
-
-      - name: Filter paths
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            frontend:
-              - 'src/frontend/**'
-            backend:
-              - 'src/backend/**'
 
   resolve:
     name: Resolve Azure resource hosts

@@ -1,7 +1,7 @@
 name: Deploy IaC
 
 concurrency:
-  group: rg-${{ vars.AZURE_RESOURCE_GROUP }}-deploy
+  group: azure-deployment-${{ vars.AZURE_RESOURCE_GROUP }}
   cancel-in-progress: false
 
 on:
