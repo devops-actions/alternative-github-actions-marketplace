@@ -27,6 +27,9 @@ param functionCorsAllowedOrigins array = [
   'https://portal.azure.com'
 ]
 
+@description('Plausible Analytics tracking domain. This domain will be used for analytics tracking on the frontend. Leave empty to disable Plausible tracking.')
+param plausibleTrackingDomain string = ''
+
 var uniqueSuffix = uniqueString(resourceGroup().id, environment)
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
@@ -201,8 +204,19 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   }
 }
 
+resource staticWebAppCustomDomain 'Microsoft.Web/staticSites/customDomains@2022-09-01' = if (!empty(plausibleTrackingDomain)) {
+  name: '${staticWebApp.name}/${plausibleTrackingDomain}'
+  properties: {
+    validationMethod: 'cname-delegation'
+  }
+  dependsOn: [
+    staticWebApp
+  ]
+}
+
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
 output functionAppDefaultHostname string = functionApp.properties.defaultHostName
 output functionAppName string = functionApp.name
 output tableEndpoint string = storageAccount.properties.primaryEndpoints.table
 output applicationInsightsConnection string = appInsights.properties.ConnectionString
+output plausibleTrackingDomain string = plausibleTrackingDomain

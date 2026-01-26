@@ -56,6 +56,8 @@ The built files will be in the `dist` directory.
 
 - `VITE_API_BASE_URL`: Base URL for the API from the browser (default: `/api`)
 - `VITE_API_PROXY_TARGET`: Backend origin the Vite dev server should proxy `/api/*` requests to (default: `http://localhost:7071`)
+- `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Domain for Plausible Analytics tracking (configured via `PLAUSIBLE_TRACKING_DOMAIN` repository variable)
+- `VITE_APPINSIGHTS_CONNECTION_STRING`: Application Insights connection string for telemetry
 
 ## Architecture
 
@@ -79,9 +81,37 @@ The `actionsService` is a singleton service that:
 The frontend is deployed to Azure Static Web Apps via GitHub Actions. See `.github/workflows/deploy-frontend.yml` for the deployment workflow.
 
 The workflow:
-1. Installs dependencies
-2. Builds the application
-3. Deploys to Azure Static Web Apps
+1. Resolves the Static Web App hostname from Azure
+2. Installs dependencies
+3. Builds the application with environment variables:
+   - `VITE_API_BASE_URL`: Backend API URL (resolved from Azure Function App hostname)
+   - `VITE_APPINSIGHTS_CONNECTION_STRING`: Application Insights connection string for telemetry
+   - `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Plausible Analytics tracking domain (from `PLAUSIBLE_TRACKING_DOMAIN` repository variable)
+4. Deploys to Azure Static Web Apps
+
+### Configuration
+
+The Plausible tracking domain is configured via the `PLAUSIBLE_TRACKING_DOMAIN` repository variable. This variable is:
+- Passed to the Bicep template during infrastructure deployment (see `.github/workflows/deploy-infra.yml`)
+- Used to configure a custom domain on the Azure Static Web App resource
+- Used at build time to configure the Plausible Analytics client
+- Typically set to your custom domain (e.g., `marketplace.example.com`)
+
+#### Custom Domain Setup
+
+If you configure a custom domain via `PLAUSIBLE_TRACKING_DOMAIN`:
+
+1. **Set the repository variable**: Add `PLAUSIBLE_TRACKING_DOMAIN` with your custom domain (e.g., `marketplace.example.com`)
+
+2. **Deploy infrastructure**: Run the `deploy-infra.yml` workflow to create the custom domain resource on the Static Web App
+
+3. **Configure DNS**: Create a CNAME record in your DNS:
+   - **Name**: Your custom domain (e.g., `marketplace.example.com`)
+   - **Value**: The Static Web App's default hostname (e.g., `swa-xyz123.azurestaticapps.net`)
+
+4. **Wait for validation**: Azure will validate domain ownership via the CNAME record
+
+Once DNS validation completes, your Static Web App will be accessible via the custom domain, and Plausible Analytics will track visits to that domain.
 
 ## API Integration
 
