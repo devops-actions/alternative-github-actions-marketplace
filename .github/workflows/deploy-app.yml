@@ -679,8 +679,8 @@ jobs:
 
   validate-resources:
     name: Validate Resources
-    needs: [validate]
-    if: ${{ always() && needs.validate.result != 'skipped' }}
+    needs: [deploy-backend, deploy-frontend]
+    if: ${{ always() && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success') }}
     uses: ./.github/workflows/validate-azure-resources.yml
     with:
       resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}

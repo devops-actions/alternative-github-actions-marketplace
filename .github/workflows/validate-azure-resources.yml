@@ -61,9 +61,10 @@ jobs:
           echo "Resources in resource group:"
           echo "$resources" | jq -r '.[] | "\(.type): \(.name)"'
           
-          # Count resources by type, excluding child resources
+          # Count resources by type, excluding child resources and role assignments
           # Child resources (like tables, file shares, custom domains) are part of their parent
-          # and shouldn't be counted separately
+          # and shouldn't be counted separately. Role assignments are excluded as multiple
+          # role assignments are expected and normal in a resource group.
           echo ""
           echo "Counting top-level resources by type..."
           
@@ -73,6 +74,7 @@ jobs:
               (.type | contains("/tableServices/") | not) and
               (.type | contains("/fileServices/") | not) and
               (.type | contains("/customDomains") | not) and
+              # Exclude role assignments as multiple are expected
               (.type | contains("/roleAssignments") | not)
             )] |
             group_by(.type) |
