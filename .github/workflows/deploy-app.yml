@@ -676,3 +676,15 @@ jobs:
             src/frontend/playwright-report
             src/frontend/test-results
           if-no-files-found: ignore
+
+  validate-resources:
+    name: Validate Resources
+    needs: [validate]
+    if: ${{ always() && needs.validate.result != 'skipped' }}
+    uses: ./.github/workflows/validate-azure-resources.yml
+    with:
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
