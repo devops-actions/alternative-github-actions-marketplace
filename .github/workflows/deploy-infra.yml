@@ -199,3 +199,14 @@ jobs:
 
           bash IAC/smoke-test-actions.sh "$FUNCTION_HOST" "$FUNCTION_KEY"
 
+  validate-resources:
+    name: Validate Resources
+    needs: deploy
+    uses: ./.github/workflows/validate-azure-resources.yml
+    with:
+      resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
