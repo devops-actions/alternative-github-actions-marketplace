@@ -114,6 +114,42 @@ jobs:
           echo "outbound_ips=$outboundIps" >> $GITHUB_OUTPUT
           echo "outbound_ips_json=$outboundIpsJson" >> $GITHUB_OUTPUT
 
+      - name: Prepare deployment parameters file
+        env:
+          DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT }}
+          DEPLOY_LOCATION: ${{ vars.DEPLOY_LOCATION }}
+          STATIC_WEB_APP_LOCATION: ${{ vars.STATIC_WEB_APP_LOCATION }}
+          PLAUSIBLE_TRACKING_DOMAIN: ${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
+          RESOURCE_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+          SWA_HOSTNAME: ${{ steps.swa-ips.outputs.swa_hostname }}
+          OUTBOUND_IPS_JSON: ${{ steps.swa-ips.outputs.outbound_ips_json }}
+        run: |
+          set -e
+          params=$(jq -n \
+            --arg env       "$DEPLOY_ENVIRONMENT" \
+            --arg suffix    "$RESOURCE_SUFFIX" \
+            --arg swaHost   "$SWA_HOSTNAME" \
+            --argjson ips   "${OUTBOUND_IPS_JSON:-[]}" \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "environment":           { "value": $env },
+                "resourceSuffix":        { "value": $suffix },
+                "staticWebAppHostname":  { "value": $swaHost },
+                "functionAllowedIpCidrs":{ "value": $ips }
+              }
+            }')
+
+          # Append optional parameters only when the variable is set
+          [ -n "$DEPLOY_LOCATION" ]          && params=$(echo "$params" | jq --arg v "$DEPLOY_LOCATION"          '.parameters.location                 = { "value": $v }')
+          [ -n "$STATIC_WEB_APP_LOCATION" ]  && params=$(echo "$params" | jq --arg v "$STATIC_WEB_APP_LOCATION"  '.parameters.staticWebAppLocation      = { "value": $v }')
+          [ -n "$PLAUSIBLE_TRACKING_DOMAIN" ] && params=$(echo "$params" | jq --arg v "$PLAUSIBLE_TRACKING_DOMAIN" '.parameters.plausibleTrackingDomain  = { "value": $v }')
+
+          echo "$params" > /tmp/deploy-params.json
+          echo "Deployment parameters:"
+          jq 'del(.parameters.functionAllowedIpCidrs) | .parameters' /tmp/deploy-params.json
+
       - name: Deploy Bicep template
         id: deploy
         uses: azure/arm-deploy@v2
@@ -121,14 +157,7 @@ jobs:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
           template: IAC/main.bicep
-          parameters: |
-            environment=${{ vars.DEPLOY_ENVIRONMENT }}
-            resourceSuffix=${{ vars.RESOURCE_SUFFIX }}
-            staticWebAppHostname=${{ steps.swa-ips.outputs.swa_hostname }}
-            functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
-            ${{ vars.DEPLOY_LOCATION != '' && format('location={0}', vars.DEPLOY_LOCATION) || '' }}
-            ${{ vars.STATIC_WEB_APP_LOCATION != '' && format('staticWebAppLocation={0}', vars.STATIC_WEB_APP_LOCATION) || '' }}
-            ${{ vars.PLAUSIBLE_TRACKING_DOMAIN != '' && format('plausibleTrackingDomain={0}', vars.PLAUSIBLE_TRACKING_DOMAIN) || '' }}
+          parameters: /tmp/deploy-params.json
           failOnStdErr: false
 
       - name: Validate deployed resource names match expected suffix
