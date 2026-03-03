@@ -123,13 +123,28 @@ jobs:
           template: IAC/main.bicep
           parameters: |
             environment=${{ vars.DEPLOY_ENVIRONMENT }}
-            location=${{ vars.DEPLOY_LOCATION }}
-            staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
+            resourceSuffix=${{ vars.RESOURCE_SUFFIX }}
             staticWebAppHostname=${{ steps.swa-ips.outputs.swa_hostname }}
             functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
-            plausibleTrackingDomain=${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
-            resourceSuffix=${{ vars.RESOURCE_SUFFIX }}
+            ${{ vars.DEPLOY_LOCATION != '' && format('location={0}', vars.DEPLOY_LOCATION) || '' }}
+            ${{ vars.STATIC_WEB_APP_LOCATION != '' && format('staticWebAppLocation={0}', vars.STATIC_WEB_APP_LOCATION) || '' }}
+            ${{ vars.PLAUSIBLE_TRACKING_DOMAIN != '' && format('plausibleTrackingDomain={0}', vars.PLAUSIBLE_TRACKING_DOMAIN) || '' }}
           failOnStdErr: false
+
+      - name: Validate deployed resource names match expected suffix
+        env:
+          EXPECTED_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+          DEPLOYED_FUNC_NAME: ${{ steps.deploy.outputs.functionAppName }}
+        run: |
+          set -e
+          expected="func-$EXPECTED_SUFFIX"
+          if [ "$DEPLOYED_FUNC_NAME" != "$expected" ]; then
+            echo "::error::Resource name mismatch! Deployed: '$DEPLOYED_FUNC_NAME', expected: '$expected'."
+            echo "::error::A new set of resources was created instead of updating existing ones."
+            echo "::error::Manually delete the new resources (suffix from '$DEPLOYED_FUNC_NAME') before re-running."
+            exit 1
+          fi
+          echo "Resource names validated: $DEPLOYED_FUNC_NAME matches expected suffix."
 
       - name: Configure GitHub App settings
         if: vars.RUNTIME_APP_ID != ''
