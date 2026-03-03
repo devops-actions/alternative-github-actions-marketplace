@@ -76,10 +76,14 @@ jobs:
       - name: Discover Static Web App outbound IPs
         id: swa-ips
         run: |
-          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
+          swaName="swa-${{ vars.RESOURCE_SUFFIX }}"
+          if ! az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" >/dev/null 2>&1; then
+            echo "::warning::Static Web App $swaName not found (first deploy?); CORS and IP restrictions will not be configured."
+            echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+            echo "swa_hostname=" >> $GITHUB_OUTPUT
+            echo "outbound_ips=" >> $GITHUB_OUTPUT
+            echo "outbound_ips_json=[]" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           # Get Static Web App hostname for CORS configuration

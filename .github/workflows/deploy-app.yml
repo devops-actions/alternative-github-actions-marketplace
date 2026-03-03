@@ -92,14 +92,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          swaName=$(az staticwebapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "[0].name" -o tsv)
-
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
-          fi
+          swaName="swa-${{ vars.RESOURCE_SUFFIX }}"
+          funcName="func-${{ vars.RESOURCE_SUFFIX }}"
 
           swaHost=$(az staticwebapp show \
             --name "$swaName" \
@@ -108,17 +102,6 @@ jobs:
 
           if [ -z "$swaHost" ]; then
             echo "::error::Failed to resolve Static Web App hostname for $swaName"
-            exit 1
-          fi
-
-          suffix=${swaName#swa-}
-
-          funcName=$(az functionapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
-
-          if [ -z "$funcName" ]; then
-            echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
 
@@ -135,7 +118,7 @@ jobs:
           {
             echo "swa_name=$swaName"
             echo "swa_host=$swaHost"
-            echo "swa_suffix=$suffix"
+            echo "swa_suffix=${{ vars.RESOURCE_SUFFIX }}"
             echo "frontend_base_url=https://$swaHost"
             echo "function_app_name=$funcName"
             echo "function_app_host=$funcHost"

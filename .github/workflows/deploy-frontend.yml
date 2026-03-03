@@ -39,14 +39,7 @@ jobs:
 
       - name: Resolve Static Web App name and suffix
         run: |
-          swaName=$(az staticwebapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "[0].name" -o tsv)
-
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
-          fi
+          swaName="swa-${{ vars.RESOURCE_SUFFIX }}"
 
           swaHost=$(az staticwebapp show \
             --name "$swaName" \
@@ -58,22 +51,14 @@ jobs:
             exit 1
           fi
 
-          suffix=${swaName#swa-}
           echo "SWA_NAME=$swaName" >> $GITHUB_ENV
           echo "SWA_HOST=$swaHost" >> $GITHUB_ENV
-          echo "SWA_SUFFIX=$suffix" >> $GITHUB_ENV
+          echo "SWA_SUFFIX=${{ vars.RESOURCE_SUFFIX }}" >> $GITHUB_ENV
           echo "FRONTEND_BASE_URL=https://$swaHost" >> $GITHUB_ENV
 
       - name: Resolve Function App host
         run: |
-          funcName=$(az functionapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
-
-          if [ -z "$funcName" ]; then
-            echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
-          fi
+          funcName="func-${{ vars.RESOURCE_SUFFIX }}"
 
           funcHost=$(az functionapp show \
             --name "$funcName" \
