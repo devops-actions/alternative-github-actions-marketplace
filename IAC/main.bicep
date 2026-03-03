@@ -30,7 +30,10 @@ param functionCorsAllowedOrigins array = [
 @description('Plausible Analytics tracking domain. This domain will be used for analytics tracking on the frontend. Leave empty to disable Plausible tracking.')
 param plausibleTrackingDomain string = ''
 
-var uniqueSuffix = uniqueString(resourceGroup().id, environment)
+@description('Fixed suffix for resource names. When provided, pins all resource names to this value, preventing accidental recreation if uniqueString inputs change. Leave empty to auto-generate via uniqueString(resourceGroup().id, environment).')
+param resourceSuffix string = ''
+
+var uniqueSuffix = empty(resourceSuffix) ? uniqueString(resourceGroup().id, environment) : resourceSuffix
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
 var staticWebAppName = 'swa-${uniqueSuffix}'
