@@ -203,6 +203,9 @@ jobs:
     name: Validate Resources
     needs: deploy
     uses: ./.github/workflows/validate-azure-resources.yml
+    permissions:
+      contents: read
+      id-token: write
     with:
       resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
     secrets:
