@@ -1,0 +1,105 @@
+name: Validate Azure Resources
+
+on:
+  workflow_call:
+    inputs:
+      resource_group:
+        description: 'Azure resource group name'
+        required: true
+        type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+env:
+  AZURE_CORE_ONLY_SHOW_ERRORS: true
+  AZURE_CORE_ERROR_RECOMMENDATION: false
+  AZURE_CORE_COLLECT_TELEMETRY: false
+  AZURE_LOGGING_ENABLE_LOG_FILE: false
+  AZURE_CORE_SURVEY_MESSAGE: false
+  AZURE_AUTO_UPGRADE_ENABLE: false
+  AZURE_CORE_NO_COLOR: true
+  AZURE_EXTENSION_USE_DYNAMIC_INSTALL: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-resources:
+    name: Validate Resource Group
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check resource group has only one of each resource type
+        run: |
+          set -euo pipefail
+          
+          echo "Checking resource group: ${{ inputs.resource_group }}"
+          
+          # List all resources in the resource group
+          resources=$(az resource list \
+            --resource-group "${{ inputs.resource_group }}" \
+            --query "[].{type:type, name:name}" \
+            -o json)
+          
+          if [ -z "$resources" ] || [ "$resources" = "[]" ]; then
+            echo "::error::No resources found in resource group ${{ inputs.resource_group }}"
+            exit 1
+          fi
+          
+          echo "Resources in resource group:"
+          echo "$resources" | jq -r '.[] | "\(.type): \(.name)"'
+          
+          # Count resources by type, excluding child resources and role assignments
+          # Child resources (like tables, file shares, custom domains) are part of their parent
+          # and shouldn't be counted separately. Role assignments are excluded as multiple
+          # role assignments are expected and normal in a resource group.
+          echo ""
+          echo "Counting top-level resources by type..."
+          
+          typeCounts=$(echo "$resources" | jq -r '
+            [.[] | select(
+              # Exclude child resources that are part of parent resources
+              (.type | contains("/tableServices/") | not) and
+              (.type | contains("/fileServices/") | not) and
+              (.type | contains("/customDomains") | not) and
+              # Exclude role assignments as multiple are expected
+              (.type | contains("/roleAssignments") | not)
+            )] |
+            group_by(.type) |
+            map({
+              type: .[0].type,
+              count: length,
+              names: [.[].name]
+            })
+          ')
+          
+          echo "$typeCounts" | jq -r '.[] | "\(.type): \(.count) instance(s)"'
+          
+          # Check for duplicates
+          duplicates=$(echo "$typeCounts" | jq -r '.[] | select(.count > 1) | .type')
+          
+          if [ -n "$duplicates" ]; then
+            echo ""
+            echo "::error::Resource group validation failed: Found resource types with more than one instance"
+            echo ""
+            echo "$typeCounts" | jq -r '
+              .[] | select(.count > 1) |
+              "::error::Resource type \(.type) has \(.count) instances: \(.names | join(", "))"
+            '
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ Resource group validation passed: All resource types have exactly one instance"
