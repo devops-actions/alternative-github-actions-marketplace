@@ -33,6 +33,21 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Validate required variables
+        env:
+          DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT }}
+          RESOURCE_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+        run: |
+          set -e
+          missing=()
+          [ -z "$DEPLOY_ENVIRONMENT" ] && missing+=("DEPLOY_ENVIRONMENT")
+          [ -z "$RESOURCE_SUFFIX" ]    && missing+=("RESOURCE_SUFFIX")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Required repository variables are not set: ${missing[*]}"
+            echo "::error::Set them under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
