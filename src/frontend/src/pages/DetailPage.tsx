@@ -114,7 +114,7 @@ export const DetailPage: React.FC = () => {
     const now = new Date();
     const days = Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (days > 365) return 'stale';
+    if (days > 270) return 'stale';
     if (days > 90) return 'aged';
     return '';
   };
