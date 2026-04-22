@@ -1,0 +1,49 @@
+name: swa-test
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 and cache npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: npm ci
+
+      - name: Run backend unit tests
+        working-directory: src/backend
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/frontend
+        run: npm run build
+
+      - name: Skip deployment (no Azure secrets)
+        if: ${{ !secrets.AZURE_WEBAPP_NAME || !secrets.AZURE_CREDENTIALS }}
+        run: |
+          echo "AZURE_WEBAPP_NAME or AZURE_CREDENTIALS not set. Skipping deploy steps."
+
+      - name: Deployment placeholder (secrets present)
+        if: ${{ secrets.AZURE_WEBAPP_NAME && secrets.AZURE_CREDENTIALS }}
+        run: |
+          echo "AZURE secrets present. Deployment steps intentionally omitted in this test workflow."
