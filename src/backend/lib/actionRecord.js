@@ -138,8 +138,15 @@ class ActionRecord {
       return payload;
     }
 
+    // Derive OpenSSF score if present under known keys. Expose as a nullable numeric field `openssf_score`.
+    const rawScore = (payload && typeof payload === 'object')
+      ? (payload.openssf_score ?? payload.ossfScore ?? payload.ossf_score ?? null)
+      : null;
+    const openssf_score = (typeof rawScore === 'number' && Number.isFinite(rawScore)) ? rawScore : null;
+
     return {
       ...payload,
+      openssf_score,
       _metadata: {
         partitionKey: this.partitionKey,
         rowKey: this.rowKey,

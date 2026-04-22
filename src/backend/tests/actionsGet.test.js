@@ -53,6 +53,9 @@ describe('ActionsGet function', () => {
       lastSyncedUtc: '2025-01-01T12:00:00Z',
       etag: 'W/"etag-value"'
     });
+
+    // New field: openssf_score should be exposed (nullable) and reflect the payload's score when available.
+    expect(context.res.body.openssf_score).toBe(basePayload.ossfScore);
   });
 
   it('returns 404 when the entity is missing', async () => {
