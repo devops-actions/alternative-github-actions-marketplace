@@ -1,0 +1,12 @@
+{
+  "name": "mcp-server",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test/test-health.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

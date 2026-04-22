@@ -83,12 +83,27 @@ function normalizeAction(raw: unknown): Action {
         archived: false
       };
 
+  // Normalize OpenSSF score: support incoming snake_case `openssf_score` or camel `ossfScore`.
+  const rawScore = action && typeof action === 'object' ? (action.openssf_score ?? action.ossfScore ?? action.ossf_score ?? null) : null;
+  let parsedScore: number | null = null;
+  if (typeof rawScore === 'string') {
+    const p = parseFloat(rawScore);
+    parsedScore = Number.isFinite(p) ? p : null;
+  } else if (typeof rawScore === 'number' && Number.isFinite(rawScore)) {
+    parsedScore = rawScore;
+  }
+
+  const ossf = Boolean(action.ossf) || (parsedScore !== null);
+  const ossfScore = parsedScore !== null ? parsedScore : (typeof action.ossfScore === 'number' ? action.ossfScore : 0);
+
   return {
     ...action,
     releaseInfo,
     tagInfo,
     dependents,
-    repoInfo
+    repoInfo,
+    ossf,
+    ossfScore
   } as Action;
 }
 

@@ -1,0 +1,150 @@
+name: Staged Deploy
+
+# Demo workflow that deploys to a staging environment then requires manual promotion to production.
+# Safe for PRs: deploy steps are skipped if AZURE_CREDENTIALS is not provided.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*', 'release/*' ]
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch: {}
+
+env:
+  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staged-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: src/frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: src/frontend
+
+      - name: Install backend deps & run tests
+        run: |
+          npm ci
+          npm test
+        working-directory: src/backend
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && env.AZURE_CREDENTIALS != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy backend (staging slot)
+        # This demonstrates deploying the backend; adjust to your slot naming if used.
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
+          package: functionapp.zip
+
+      - name: Deploy frontend to Static Web App (staging)
+        # Uses Static Web Apps deploy action; if you have a slot/staging workflow, update accordingly.
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: 'src/frontend/dist'
+          skip_app_build: true
+          skip_api_build: true
+
+  smoke-tests:
+    name: Smoke tests against Staging
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: needs.deploy-staging.result == 'success' && env.AZURE_CREDENTIALS != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: src/backend
+
+      - name: Run smoke tests (examples)
+        working-directory: src/backend
+        run: |
+          set -e
+          node examples/list-actions.js || true
+
+  promote-to-production:
+    name: Promote to Production
+    needs: smoke-tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && env.AZURE_CREDENTIALS != ''
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy backend to production
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
+          package: functionapp.zip
+
+      - name: Deploy frontend to Static Web App (production)
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: 'src/frontend/dist'
+          skip_app_build: true
+          skip_api_build: true
+
+  noop-on-missing-secrets:
+    name: No-op guard for PRs or missing secrets
+    runs-on: ubuntu-latest
+    if: env.AZURE_CREDENTIALS == ''
+    steps:
+      - name: Skip deploys (no Azure credentials)
+        run: |
+          echo "AZURE_CREDENTIALS missing; skipping deployment steps. This is expected for PRs or forks."
