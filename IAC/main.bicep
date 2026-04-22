@@ -1,6 +1,9 @@
 @description('Deployment environment label, used for naming (e.g., dev, prod).')
 param environment string = 'dev'
 
+@description('Opt-in: when true, CI will run a pre-deploy duplicate resource check to avoid creating resources that already exist. Default false to preserve existing behavior.')
+param preventDuplicateDeployments bool = false
+
 @description('Primary Azure region for regional resources.')
 param location string = 'westeurope'
 

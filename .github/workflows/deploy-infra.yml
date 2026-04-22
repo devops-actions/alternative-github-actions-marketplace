@@ -43,6 +43,14 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Pre-deploy duplicate resource check
+        if: env.PREVENT_DUPLICATE_DEPLOYMENTS == 'true' && secrets.AZURE_SUBSCRIPTION_ID != ''
+        shell: pwsh
+        run: |
+          Write-Host "Running pre-deploy duplicate resource check..."
+          # Call the PowerShell script; fail the job if the script exits non-zero
+          ./IAC/scripts/check-resources.ps1 -ResourceGroup '${{ vars.AZURE_RESOURCE_GROUP }}' -SubscriptionId '${{ secrets.AZURE_SUBSCRIPTION_ID }}' -Environment '${{ vars.DEPLOY_ENVIRONMENT }}' -Location '${{ vars.DEPLOY_LOCATION }}' -StaticWebAppLocation '${{ vars.STATIC_WEB_APP_LOCATION }}'
+
       - name: Lint Bicep template
         run: |
           set -e
