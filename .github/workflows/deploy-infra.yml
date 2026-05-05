@@ -33,23 +33,23 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Validate required variables
+        env:
+          DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT }}
+          RESOURCE_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+        run: |
+          set -e
+          missing=()
+          [ -z "$DEPLOY_ENVIRONMENT" ] && missing+=("DEPLOY_ENVIRONMENT")
+          [ -z "$RESOURCE_SUFFIX" ]    && missing+=("RESOURCE_SUFFIX")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Required repository variables are not set: ${missing[*]}"
+            echo "::error::Set them under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6.0.1
-
-      - name: Log in to Azure (OIDC)
-        uses: azure/login@v2.3.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Pre-deploy duplicate resource check
-        if: env.PREVENT_DUPLICATE_DEPLOYMENTS == 'true' && secrets.AZURE_SUBSCRIPTION_ID != ''
-        shell: pwsh
-        run: |
-          Write-Host "Running pre-deploy duplicate resource check..."
-          # Call the PowerShell script; fail the job if the script exits non-zero
-          ./IAC/scripts/check-resources.ps1 -ResourceGroup '${{ vars.AZURE_RESOURCE_GROUP }}' -SubscriptionId '${{ secrets.AZURE_SUBSCRIPTION_ID }}' -Environment '${{ vars.DEPLOY_ENVIRONMENT }}' -Location '${{ vars.DEPLOY_LOCATION }}' -StaticWebAppLocation '${{ vars.STATIC_WEB_APP_LOCATION }}'
 
       - name: Lint Bicep template
         run: |
@@ -66,13 +66,24 @@ jobs:
           
           echo "Bicep template validation successful"
 
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Discover Static Web App outbound IPs
         id: swa-ips
         run: |
-          swaName=$(az staticwebapp list --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --query "[0].name" -o tsv)
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
+          swaName="swa-${{ vars.RESOURCE_SUFFIX }}"
+          if ! az staticwebapp show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "$swaName" >/dev/null 2>&1; then
+            echo "::warning::Static Web App $swaName not found (first deploy?); CORS and IP restrictions will not be configured."
+            echo "swa_name=$swaName" >> $GITHUB_OUTPUT
+            echo "swa_hostname=" >> $GITHUB_OUTPUT
+            echo "outbound_ips=" >> $GITHUB_OUTPUT
+            echo "outbound_ips_json=[]" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           # Get Static Web App hostname for CORS configuration
@@ -103,6 +114,42 @@ jobs:
           echo "outbound_ips=$outboundIps" >> $GITHUB_OUTPUT
           echo "outbound_ips_json=$outboundIpsJson" >> $GITHUB_OUTPUT
 
+      - name: Prepare deployment parameters file
+        env:
+          DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT }}
+          DEPLOY_LOCATION: ${{ vars.DEPLOY_LOCATION }}
+          STATIC_WEB_APP_LOCATION: ${{ vars.STATIC_WEB_APP_LOCATION }}
+          PLAUSIBLE_TRACKING_DOMAIN: ${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
+          RESOURCE_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+          SWA_HOSTNAME: ${{ steps.swa-ips.outputs.swa_hostname }}
+          OUTBOUND_IPS_JSON: ${{ steps.swa-ips.outputs.outbound_ips_json }}
+        run: |
+          set -e
+          params=$(jq -n \
+            --arg env       "$DEPLOY_ENVIRONMENT" \
+            --arg suffix    "$RESOURCE_SUFFIX" \
+            --arg swaHost   "$SWA_HOSTNAME" \
+            --argjson ips   "${OUTBOUND_IPS_JSON:-[]}" \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "environment":           { "value": $env },
+                "resourceSuffix":        { "value": $suffix },
+                "staticWebAppHostname":  { "value": $swaHost },
+                "functionAllowedIpCidrs":{ "value": $ips }
+              }
+            }')
+
+          # Append optional parameters only when the variable is set
+          [ -n "$DEPLOY_LOCATION" ]          && params=$(echo "$params" | jq --arg v "$DEPLOY_LOCATION"          '.parameters.location                 = { "value": $v }')
+          [ -n "$STATIC_WEB_APP_LOCATION" ]  && params=$(echo "$params" | jq --arg v "$STATIC_WEB_APP_LOCATION"  '.parameters.staticWebAppLocation      = { "value": $v }')
+          [ -n "$PLAUSIBLE_TRACKING_DOMAIN" ] && params=$(echo "$params" | jq --arg v "$PLAUSIBLE_TRACKING_DOMAIN" '.parameters.plausibleTrackingDomain  = { "value": $v }')
+
+          echo "$params" > /tmp/deploy-params.json
+          echo "Deployment parameters:"
+          jq 'del(.parameters.functionAllowedIpCidrs) | .parameters' /tmp/deploy-params.json
+
       - name: Deploy Bicep template
         id: deploy
         uses: azure/arm-deploy@v2
@@ -110,14 +157,23 @@ jobs:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
           template: IAC/main.bicep
-          parameters: |
-            environment=${{ vars.DEPLOY_ENVIRONMENT }}
-            location=${{ vars.DEPLOY_LOCATION }}
-            staticWebAppLocation=${{ vars.STATIC_WEB_APP_LOCATION }}
-            staticWebAppHostname=${{ steps.swa-ips.outputs.swa_hostname }}
-            functionAllowedIpCidrs=${{ steps.swa-ips.outputs.outbound_ips_json }}
-            plausibleTrackingDomain=${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
+          parameters: /tmp/deploy-params.json
           failOnStdErr: false
+
+      - name: Validate deployed resource names match expected suffix
+        env:
+          EXPECTED_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
+          DEPLOYED_FUNC_NAME: ${{ steps.deploy.outputs.functionAppName }}
+        run: |
+          set -e
+          expected="func-$EXPECTED_SUFFIX"
+          if [ "$DEPLOYED_FUNC_NAME" != "$expected" ]; then
+            echo "::error::Resource name mismatch! Deployed: '$DEPLOYED_FUNC_NAME', expected: '$expected'."
+            echo "::error::A new set of resources was created instead of updating existing ones."
+            echo "::error::Manually delete the new resources (suffix from '$DEPLOYED_FUNC_NAME') before re-running."
+            exit 1
+          fi
+          echo "Resource names validated: $DEPLOYED_FUNC_NAME matches expected suffix."
 
       - name: Configure GitHub App settings
         if: vars.RUNTIME_APP_ID != ''
