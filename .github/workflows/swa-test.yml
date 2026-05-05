@@ -11,6 +11,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,11 +42,11 @@ jobs:
         run: npm run build
 
       - name: Skip deployment (no Azure secrets)
-        if: ${{ !secrets.AZURE_WEBAPP_NAME || !secrets.AZURE_CREDENTIALS }}
+        if: env.AZURE_WEBAPP_NAME == '' || env.AZURE_CREDENTIALS == ''
         run: |
           echo "AZURE_WEBAPP_NAME or AZURE_CREDENTIALS not set. Skipping deploy steps."
 
       - name: Deployment placeholder (secrets present)
-        if: ${{ secrets.AZURE_WEBAPP_NAME && secrets.AZURE_CREDENTIALS }}
+        if: env.AZURE_WEBAPP_NAME != '' && env.AZURE_CREDENTIALS != ''
         run: |
           echo "AZURE secrets present. Deployment steps intentionally omitted in this test workflow."

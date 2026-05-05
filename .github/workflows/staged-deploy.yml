@@ -11,9 +11,6 @@ on:
     types: [opened, synchronize]
   workflow_dispatch: {}
 
-env:
-  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-
 permissions:
   contents: read
   id-token: write
@@ -23,6 +20,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check-creds:
+    name: Check Azure credentials
+    runs-on: ubuntu-latest
+    outputs:
+      has_creds: ${{ steps.check.outputs.has_creds }}
+    steps:
+      - name: Check if AZURE_CREDENTIALS secret is set
+        id: check
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -n "$AZURE_CREDENTIALS" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -51,9 +65,9 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    needs: build
+    needs: [build, check-creds]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && env.AZURE_CREDENTIALS != ''
+    if: github.event_name == 'push' && needs.check-creds.outputs.has_creds == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -85,9 +99,9 @@ jobs:
 
   smoke-tests:
     name: Smoke tests against Staging
-    needs: deploy-staging
+    needs: [deploy-staging, check-creds]
     runs-on: ubuntu-latest
-    if: needs.deploy-staging.result == 'success' && env.AZURE_CREDENTIALS != ''
+    if: needs.deploy-staging.result == 'success' && needs.check-creds.outputs.has_creds == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -109,9 +123,9 @@ jobs:
 
   promote-to-production:
     name: Promote to Production
-    needs: smoke-tests
+    needs: [smoke-tests, check-creds]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && env.AZURE_CREDENTIALS != ''
+    if: github.event_name == 'push' && needs.check-creds.outputs.has_creds == 'true'
     environment: production
     steps:
       - name: Checkout
@@ -142,9 +156,11 @@ jobs:
 
   noop-on-missing-secrets:
     name: No-op guard for PRs or missing secrets
+    needs: check-creds
     runs-on: ubuntu-latest
-    if: env.AZURE_CREDENTIALS == ''
+    if: needs.check-creds.outputs.has_creds != 'true'
     steps:
       - name: Skip deploys (no Azure credentials)
         run: |
           echo "AZURE_CREDENTIALS missing; skipping deployment steps. This is expected for PRs or forks."
+
