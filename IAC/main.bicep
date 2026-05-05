@@ -1,9 +1,6 @@
 @description('Deployment environment label, used for naming (e.g., dev, prod).')
 param environment string = 'dev'
 
-@description('Opt-in: when true, CI will run a pre-deploy duplicate resource check to avoid creating resources that already exist. Default false to preserve existing behavior.')
-param preventDuplicateDeployments bool = false
-
 @description('Primary Azure region for regional resources.')
 param location string = 'westeurope'
 
@@ -33,7 +30,11 @@ param functionCorsAllowedOrigins array = [
 @description('Plausible Analytics tracking domain. This domain will be used for analytics tracking on the frontend. Leave empty to disable Plausible tracking.')
 param plausibleTrackingDomain string = ''
 
-var uniqueSuffix = uniqueString(resourceGroup().id, environment)
+@description('Required. Fixed suffix for all resource names. Set via the RESOURCE_SUFFIX repository variable. All resources will be named with this suffix (e.g., func-{suffix}, swa-{suffix}). Prevents accidental creation of duplicate resources.')
+@minLength(1)
+param resourceSuffix string
+
+var uniqueSuffix = resourceSuffix
 var storageAccountName = toLower('st${uniqueSuffix}')
 var functionAppName = 'func-${uniqueSuffix}'
 var staticWebAppName = 'swa-${uniqueSuffix}'
