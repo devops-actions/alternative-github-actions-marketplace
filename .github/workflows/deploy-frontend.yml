@@ -22,10 +22,18 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy Frontend
+  resolve:
+    name: Resolve Azure Resources
     runs-on: ubuntu-latest
     environment: prod
+    outputs:
+      swa_name: ${{ steps.resolve.outputs.swa_name }}
+      swa_host: ${{ steps.resolve.outputs.swa_host }}
+      frontend_base_url: ${{ steps.resolve.outputs.frontend_base_url }}
+      function_app_name: ${{ steps.resolve.outputs.function_app_name }}
+      function_app_host: ${{ steps.resolve.outputs.function_app_host }}
+      api_base_url: ${{ steps.resolve.outputs.api_base_url }}
+      appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -37,16 +45,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Resolve Static Web App name and suffix
+      - name: Resolve Static Web App and Function App hosts
+        id: resolve
         run: |
-          swaName=$(az staticwebapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "[0].name" -o tsv)
-
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
-          fi
+          swaName="swa-${{ vars.RESOURCE_SUFFIX }}"
 
           swaHost=$(az staticwebapp show \
             --name "$swaName" \
@@ -58,22 +60,7 @@ jobs:
             exit 1
           fi
 
-          suffix=${swaName#swa-}
-          echo "SWA_NAME=$swaName" >> $GITHUB_ENV
-          echo "SWA_HOST=$swaHost" >> $GITHUB_ENV
-          echo "SWA_SUFFIX=$suffix" >> $GITHUB_ENV
-          echo "FRONTEND_BASE_URL=https://$swaHost" >> $GITHUB_ENV
-
-      - name: Resolve Function App host
-        run: |
-          funcName=$(az functionapp list \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "sort_by([?contains(kind, 'functionapp')], &name)[0].name" -o tsv)
-
-          if [ -z "$funcName" ]; then
-            echo "::error::No function app found in resource group ${{ vars.AZURE_RESOURCE_GROUP }}"
-            exit 1
-          fi
+          funcName="func-${{ vars.RESOURCE_SUFFIX }}"
 
           funcHost=$(az functionapp show \
             --name "$funcName" \
@@ -84,20 +71,20 @@ jobs:
             echo "::error::Failed to resolve Function App hostname for $funcName"
             exit 1
           fi
-          echo "FUNCTION_APP_NAME=$funcName" >> $GITHUB_ENV
-          echo "FUNCTION_APP_HOST=$funcHost" >> $GITHUB_ENV
-          echo "API_BASE_URL=https://$funcHost/api" >> $GITHUB_ENV
+
+          {
+            echo "swa_name=$swaName"
+            echo "swa_host=$swaHost"
+            echo "frontend_base_url=https://$swaHost"
+            echo "function_app_name=$funcName"
+            echo "function_app_host=$funcHost"
+            echo "api_base_url=https://$funcHost/api"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Resolve App Insights connection string
         id: appinsights
         run: |
-          suffix="$SWA_SUFFIX"
-          if [ -z "$suffix" ]; then
-            echo "::error::Missing Static Web App suffix; cannot resolve App Insights name"
-            exit 1
-          fi
-
-          appiName="appi-$suffix"
+          appiName="appi-${{ vars.RESOURCE_SUFFIX }}"
           connection=$(az resource show \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --resource-type "microsoft.insights/components" \
@@ -105,7 +92,6 @@ jobs:
             --query "properties.ConnectionString" -o tsv)
 
           if [ -z "$connection" ]; then
-            # Fallback to first component in case naming diverged
             connection=$(az resource list \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --resource-type "microsoft.insights/components" \
@@ -115,7 +101,25 @@ jobs:
             echo "::error::No Application Insights resource found in RG ${{ vars.AZURE_RESOURCE_GROUP }}"
             exit 1
           fi
-          echo "connection_string=$connection" >> $GITHUB_OUTPUT
+          echo "connection_string=$connection" >> "$GITHUB_OUTPUT"
+
+  build-and-deploy:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: resolve
+    environment:
+      name: prod
+      url: ${{ needs.resolve.outputs.frontend_base_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -128,8 +132,8 @@ jobs:
 
       - name: Build frontend
         run: |
-          VITE_API_BASE_URL="$API_BASE_URL" \
-          VITE_APPINSIGHTS_CONNECTION_STRING="${{ steps.appinsights.outputs.connection_string }}" \
+          VITE_API_BASE_URL="${{ needs.resolve.outputs.api_base_url }}" \
+          VITE_APPINSIGHTS_CONNECTION_STRING="${{ needs.resolve.outputs.appinsights_connection_string }}" \
           VITE_PLAUSIBLE_TRACKING_DOMAIN="${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}" \
           npm run build
         working-directory: src/frontend
@@ -137,11 +141,7 @@ jobs:
       - name: Get Static Web App deployment token
         id: swa-token
         run: |
-          swaName="$SWA_NAME"
-          if [ -z "$swaName" ]; then
-            echo "::error::No static web app name available"
-            exit 1
-          fi
+          swaName="${{ needs.resolve.outputs.swa_name }}"
           token=$(az staticwebapp secrets list --name "$swaName" --query "properties.apiKey" -o tsv)
           echo "::add-mask::$token"
           echo "deployment_token=$token" >> $GITHUB_OUTPUT
@@ -161,6 +161,8 @@ jobs:
           skip_api_build: true
 
       - name: Wait for SWA + assets to be ready
+        env:
+          FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
         run: |
           set -e
           echo "Checking $FRONTEND_BASE_URL"
@@ -177,6 +179,8 @@ jobs:
           done
 
       - name: Pre-warm API endpoints
+        env:
+          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
         run: |
           set -e
           echo "Warming up API at $API_BASE_URL"
@@ -216,7 +220,7 @@ jobs:
 
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$FUNCTION_APP_NAME" \
+            --name "${{ needs.resolve.outputs.function_app_name }}" \
             --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
@@ -227,6 +231,10 @@ jobs:
           echo "RUNNER_PUBLIC_IP=$runnerIp" >> $GITHUB_ENV
 
       - name: Diagnose API access + CORS (runner + browser origin)
+        env:
+          FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
+          API_BASE_URL: ${{ needs.resolve.outputs.api_base_url }}
+          FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
         run: |
           set -euo pipefail
           echo "FRONTEND_BASE_URL=$FRONTEND_BASE_URL"
@@ -301,6 +309,7 @@ jobs:
         working-directory: src/frontend
         env:
           PLAYWRIGHT_WORKERS: 2
+          FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
         run: npm run test:e2e
 
       - name: Remove temporary GitHub runner allow rule
@@ -309,7 +318,7 @@ jobs:
           set +e
           az functionapp config access-restriction remove \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "$FUNCTION_APP_NAME" \
+            --name "${{ needs.resolve.outputs.function_app_name }}" \
             --rule-name "$ALLOW_RULE_NAME"
           exit 0
 
