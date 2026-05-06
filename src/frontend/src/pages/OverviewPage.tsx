@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
-import { actionsService } from '../services/actionsService';
+import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
 import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 
@@ -238,8 +238,8 @@ export const OverviewPage: React.FC = () => {
     // Apply sorting
     filtered = [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
-        const aDeps = parseInt(a?.dependents?.dependents || '') || 0;
-        const bDeps = parseInt(b?.dependents?.dependents || '') || 0;
+        const aDeps = parseDependentsCount(a?.dependents?.dependents);
+        const bDeps = parseDependentsCount(b?.dependents?.dependents);
         return bDeps - aDeps; // Descending
       } else {
         // Sort by updated date
@@ -558,7 +558,7 @@ export const OverviewPage: React.FC = () => {
                   <div className="meta-item">
                     <span>👥</span>
                     <strong className="dependents-highlight">
-                      {(parseInt(action?.dependents?.dependents || '') || 0).toLocaleString()}
+                      {formatDependentsCount(action?.dependents?.dependents)}
                     </strong>
                     <span>Used by</span>
                   </div>
