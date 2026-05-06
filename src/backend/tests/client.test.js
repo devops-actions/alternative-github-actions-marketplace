@@ -403,6 +403,63 @@ describe('ActionsMarketplaceClient', () => {
         );
       });
 
+      it('appends limit to URL when provided', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => []
+        });
+        global.fetch = mockFetch;
+
+        await client.listActions({ limit: 10 });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list?limit=10',
+          expect.anything()
+        );
+      });
+
+      it('combines owner and limit in URL', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => []
+        });
+        global.fetch = mockFetch;
+
+        await client.listActions({ owner: 'actions', limit: 5 });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list?owner=actions&limit=5',
+          expect.anything()
+        );
+      });
+
+      it('ignores invalid limit values', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => []
+        });
+        global.fetch = mockFetch;
+
+        await client.listActions({ limit: -1 });
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://example.com/api/actions/list',
+          expect.anything()
+        );
+      });
+
       it('throws error on non-200 response', async () => {
         const client = new ActionsMarketplaceClient({
           apiUrl: 'https://example.com'

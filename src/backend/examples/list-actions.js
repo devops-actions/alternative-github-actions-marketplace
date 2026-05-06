@@ -66,8 +66,8 @@ async function main() {
   const { apiHost } = normalizeApiUrl(process.env.API_URL);
   let hadError = false;
 
-  // Example 1: List all actions using HTTP API mode
-  console.log('Example 1: List All Actions (HTTP API Mode)\n');
+  // Example 1: List actions using HTTP API mode (limit=5 keeps smoke test fast)
+  console.log('Example 1: List Actions (HTTP API Mode)\n');
   
   const httpClient = new ActionsMarketplaceClient({
     apiUrl: apiHost,
@@ -75,7 +75,7 @@ async function main() {
   });
 
   try {
-    const actions = await httpClient.listActions();
+    const actions = await httpClient.listActions({ limit: 5 });
     
     console.log(`Found ${actions.length} actions in total\n`);
 
