@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
-import { actionsService } from '../services/actionsService';
+import { actionsService, formatDependentsCount } from '../services/actionsService';
 import { splitOwnerRepo } from '../services/utils';
 
 export const DetailPage: React.FC = () => {
@@ -138,7 +138,7 @@ export const DetailPage: React.FC = () => {
     );
   }
 
-  const dependentsCount = parseInt(action.dependents.dependents);
+  const dependentsDisplay = formatDependentsCount(action.dependents.dependents);
 
   return (
     <div className="app">
@@ -177,7 +177,7 @@ export const DetailPage: React.FC = () => {
           <div className={`info-card ${action.repoInfo.archived ? 'archived' : ''}`}>
             <h3>Used by</h3>
             <div className="value dependents-highlight">
-              {dependentsCount.toLocaleString()}
+              {dependentsDisplay}
             </div>
           </div>
 
