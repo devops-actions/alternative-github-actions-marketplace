@@ -3,10 +3,12 @@ const { getGitHubAuthHeaders } = require('../lib/githubAuth');
 const { getCachedReadme, cacheReadme, isCacheValid } = require('../lib/readmeCache');
 const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
+const { extractRepoName } = require('../lib/actionNameDecoder');
 
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
-  const url = `https://api.github.com/repos/${owner}/${name}/readme?ref=${ref}`;
+  const repoName = extractRepoName(owner, name);
+  const url = `https://api.github.com/repos/${owner}/${repoName}/readme?ref=${ref}`;
   
   const headers = await getGitHubAuthHeaders();
 
