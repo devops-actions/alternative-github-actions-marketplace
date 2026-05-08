@@ -33,6 +33,26 @@ function getApiBaseUrl(): string {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// Parses a dependents count string that may end with "+" (e.g. "999+").
+// Returns a numeric value suitable for sorting; "999+" sorts above "999".
+export function parseDependentsCount(value: string | undefined): number {
+  if (!value) return 0;
+  const isPlus = value.endsWith('+');
+  const num = parseInt(value, 10);
+  if (!Number.isFinite(num)) return 0;
+  // Fractional bump ensures "999+" sorts strictly above "999".
+  return isPlus ? num + 0.5 : num;
+}
+
+// Formats a dependents count string for display, preserving any "+" suffix.
+export function formatDependentsCount(value: string | undefined): string {
+  if (!value) return '0';
+  const isPlus = value.endsWith('+');
+  const num = parseInt(value, 10);
+  if (!Number.isFinite(num)) return '0';
+  return isPlus ? `${num.toLocaleString()}+` : num.toLocaleString();
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];

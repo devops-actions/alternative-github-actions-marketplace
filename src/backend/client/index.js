@@ -174,11 +174,18 @@ class ActionsMarketplaceClient {
 
   async _listViaHttp(options = {}) {
     const owner = options.owner;
+    const limit = options.limit;
     let url = `${this.apiUrl}/api/actions/list`;
 
     const query = new URLSearchParams();
     if (owner) {
       query.set('owner', owner);
+    }
+    if (limit != null) {
+      const parsed = Number(limit);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        query.set('limit', String(Math.floor(parsed)));
+      }
     }
     if (this.functionKey) {
       query.set('code', this.functionKey);
@@ -187,12 +194,15 @@ class ActionsMarketplaceClient {
     if (queryString) {
       url += `?${queryString}`;
     }
-    
+
+    const signal = options.signal !== undefined ? options.signal : AbortSignal.timeout(120_000);
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
-      }
+      },
+      signal
     });
 
     if (!response.ok) {
