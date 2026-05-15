@@ -9,6 +9,7 @@
 		"repoInfo": { "latest_release_published_at": "2019-08-31T09:23:23Z", "disabled": false, "updated_at": "2021-10-21T10:50:20Z", "archived": false },
 		"tagInfo": ["0.0.9", "0.0.10", "0.0.11", "1.0.0", "1.0.1"],
 		"releaseInfo": ["1.0.1", "1.0.0", "0.0.11", "0.0.10", "0.0.9"],
+		"versionShaMap": { "1.0.0": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5", "1.0.1": "e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6" },
 		"dependabotEnabled": true,
 		"mirrorLastUpdated": null,
 		"secretScanningEnabled": true,

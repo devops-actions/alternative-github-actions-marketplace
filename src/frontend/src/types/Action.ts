@@ -25,6 +25,7 @@ export interface Action {
   };
   tagInfo: string[];
   releaseInfo: string[];
+  versionShaMap?: Record<string, string>;
   dependabotEnabled: boolean;
   mirrorLastUpdated: string | null;
   secretScanningEnabled: boolean;

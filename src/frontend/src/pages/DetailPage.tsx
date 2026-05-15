@@ -254,6 +254,11 @@ export const DetailPage: React.FC = () => {
                 </option>
               ))}
             </select>
+            {selectedVersion && action.versionShaMap && action.versionShaMap[selectedVersion] && (
+              <code className="commit-sha" title={action.versionShaMap[selectedVersion]}>
+                {action.versionShaMap[selectedVersion].slice(0, 7)}
+              </code>
+            )}
           </div>
         )}
 

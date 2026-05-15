@@ -24,7 +24,12 @@ async function main() {
       version: 'v4.0.0',
       icon: 'download',
       color: 'blue',
-      // Add any additional metadata fields...
+      tagInfo: ['v3.0.0', 'v4.0.0'],
+      releaseInfo: ['v4.0.0', 'v3.0.0'],
+      versionShaMap: {
+        'v3.0.0': 'ac593985615ec2876ae9cb32dd5c4beb83db4615',
+        'v4.0.0': 'b4ffde65f46336ab88eb53be808477a3936bae11'
+      }
     });
 
     console.log('Upload result:', result);

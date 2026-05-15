@@ -1,10 +1,56 @@
 const http = require('http');
 const url = require('url');
 
+const BACKEND_API_URL = process.env.BACKEND_API_URL || '';
+
+async function fetchActionFromBackend(owner, name) {
+  if (!BACKEND_API_URL) {
+    return null;
+  }
+
+  const base = BACKEND_API_URL.replace(/\/+$/, '');
+  const actionUrl = `${base}/actions/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+
+  const response = await fetch(actionUrl, {
+    headers: { 'Accept': 'application/json' }
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function buildVersionResponse(action, version) {
+  if (!action) {
+    return null;
+  }
+
+  const shaMap = action.versionShaMap || {};
+  const tagInfo = Array.isArray(action.tagInfo) ? action.tagInfo : [];
+  const releaseInfo = Array.isArray(action.releaseInfo) ? action.releaseInfo : [];
+
+  if (version) {
+    const sha = shaMap[version] || null;
+    const exists = tagInfo.includes(version) || releaseInfo.includes(version);
+    if (!exists) {
+      return null;
+    }
+    return { version, sha };
+  }
+
+  const versions = tagInfo.map((v) => ({
+    version: v,
+    sha: shaMap[v] || null
+  }));
+
+  return { owner: action.owner, name: action.name, versions };
+}
+
 function requestHandler(req, res) {
   const parsed = url.parse(req.url, true);
 
-  // CORS preflight handling
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -31,6 +77,30 @@ function requestHandler(req, res) {
     return;
   }
 
+  // Version lookup: GET /versions/:owner/:name?version=v1.0.0
+  const versionMatch = parsed.pathname.match(/^\/versions\/([^/]+)\/([^/]+)$/);
+  if (versionMatch && req.method === 'GET') {
+    const owner = decodeURIComponent(versionMatch[1]);
+    const name = decodeURIComponent(versionMatch[2]);
+    const version = parsed.query.version || null;
+
+    fetchActionFromBackend(owner, name)
+      .then((action) => {
+        const result = buildVersionResponse(action, version);
+        if (!result) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'not found' }));
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      })
+      .catch((err) => {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'upstream error', message: err.message }));
+      });
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'not found' }));
 }
@@ -47,4 +117,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer };
+module.exports = { createServer, buildVersionResponse };
