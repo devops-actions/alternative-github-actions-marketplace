@@ -1,12 +1,24 @@
 {
-  "name": "mcp-server",
-  "version": "0.1.0",
+  "name": "@devops-actions/mcp-server",
+  "version": "1.0.0",
+  "description": "Remote MCP server for GitHub Actions version lookup against the alternative marketplace API.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test/test-health.js"
+    "test": "jest --forceExit",
+    "lint": "node -c index.js && node -c lib/*.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0",
+    "lru-cache": "^11.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
