@@ -11,15 +11,23 @@ Provides a `lookup-action-versions` tool that accepts an array of GitHub Action 
 
 ## Connecting to the server
 
+The public MCP server is hosted on Azure Container Apps. The FQDN follows the pattern:
+
+```
+https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp
+```
+
+Replace `YOUR_SUFFIX` with the `RESOURCE_SUFFIX` configured for your deployment (e.g., `ca-mcp-prod42.westeurope.azurecontainerapps.io`).
+
 ### GitHub Copilot (VS Code)
 
-Add to `.vscode/mcp.json`:
+Add to `.vscode/mcp.json` in your project (or user settings under `mcp.servers`):
 ```json
 {
   "servers": {
     "actions-marketplace": {
       "type": "http",
-      "url": "https://<your-server-host>/mcp"
+      "url": "https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp"
     }
   }
 }
@@ -27,12 +35,27 @@ Add to `.vscode/mcp.json`:
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Add to `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows):
 ```json
 {
   "mcpServers": {
     "actions-marketplace": {
-      "url": "https://<your-server-host>/mcp"
+      "type": "streamable-http",
+      "url": "https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp"
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "actions-marketplace": {
+      "type": "streamable-http",
+      "url": "https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp"
     }
   }
 }
@@ -40,7 +63,7 @@ Add to `claude_desktop_config.json`:
 
 ### Cursor / Other MCP clients
 
-Use the server URL `https://<your-server-host>/mcp` in your client's MCP configuration.
+Use the server URL `https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp` in your client's MCP configuration.
 
 ## Tool: `lookup-action-versions`
 
@@ -132,6 +155,14 @@ curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lookup-action-versions","arguments":{"actions":["actions/checkout@v4"]}}}'
+```
+
+Call the lookup tool against the hosted server:
+```bash
+curl -X POST https://ca-mcp-YOUR_SUFFIX.westeurope.azurecontainerapps.io/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup-action-versions","arguments":{"actions":["actions/checkout@v4","actions/setup-node@v3"]}}}'
 ```
 
 ## Docker
