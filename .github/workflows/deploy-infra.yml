@@ -73,17 +73,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Register required resource providers
+      - name: Check required resource providers are registered
         run: |
+          failed=()
           for ns in Microsoft.ContainerRegistry Microsoft.App Microsoft.OperationalInsights; do
-            state=$(az provider show --namespace "$ns" --query "registrationState" -o tsv 2>/dev/null || echo "NotFound")
+            state=$(az provider show --namespace "$ns" --query "registrationState" -o tsv 2>/dev/null || echo "Unknown")
+            echo "$ns: $state"
             if [ "$state" != "Registered" ]; then
-              echo "Registering $ns..."
-              az provider register --namespace "$ns" --wait
-            else
-              echo "$ns already registered"
+              failed+=("$ns")
             fi
           done
+
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::The following resource providers are not registered in the subscription: ${failed[*]}"
+            echo "::error::Register them once with: az provider register --namespace <name> --wait"
+            echo "::error::(Requires Contributor or Owner at subscription scope — run this manually or via a privileged account.)"
+            exit 1
+          fi
 
       - name: Discover Static Web App outbound IPs
         id: swa-ips
