@@ -1,35 +1,151 @@
-MCP Server (skeleton)
+# MCP Server: GitHub Actions Version Lookup
 
-This folder contains a minimal MCP server skeleton used as a starting point for implementing an MCP (Model Control Plane) server for this project.
+A remote [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that lets AI assistants look up the latest versions of GitHub Actions from the alternative marketplace database.
 
-Quickstart
+## What it does
 
-- Run:
-  - node index.js
-  - or from this directory: npm install && npm start
+Provides a `lookup-action-versions` tool that accepts an array of GitHub Action references and returns:
+- The latest available version for each action
+- Whether the referenced version is already up-to-date
+- All known versions/tags
 
-API
+## Connecting to the server
 
-- GET /health
-  - Returns 200 with JSON { status: "ok" }
-- POST /invoke
-  - Accepts a JSON body and returns 200 with { received: <body> }
+### GitHub Copilot (VS Code)
 
-Extending
+Add to `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "actions-marketplace": {
+      "type": "http",
+      "url": "https://<your-server-host>/mcp"
+    }
+  }
+}
+```
 
-- Replace the simple in-memory handler in index.js with your MCP logic.
-- Add authentication, logging, and proper request validation as needed.
-- Consider switching to Express or a framework if routing grows.
+### Claude Desktop
 
-Tests
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "actions-marketplace": {
+      "url": "https://<your-server-host>/mcp"
+    }
+  }
+}
+```
 
-- A small smoke test is provided at test/test-health.js which starts the server and verifies /health returns 200.
-  - From src/mcp-server: npm test
+### Cursor / Other MCP clients
 
-Next steps for maintainers
+Use the server URL `https://<your-server-host>/mcp` in your client's MCP configuration.
 
-- Add durable storage or message queues for long-running/async invocations.
-- Add OpenAPI spec and implement request validation.
-- Wire the mcp-server into CI and add unit tests for any new business logic.
+## Tool: `lookup-action-versions`
 
-License: follow repository license.
+### Input
+
+```json
+{
+  "actions": [
+    "actions/checkout@v4",
+    "actions/setup-node@v4",
+    "github/codeql-action/analyze@v3"
+  ]
+}
+```
+
+### Output
+
+```json
+{
+  "results": [
+    {
+      "input": "actions/checkout@v4",
+      "found": true,
+      "owner": "actions",
+      "name": "checkout",
+      "latestVersion": "v4.2.2",
+      "commitSha": null,
+      "currentVersion": "v4",
+      "isLatest": true,
+      "allVersions": ["v4.2.2", "v4.2.1", "v4.2.0", "v4.1.0", "v3.6.0"]
+    }
+  ]
+}
+```
+
+### Limits
+
+- Maximum 20 actions per request
+- Rate limited to 60 requests per minute per IP
+
+## Local development
+
+```bash
+cd src/mcp-server
+npm install
+
+# Set the backend API URL (defaults to http://localhost:7071/api)
+export BACKEND_API_URL=https://your-functions-app.azurewebsites.net/api
+
+# Start the server
+npm start
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Server listen port |
+| `BACKEND_API_URL` | `http://localhost:7071/api` | Backend Functions API base URL |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | (empty) | Optional App Insights connection |
+
+### Testing
+
+```bash
+npm test
+```
+
+### Health check
+
+```
+GET /health
+```
+
+Returns server uptime, call stats, and cache info.
+
+### Manual MCP test
+
+List available tools:
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Call the lookup tool:
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lookup-action-versions","arguments":{"actions":["actions/checkout@v4"]}}}'
+```
+
+## Docker
+
+```bash
+docker build -t mcp-server .
+docker run -p 3000:3000 -e BACKEND_API_URL=https://your-api.azurewebsites.net/api mcp-server
+```
+
+## Architecture
+
+- **Transport**: Streamable HTTP (stateless mode) per MCP specification
+- **Caching**: In-memory LRU (500 entries, 5-minute TTL), pre-warmed with top actions
+- **Rate limiting**: 3 tiers (global 200/min, MCP 60/min, burst 10/sec) per IP
+- **Monitoring**: Structured JSON logs, periodic stats, action lookup tracking
+- **Hosting**: Designed for Azure Container Apps (Consumption plan, scale-to-zero)
+

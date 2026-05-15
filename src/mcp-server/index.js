@@ -1,50 +1,93 @@
-const http = require('http');
-const url = require('url');
+'use strict';
 
-function requestHandler(req, res) {
-  const parsed = url.parse(req.url, true);
+const express = require('express');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { createMcpServer } = require('./lib/mcpServer');
+const { createRateLimiters } = require('./lib/rateLimiter');
+const { getStats, startPeriodicFlush } = require('./lib/monitoring');
+const { preWarm, getCacheStats } = require('./lib/cache');
 
-  // CORS preflight handling
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+const PORT = process.env.PORT || 3000;
+
+function createApp() {
+  const app = express();
+  const { globalLimiter, mcpLimiter, burstLimiter } = createRateLimiters();
+
+  app.set('trust proxy', 1);
+  app.use(globalLimiter);
+  app.use(express.json({ limit: '1kb' }));
+
+  // Health endpoint
+  app.get('/health', (req, res) => {
+    const stats = getStats();
+    const cacheStats = getCacheStats();
+    res.json({
+      status: 'ok',
+      uptime: Math.floor(process.uptime()),
+      ...stats,
+      cache: cacheStats
     });
-    return res.end();
-  }
+  });
 
-  if (parsed.pathname === '/health' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ status: 'ok' }));
-  }
+  // MCP endpoint: POST handles JSON-RPC requests
+  app.post('/mcp', burstLimiter, mcpLimiter, async (req, res) => {
+    const server = createMcpServer();
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined // stateless
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      res.on('close', () => {
+        transport.close();
+        server.close();
+      });
+    } catch (error) {
+      console.error('MCP request error:', error.message);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null
+        });
+      }
+    }
+  });
 
-  if (parsed.pathname === '/invoke' && req.method === 'POST') {
-    let body = '';
-    req.on('data', (chunk) => (body += chunk));
-    req.on('end', () => {
-      let parsedBody = null;
-      try { parsedBody = body ? JSON.parse(body) : null; } catch (e) { parsedBody = body; }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ received: parsedBody }));
+  // Reject GET and DELETE for stateless server
+  app.get('/mcp', (req, res) => {
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Method not allowed.' },
+      id: null
     });
-    return;
-  }
+  });
 
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'not found' }));
+  app.delete('/mcp', (req, res) => {
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Method not allowed.' },
+      id: null
+    });
+  });
+
+  return app;
 }
 
-function createServer() {
-  return http.createServer(requestHandler);
-}
+async function main() {
+  startPeriodicFlush();
 
-if (require.main === module) {
-  const port = process.env.PORT || 3000;
-  const server = createServer();
-  server.listen(port, () => {
-    console.log(`MCP server listening on ${port}`);
+  // Pre-warm cache (non-blocking, failure is ok)
+  preWarm().catch(() => {});
+
+  const app = createApp();
+  app.listen(PORT, () => {
+    console.log(`MCP server listening on port ${PORT}`);
   });
 }
 
-module.exports = { createServer };
+if (require.main === module) {
+  main();
+}
+
+module.exports = { createApp };
