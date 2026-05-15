@@ -73,6 +73,18 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Register required resource providers
+        run: |
+          for ns in Microsoft.ContainerRegistry Microsoft.App Microsoft.OperationalInsights; do
+            state=$(az provider show --namespace "$ns" --query "registrationState" -o tsv 2>/dev/null || echo "NotFound")
+            if [ "$state" != "Registered" ]; then
+              echo "Registering $ns..."
+              az provider register --namespace "$ns" --wait
+            else
+              echo "$ns already registered"
+            fi
+          done
+
       - name: Discover Static Web App outbound IPs
         id: swa-ips
         run: |
