@@ -1,0 +1,180 @@
+name: Deploy MCP Server
+
+concurrency:
+  group: mcp-server-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/mcp-server/**'
+      - '.github/workflows/deploy-mcp-server.yml'
+  pull_request:
+    paths:
+      - 'src/mcp-server/**'
+      - '.github/workflows/deploy-mcp-server.yml'
+
+env:
+  AZURE_CORE_ONLY_SHOW_ERRORS: true
+  AZURE_CORE_ERROR_RECOMMENDATION: false
+  AZURE_CORE_COLLECT_TELEMETRY: false
+  AZURE_LOGGING_ENABLE_LOG_FILE: false
+  AZURE_CORE_SURVEY_MESSAGE: false
+  AZURE_AUTO_UPGRADE_ENABLE: false
+  AZURE_CORE_NO_COLOR: true
+  AZURE_EXTENSION_USE_DYNAMIC_INSTALL: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: src/mcp-server
+
+      - name: Syntax check
+        run: |
+          set -e
+          for f in index.js lib/*.js; do
+            echo "node -c $f"
+            node -c "$f"
+          done
+        working-directory: src/mcp-server
+
+      - name: Run unit tests
+        run: npm test
+        working-directory: src/mcp-server
+
+      - name: Build Docker image
+        run: docker build -t mcp-server:${{ github.sha }} src/mcp-server
+
+      - name: Verify container starts
+        run: |
+          set -e
+          container_id=$(docker run -d -p 3001:3000 \
+            -e BACKEND_API_URL=http://localhost:7071/api \
+            mcp-server:${{ github.sha }})
+          echo "CONTAINER_ID=$container_id" >> "$GITHUB_ENV"
+
+          # Wait for healthy response
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:3001/health; then
+              echo ""
+              echo "Health check passed"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "::error::Container failed to become healthy"
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Stop test container
+        if: always()
+        run: |
+          if [ -n "$CONTAINER_ID" ]; then
+            docker stop "$CONTAINER_ID" || true
+          fi
+
+  deploy:
+    name: Deploy Container
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: |
+          acrName="acr${{ vars.RESOURCE_SUFFIX }}"
+          az acr login --name "$acrName"
+          echo "ACR_NAME=$acrName" >> "$GITHUB_ENV"
+          echo "ACR_LOGIN_SERVER=${acrName}.azurecr.io" >> "$GITHUB_ENV"
+
+      - name: Build and push container image
+        run: |
+          imageTag="${ACR_LOGIN_SERVER}/mcp-server:${{ github.sha }}"
+          imageLatest="${ACR_LOGIN_SERVER}/mcp-server:latest"
+
+          docker build -t "$imageTag" -t "$imageLatest" src/mcp-server
+
+          docker push "$imageTag"
+          docker push "$imageLatest"
+
+          echo "IMAGE_TAG=$imageTag" >> "$GITHUB_ENV"
+
+      - name: Deploy to Container App
+        run: |
+          caName="ca-mcp-${{ vars.RESOURCE_SUFFIX }}"
+
+          az containerapp update \
+            --name "$caName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "$IMAGE_TAG"
+
+          echo "Deployed $IMAGE_TAG to $caName"
+
+      - name: Smoke test deployed MCP server
+        run: |
+          caName="ca-mcp-${{ vars.RESOURCE_SUFFIX }}"
+
+          fqdn=$(az containerapp show \
+            --name "$caName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+
+          if [ -z "$fqdn" ]; then
+            echo "::error::Could not resolve Container App FQDN"
+            exit 1
+          fi
+
+          echo "MCP Server FQDN: $fqdn"
+
+          # Health check
+          curl -sf "https://$fqdn/health" || {
+            echo "::error::Health check failed on deployed container"
+            exit 1
+          }
+          echo "Health check passed"
+
+          # MCP initialize request
+          response=$(curl -sf -X POST "https://$fqdn/mcp" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"1.0.0"}}}')
+
+          echo "MCP initialize response: $response"
+
+          if echo "$response" | jq -e '.result.serverInfo' > /dev/null 2>&1; then
+            echo "MCP server responding correctly"
+          else
+            echo "::error::MCP server did not return expected initialize response"
+            exit 1
+          fi
