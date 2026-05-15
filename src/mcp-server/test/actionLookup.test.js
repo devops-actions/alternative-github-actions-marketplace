@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveLatestVersion } = require('../lib/actionLookup');
+const { resolveLatestVersion, resolveCommitSha } = require('../lib/actionLookup');
 
 describe('resolveLatestVersion', () => {
   test('returns latest from releaseInfo (newest-first)', () => {
@@ -61,5 +61,36 @@ describe('resolveLatestVersion', () => {
     };
     const result = resolveLatestVersion(actionData, null);
     expect(result.allVersions).toEqual(['v2.0.0', 'v1.0.0']);
+  });
+});
+
+describe('resolveCommitSha', () => {
+  test('returns SHA when versionShaMap has the version', () => {
+    const actionData = {
+      versionShaMap: { 'v4.0.0': 'abc123', 'v4.1.0': 'def456' }
+    };
+    expect(resolveCommitSha(actionData, 'v4.0.0')).toBe('abc123');
+  });
+
+  test('returns null when version is not in the map', () => {
+    const actionData = {
+      versionShaMap: { 'v4.0.0': 'abc123' }
+    };
+    expect(resolveCommitSha(actionData, 'v99.0.0')).toBeNull();
+  });
+
+  test('returns null when versionShaMap is missing', () => {
+    expect(resolveCommitSha({}, 'v1.0.0')).toBeNull();
+  });
+
+  test('returns null when versionShaMap is not an object', () => {
+    expect(resolveCommitSha({ versionShaMap: 'bad' }, 'v1.0.0')).toBeNull();
+  });
+
+  test('returns null when version is null', () => {
+    const actionData = {
+      versionShaMap: { 'v4.0.0': 'abc123' }
+    };
+    expect(resolveCommitSha(actionData, null)).toBeNull();
   });
 });

@@ -8,6 +8,18 @@ const { logToolCall } = require('./monitoring');
 const MAX_BATCH_SIZE = 20;
 
 /**
+ * Resolve the commit SHA for a given version using versionShaMap.
+ * Returns null if the map is missing or has no entry for the version.
+ */
+function resolveCommitSha(actionData, version) {
+  const shaMap = actionData.versionShaMap;
+  if (!shaMap || typeof shaMap !== 'object') {
+    return null;
+  }
+  return shaMap[version] || null;
+}
+
+/**
  * Resolve the latest version from tagInfo/releaseInfo arrays.
  * If a currentVersion is provided (e.g., "v4"), find the latest matching that major.
  */
@@ -117,6 +129,7 @@ async function lookupSingleAction(parsed) {
   logToolCall(owner, name, raw);
 
   const { latestVersion, allVersions, isLatest } = resolveLatestVersion(actionData, version);
+  const commitSha = resolveCommitSha(actionData, latestVersion);
 
   return {
     input: raw,
@@ -125,7 +138,7 @@ async function lookupSingleAction(parsed) {
     owner,
     name,
     latestVersion,
-    commitSha: null, // Not available in current data model
+    commitSha,
     currentVersion: version,
     isLatest,
     allVersions,
@@ -156,4 +169,4 @@ async function lookupActions(actions) {
   return { results };
 }
 
-module.exports = { lookupActions, lookupSingleAction, resolveLatestVersion, MAX_BATCH_SIZE };
+module.exports = { lookupActions, lookupSingleAction, resolveLatestVersion, resolveCommitSha, MAX_BATCH_SIZE };
