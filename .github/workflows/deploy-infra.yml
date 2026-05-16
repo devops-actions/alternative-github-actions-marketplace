@@ -178,6 +178,40 @@ jobs:
           parameters: /tmp/deploy-params.json
           failOnStdErr: false
 
+      - name: Grant AcrPull role to Container App managed identity
+        run: |
+          set -e
+          caName="ca-mcp-${{ vars.RESOURCE_SUFFIX }}"
+          acrName="acr${{ vars.RESOURCE_SUFFIX }}"
+
+          principalId=$(az containerapp show \
+            --name "$caName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "identity.principalId" -o tsv 2>/dev/null || true)
+
+          if [ -z "$principalId" ]; then
+            echo "::warning::Could not retrieve Container App managed identity principal ID; skipping AcrPull role assignment."
+            exit 0
+          fi
+
+          acrId=$(az acr show \
+            --name "$acrName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "id" -o tsv)
+
+          # Idempotent: ignore if assignment already exists
+          if az role assignment create \
+            --assignee-object-id "$principalId" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$acrId" 2>/dev/null; then
+            echo "AcrPull role granted to $caName managed identity on $acrName."
+          else
+            echo "::warning::Could not create AcrPull role assignment (deployment identity may lack Microsoft.Authorization/roleAssignments/write)."
+            echo "::warning::Grant it manually:"
+            echo "::warning::  az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role AcrPull --scope $acrId"
+          fi
+
       - name: Validate deployed resource names match expected suffix
         env:
           EXPECTED_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
