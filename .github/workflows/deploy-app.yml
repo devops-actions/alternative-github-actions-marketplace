@@ -18,13 +18,7 @@ on:
         required: true
         default: true
         type: boolean
-  push:
-    #branches:
-    #  - main
-    paths:
-      - 'src/frontend/**'
-      - 'src/backend/**'
-      - '.github/workflows/deploy-app.yml'
+
 
 env:
   # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
@@ -184,7 +178,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -246,7 +240,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -509,7 +503,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
