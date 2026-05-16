@@ -18,15 +18,7 @@ on:
         required: true
         default: true
         type: boolean
-  push:
-    branches-ignore:
-      - 'dependabot/**'
-    #branches:
-    #  - main
-    paths:
-      - 'src/frontend/**'
-      - 'src/backend/**'
-      - '.github/workflows/deploy-app.yml'
+
 
 env:
   # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
