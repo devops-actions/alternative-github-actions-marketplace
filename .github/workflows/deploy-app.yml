@@ -18,13 +18,7 @@ on:
         required: true
         default: true
         type: boolean
-  push:
-    #branches:
-    #  - main
-    paths:
-      - 'src/frontend/**'
-      - 'src/backend/**'
-      - '.github/workflows/deploy-app.yml'
+
 
 env:
   # env vars to speed up the Azure CLI calls, see here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
@@ -50,7 +44,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Filter paths
         id: filter
@@ -78,10 +72,10 @@ jobs:
       appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@v2.3.0
+        uses: azure/login@v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -166,7 +160,7 @@ jobs:
       DO_BACKEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_backend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.backend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Syntax check non-project JavaScript files
         if: ${{ env.DO_BACKEND == 'true' }}
@@ -184,7 +178,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -205,7 +199,7 @@ jobs:
 
       - name: Log in to Azure (OIDC)
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: azure/login@v2.3.0
+        uses: azure/login@v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -234,11 +228,11 @@ jobs:
       DO_FRONTEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: azure/login@v2.3.0
+        uses: azure/login@v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -246,7 +240,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -300,10 +294,10 @@ jobs:
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_e2e == true) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true')) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@v2.3.0
+        uses: azure/login@v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -509,7 +503,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
