@@ -210,7 +210,7 @@ jobs:
 
       - name: Retrieve host default function key (optional)
         id: fetch_host_key
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           inlineScript: |
             function_app_name="${{ steps.deploy.outputs.functionAppName }}"
