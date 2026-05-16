@@ -44,7 +44,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Filter paths
         id: filter
@@ -72,7 +72,7 @@ jobs:
       appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2.3.0
@@ -160,7 +160,7 @@ jobs:
       DO_BACKEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_backend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.backend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Syntax check non-project JavaScript files
         if: ${{ env.DO_BACKEND == 'true' }}
@@ -228,7 +228,7 @@ jobs:
       DO_FRONTEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         if: ${{ env.DO_FRONTEND == 'true' }}
@@ -294,7 +294,7 @@ jobs:
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_e2e == true) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true')) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2.3.0

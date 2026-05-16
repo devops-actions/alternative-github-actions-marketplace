@@ -36,7 +36,7 @@ jobs:
       appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2.3.0
@@ -112,7 +112,7 @@ jobs:
       url: ${{ needs.resolve.outputs.frontend_base_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
 
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2.3.0
