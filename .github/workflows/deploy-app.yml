@@ -19,6 +19,8 @@ on:
         default: true
         type: boolean
   push:
+    branches-ignore:
+      - 'dependabot/**'
     #branches:
     #  - main
     paths:
