@@ -13,6 +13,9 @@ param tableName string = 'actions'
 @description('Assign Storage Table Data Contributor role to the function app managed identity. Requires role assignment permissions on the storage account scope.')
 param assignTableDataContributor bool = false
 
+@description('Assign AcrPull role to the MCP Container App managed identity. Requires role assignment permissions on the Container Registry scope.')
+param assignAcrPullRole bool = false
+
 @description('IP CIDRs allowed to reach the Function App (e.g., Static Web Apps outbound IPs). Leave empty to allow all.')
 param functionAllowedIpCidrs array = []
 
@@ -41,6 +44,9 @@ var staticWebAppName = 'swa-${uniqueSuffix}'
 var hostingPlanName = 'plan-${uniqueSuffix}'
 var insightsName = 'appi-${uniqueSuffix}'
 var fileShareName = toLower('func${uniqueSuffix}')
+var containerRegistryName = 'acr${uniqueSuffix}'
+var containerAppsEnvName = 'cae-${uniqueSuffix}'
+var containerAppName = 'ca-mcp-${uniqueSuffix}'
 
 var functionDebugIpSecurityRestrictions = [for (cidr, i) in functionDebugAllowedIpCidrs: {
   name: 'AllowDebug${i}'
@@ -226,3 +232,81 @@ output functionAppName string = functionApp.name
 output tableEndpoint string = storageAccount.properties.primaryEndpoints.table
 output applicationInsightsConnection string = appInsights.properties.ConnectionString
 output plausibleTrackingDomain string = plausibleTrackingDomain
+
+// --- Azure Container Registry ---
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: containerRegistryName
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+  }
+}
+
+// --- Container Apps Environment ---
+
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
+  name: containerAppsEnvName
+  location: location
+  properties: {}
+}
+
+// --- Container App: MCP Server ---
+
+resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
+  name: containerAppName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: 3000
+        transport: 'http'
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'mcp-server'
+          // Placeholder image; CI replaces this via `az containerapp update --image`
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          env: [
+            {
+              name: 'BACKEND_API_URL'
+              value: 'https://${functionApp.properties.defaultHostName}/api'
+            }
+          ]
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 2
+      }
+    }
+  }
+}
+
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (assignAcrPullRole) {
+  name: guid(containerRegistry.id, 'AcrPull', mcpContainerApp.id)
+  scope: containerRegistry
+  properties: {
+    principalId: mcpContainerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    // AcrPull built-in role
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+  }
+}
+
+output containerRegistryLoginServer string = containerRegistry.properties.loginServer
+output mcpServerFqdn string = mcpContainerApp.properties.configuration.ingress.fqdn
