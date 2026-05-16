@@ -270,12 +270,6 @@ resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
         targetPort: 3000
         transport: 'http'
       }
-      registries: [
-        {
-          server: containerRegistry.properties.loginServer
-          identity: 'system'
-        }
-      ]
     }
     template: {
       containers: [
