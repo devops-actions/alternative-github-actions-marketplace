@@ -184,7 +184,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -246,7 +246,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -509,7 +509,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
