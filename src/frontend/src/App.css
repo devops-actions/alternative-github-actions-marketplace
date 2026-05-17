@@ -25,11 +25,16 @@
   --c-green-tint: #f0fdf4;
   --c-green-border: #86efac;
 
-  /* Danger / Archived / Composite */
+  /* Danger / Archived */
   --c-red: #dc2626;
   --c-red-dark: #b91c1c;
   --c-red-tint: #fef2f2;
   --c-red-border: #fca5a5;
+
+  /* Composite */
+  --c-purple: #7c3aed;
+  --c-purple-tint: #f5f3ff;
+  --c-purple-border: #c4b5fd;
 
   /* Warning / Stale */
   --c-amber: #d97706;
@@ -85,6 +90,10 @@
     --c-red-dark: #ef4444;
     --c-red-tint: #2d0707;
     --c-red-border: #7f1d1d;
+
+    --c-purple: #a78bfa;
+    --c-purple-tint: #1e1040;
+    --c-purple-border: #4c1d95;
 
     --c-amber: #fbbf24;
     --c-amber-tint: #1c0d00;
@@ -435,13 +444,13 @@ body {
   background: var(--c-sky);
 }
 
-/* Composite cards get red accent */
+/* Composite cards get purple accent */
 .action-card:has(.badge-composite)::before {
-  background: var(--c-red-border);
+  background: var(--c-purple-border);
 }
 
 .action-card:has(.badge-composite):hover::before {
-  background: var(--c-red);
+  background: var(--c-purple);
 }
 
 .action-card.archived {
@@ -528,9 +537,9 @@ body {
 }
 
 .badge-composite {
-  background: var(--c-red-tint);
-  color: var(--c-red);
-  border-color: var(--c-red-border);
+  background: var(--c-purple-tint);
+  color: var(--c-purple);
+  border-color: var(--c-purple-border);
 }
 
 .verified-badge {
