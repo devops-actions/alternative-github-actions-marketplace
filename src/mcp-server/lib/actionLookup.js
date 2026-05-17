@@ -8,24 +8,47 @@ const { logToolCall } = require('./monitoring');
 const MAX_BATCH_SIZE = 20;
 
 /**
- * Resolve the commit SHA for a given version using versionShaMap.
- * Returns null if the map is missing or has no entry for the version.
+ * Resolve the commit SHA for a given version using versionShaMap or legacy tagInfo objects.
+ * Returns null if no SHA can be found.
  */
 function resolveCommitSha(actionData, version) {
+  if (!version) return null;
+
   const shaMap = actionData.versionShaMap;
-  if (!shaMap || typeof shaMap !== 'object') {
-    return null;
+  if (shaMap && typeof shaMap === 'object' && shaMap[version]) {
+    return shaMap[version];
   }
-  return shaMap[version] || null;
+
+  // Legacy data may store SHA inside tagInfo as [{sha, tag}]
+  const rawTags = Array.isArray(actionData.tagInfo) ? actionData.tagInfo : [];
+  const tagEntry = rawTags.find(t => t && typeof t === 'object' && t.tag === version);
+  return tagEntry ? tagEntry.sha : null;
 }
 
 /**
  * Resolve the latest version from tagInfo/releaseInfo arrays.
  * If a currentVersion is provided (e.g., "v4"), find the latest matching that major.
  */
+/**
+ * Normalize a releaseInfo or tagInfo entry to a plain version string.
+ * Legacy data may store objects like { tag_name, target_commitish } or { sha, tag }.
+ */
+function normalizeVersionEntry(entry) {
+  if (typeof entry === 'string') return entry;
+  if (entry && typeof entry === 'object') {
+    return entry.tag_name || entry.tag || null;
+  }
+  return null;
+}
+
 function resolveLatestVersion(actionData, currentVersion) {
-  const releases = actionData.releaseInfo || [];
-  const tags = actionData.tagInfo || [];
+  const rawReleases = Array.isArray(actionData.releaseInfo) ? actionData.releaseInfo
+    : (actionData.releaseInfo ? [actionData.releaseInfo] : []);
+  const rawTags = Array.isArray(actionData.tagInfo) ? actionData.tagInfo
+    : (actionData.tagInfo ? [actionData.tagInfo] : []);
+
+  const releases = rawReleases.map(normalizeVersionEntry).filter(Boolean);
+  const tags = rawTags.map(normalizeVersionEntry).filter(Boolean);
 
   // Combine and deduplicate, releases first (typically newest-first)
   const allVersions = [...new Set([...releases, ...tags])];
