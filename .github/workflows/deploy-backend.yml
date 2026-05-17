@@ -115,18 +115,25 @@ jobs:
           ruleName="AllowGitHubRunnerSmokeTest-${GITHUB_RUN_ID}"
           echo "ALLOW_SMOKE_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
 
+          # Use a priority derived from run ID to avoid collisions with leftover rules from prior runs.
+          # Clamp to range 80-89 (below the SWA rules at 100+).
+          priority=$(( 80 + (GITHUB_RUN_ID % 10) ))
+
           # Allow this runner IP so smoke tests can reach the app when access restrictions are locked down to SWA IPs.
-          az functionapp config access-restriction add \
+          if az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "$FUNCTION_APP_NAME" \
             --rule-name "$ruleName" \
             --action Allow \
             --ip-address "$runnerIp/32" \
-            --priority 89 \
-            --description "Temporary allow for GitHub Actions smoke tests"
-
-          # Propagation delay for access restriction rules.
-          sleep 10
+            --priority "$priority" \
+            --description "Temporary allow for GitHub Actions smoke tests"; then
+            echo "Access restriction added (priority $priority)."
+            # Propagation delay for access restriction rules.
+            sleep 10
+          else
+            echo "::warning::Could not add access restriction (function may allow all traffic or priority conflict). Smoke tests will run without the rule."
+          fi
 
           echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
 
