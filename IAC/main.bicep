@@ -33,6 +33,12 @@ param functionCorsAllowedOrigins array = [
 @description('Plausible Analytics tracking domain. This domain will be used for analytics tracking on the frontend. Leave empty to disable Plausible tracking.')
 param plausibleTrackingDomain string = ''
 
+@description('Custom domain for the Static Web App (e.g., marketplace.devopsjournal.io). Leave empty to skip. Requires a CNAME record pointing to the SWA default hostname before deployment.')
+param swaCustomDomain string = ''
+
+@description('Custom domain for the MCP Container App (e.g., actions-mcp.devopsjournal.io). Leave empty to skip. Requires DNS set up before deployment: CNAME to the Container App FQDN and TXT asuid.<subdomain> with the Container App verification ID.')
+param mcpCustomDomain string = ''
+
 @description('Required. Fixed suffix for all resource names. Set via the RESOURCE_SUFFIX repository variable. All resources will be named with this suffix (e.g., func-{suffix}, swa-{suffix}). Prevents accidental creation of duplicate resources.')
 @minLength(1)
 param resourceSuffix string
@@ -69,9 +75,11 @@ var functionIpSecurityRestrictions = concat(functionDebugIpSecurityRestrictions,
 // Build complete CORS origins list, adding Static Web App if provided
 // Include both with and without trailing slash to handle browser Origin header variations
 // This addresses preflight CORS failures when browser sends Origin with trailing slash
-var completeCorsOrigins = !empty(staticWebAppHostname) 
-  ? union(functionCorsAllowedOrigins, ['https://${staticWebAppHostname}', 'https://${staticWebAppHostname}/'])
-  : functionCorsAllowedOrigins
+var completeCorsOrigins = union(
+  functionCorsAllowedOrigins,
+  !empty(staticWebAppHostname) ? ['https://${staticWebAppHostname}', 'https://${staticWebAppHostname}/'] : [],
+  !empty(swaCustomDomain)      ? ['https://${swaCustomDomain}', 'https://${swaCustomDomain}/']           : []
+)
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -226,6 +234,16 @@ resource staticWebAppCustomDomain 'Microsoft.Web/staticSites/customDomains@2022-
   ]
 }
 
+// Custom domain for the marketplace site (e.g., marketplace.devopsjournal.io)
+// Prerequisite: CNAME <subdomain> -> SWA default hostname must exist in DNS before deployment
+resource staticWebAppSiteDomain 'Microsoft.Web/staticSites/customDomains@2022-09-01' = if (!empty(swaCustomDomain)) {
+  name: swaCustomDomain
+  parent: staticWebApp
+  properties: {
+    validationMethod: 'cname-delegation'
+  }
+}
+
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
 output functionAppDefaultHostname string = functionApp.properties.defaultHostName
 output functionAppName string = functionApp.name
@@ -256,6 +274,19 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
 
 // --- Container App: MCP Server ---
 
+// Managed TLS certificate for the MCP custom domain.
+// Prerequisites: CNAME <subdomain> -> Container App FQDN and TXT asuid.<subdomain> -> mcpCustomDomainVerificationId
+// must exist in DNS before this cert can be provisioned.
+resource mcpManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2023-05-01' = if (!empty(mcpCustomDomain)) {
+  name: 'cert-mcp-${uniqueSuffix}'
+  parent: containerAppsEnvironment
+  location: location
+  properties: {
+    subjectName: mcpCustomDomain
+    domainControlValidation: 'CNAME'
+  }
+}
+
 resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
@@ -275,6 +306,13 @@ resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
         external: true
         targetPort: 3000
         transport: 'http'
+        customDomains: !empty(mcpCustomDomain) ? [
+          {
+            name: mcpCustomDomain
+            certificateId: mcpManagedCert.id
+            bindingType: 'SniEnabled'
+          }
+        ] : []
       }
     }
     template: {
@@ -316,3 +354,4 @@ resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
 output mcpServerFqdn string = mcpContainerApp.properties.configuration.ingress.fqdn
+output mcpCustomDomainVerificationId string = mcpContainerApp.properties.customDomainVerificationId

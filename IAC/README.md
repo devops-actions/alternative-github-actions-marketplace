@@ -26,12 +26,61 @@ The `main.bicep` template deploys:
 | `staticWebAppHostname` | Static Web App hostname for CORS configuration | `''` | No |
 | `functionCorsAllowedOrigins` | CORS allowed origins for the Function App | `['https://portal.azure.com']` | No |
 | `plausibleTrackingDomain` | Custom domain for Plausible Analytics tracking | `''` | No |
+| `swaCustomDomain` | Custom domain for the Static Web App (e.g., `marketplace.devopsjournal.io`) | `''` | No |
+| `mcpCustomDomain` | Custom domain for the MCP Container App (e.g., `actions-mcp.devopsjournal.io`) | `''` | No |
 
 ## Custom Domain Configuration
 
-The template supports configuring a custom domain on the Static Web App for Plausible Analytics tracking.
+### Marketplace Website (`marketplace.devopsjournal.io` → SWA)
 
-### Setup
+**Step 1 — Create DNS record first** (before deploying Bicep):
+
+```
+CNAME  marketplace  →  <swa-default-hostname>.azurestaticapps.net
+```
+
+Get the default hostname from the Azure portal or:
+```bash
+az staticwebapp show --name swa-<suffix> --resource-group <rg> --query defaultHostname -o tsv
+```
+
+**Step 2 — Set repository variable:**
+```
+SWA_CUSTOM_DOMAIN=marketplace.devopsjournal.io
+```
+
+**Step 3 — Deploy:** The `deploy-infra.yml` workflow passes `swaCustomDomain` to Bicep, which creates the custom domain resource using CNAME delegation. Azure issues the managed TLS certificate automatically (no TXT record needed for subdomain CNAME delegation).
+
+---
+
+### MCP Server (`actions-mcp.devopsjournal.io` → Container App)
+
+This requires a **two-step process** because the managed certificate needs DNS to exist before it can be issued.
+
+**Step 1 — Get the verification ID** (first deploy without custom domain set):
+```bash
+az containerapp show \
+  --name ca-mcp-<suffix> \
+  --resource-group <rg> \
+  --query "properties.customDomainVerificationId" -o tsv
+```
+
+**Step 2 — Create DNS records:**
+```
+CNAME  actions-mcp   →  ca-mcp-<suffix>.ashyplant-207692d4.westeurope.azurecontainerapps.io
+TXT    asuid.actions-mcp  →  <verification-id-from-step-1>
+```
+
+**Step 3 — Set repository variable:**
+```
+MCP_CUSTOM_DOMAIN=actions-mcp.devopsjournal.io
+```
+
+**Step 4 — Deploy again:** Bicep creates the managed certificate and binds it to the Container App ingress. Azure validates via CNAME and issues the TLS cert.
+
+---
+
+### Plausible Analytics Custom Domain (`plausibleTrackingDomain`)
 
 1. **Set repository variable**: Configure `PLAUSIBLE_TRACKING_DOMAIN` with your custom domain:
    ```
@@ -111,3 +160,6 @@ az deployment group create \
 | `tableEndpoint` | Table Storage endpoint URL |
 | `applicationInsightsConnection` | Application Insights connection string |
 | `plausibleTrackingDomain` | The configured Plausible tracking domain |
+| `containerRegistryLoginServer` | ACR login server hostname |
+| `mcpServerFqdn` | Container App default FQDN |
+| `mcpCustomDomainVerificationId` | Verification ID for Container App custom domain TXT record (`asuid.<subdomain>`) |

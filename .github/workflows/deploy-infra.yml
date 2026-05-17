@@ -138,6 +138,8 @@ jobs:
           DEPLOY_LOCATION: ${{ vars.DEPLOY_LOCATION }}
           STATIC_WEB_APP_LOCATION: ${{ vars.STATIC_WEB_APP_LOCATION }}
           PLAUSIBLE_TRACKING_DOMAIN: ${{ vars.PLAUSIBLE_TRACKING_DOMAIN }}
+          SWA_CUSTOM_DOMAIN: ${{ vars.SWA_CUSTOM_DOMAIN }}
+          MCP_CUSTOM_DOMAIN: ${{ vars.MCP_CUSTOM_DOMAIN }}
           RESOURCE_SUFFIX: ${{ vars.RESOURCE_SUFFIX }}
           SWA_HOSTNAME: ${{ steps.swa-ips.outputs.swa_hostname }}
           OUTBOUND_IPS_JSON: ${{ steps.swa-ips.outputs.outbound_ips_json }}
@@ -163,6 +165,8 @@ jobs:
           [ -n "$DEPLOY_LOCATION" ]          && params=$(echo "$params" | jq --arg v "$DEPLOY_LOCATION"          '.parameters.location                 = { "value": $v }')
           [ -n "$STATIC_WEB_APP_LOCATION" ]  && params=$(echo "$params" | jq --arg v "$STATIC_WEB_APP_LOCATION"  '.parameters.staticWebAppLocation      = { "value": $v }')
           [ -n "$PLAUSIBLE_TRACKING_DOMAIN" ] && params=$(echo "$params" | jq --arg v "$PLAUSIBLE_TRACKING_DOMAIN" '.parameters.plausibleTrackingDomain  = { "value": $v }')
+          [ -n "$SWA_CUSTOM_DOMAIN" ]        && params=$(echo "$params" | jq --arg v "$SWA_CUSTOM_DOMAIN"        '.parameters.swaCustomDomain           = { "value": $v }')
+          [ -n "$MCP_CUSTOM_DOMAIN" ]        && params=$(echo "$params" | jq --arg v "$MCP_CUSTOM_DOMAIN"        '.parameters.mcpCustomDomain           = { "value": $v }')
 
           echo "$params" > /tmp/deploy-params.json
           echo "Deployment parameters:"
