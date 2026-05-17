@@ -8,12 +8,18 @@ import { AnimatedCounter } from '../components/AnimatedCounter';
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
 
+// Thresholds for the low-activity filter:
+// an action is considered low-activity when BOTH conditions are true.
+const LOW_ACTIVITY_DEPENDENTS_THRESHOLD = 10;
+const LOW_ACTIVITY_STALE_DAYS = 30;
+
 type OverviewUiState = {
   searchQuery: string;
   typeFilter: ActionTypeFilter;
   showVerifiedOnly: boolean;
   verifiedFilter?: 'all' | 'verified' | 'unverified';
   archivedFilter?: 'hide' | 'show' | 'only';
+  activityFilter?: 'hide' | 'show' | 'only';
   sortBy: 'updated' | 'dependents';
   currentPage: number;
   scrollY?: number;
@@ -63,6 +69,10 @@ export const OverviewPage: React.FC = () => {
     const persisted = (initialPersisted as any)?.archivedFilter as 'hide' | 'show' | 'only' | undefined;
     return persisted || 'hide';
   });
+  const [activityFilter, setActivityFilter] = useState<'hide' | 'show' | 'only'>(() => {
+    const persisted = (initialPersisted as any)?.activityFilter as 'hide' | 'show' | 'only' | undefined;
+    return persisted || 'hide';
+  });
   const [openssfFilter, setOpenssfFilter] = useState<'all' | 'above5' | 'above7'>(() => {
     const candidate = initialPersisted?.openssfFilter as string | undefined;
     return candidate === 'above5' || candidate === 'above7' ? candidate : 'all';
@@ -82,6 +92,7 @@ export const OverviewPage: React.FC = () => {
     typeFilter,
     showVerifiedOnly,
     archivedFilter,
+    activityFilter,
     verifiedFilter,
     sortBy,
     openssfFilter
@@ -116,6 +127,7 @@ export const OverviewPage: React.FC = () => {
     setTypeFilter('All');
     setShowVerifiedOnly(false);
     setArchivedFilter('hide');
+    setActivityFilter('hide');
     setOpenssfFilter('all');
     setSortBy('updated');
     setCurrentPage(1);
@@ -195,11 +207,12 @@ export const OverviewPage: React.FC = () => {
       showVerifiedOnly,
       verifiedFilter,
       archivedFilter,
+      activityFilter,
       sortBy,
       openssfFilter,
       currentPage
     });
-  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, sortBy, openssfFilter, currentPage]);
+  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, currentPage]);
 
   useEffect(() => {
     let filtered = actions;
@@ -224,6 +237,22 @@ export const OverviewPage: React.FC = () => {
       filtered = filtered.filter(action => action?.repoInfo?.archived === true);
     } else if (archivedFilter === 'hide') {
       filtered = filtered.filter(action => action?.repoInfo?.archived !== true);
+    }
+
+    // Filter by low-activity: dependents below threshold AND not updated within the stale window.
+    if (activityFilter !== 'show') {
+      const staleDate = new Date();
+      staleDate.setDate(staleDate.getDate() - LOW_ACTIVITY_STALE_DAYS);
+      const isLowActivity = (action: Action) => {
+        const deps = parseDependentsCount(action?.dependents?.dependents);
+        const updatedAt = new Date(action?.repoInfo?.updated_at || 0);
+        return deps < LOW_ACTIVITY_DEPENDENTS_THRESHOLD && updatedAt < staleDate;
+      };
+      if (activityFilter === 'only') {
+        filtered = filtered.filter(isLowActivity);
+      } else {
+        filtered = filtered.filter(action => !isLowActivity(action));
+      }
     }
 
     // Filter by OpenSSF score threshold
@@ -258,10 +287,11 @@ export const OverviewPage: React.FC = () => {
       prev.showVerifiedOnly !== showVerifiedOnly ||
       prev.verifiedFilter !== verifiedFilter ||
       prev.archivedFilter !== archivedFilter ||
+      prev.activityFilter !== activityFilter ||
       prev.sortBy !== sortBy ||
       prev.openssfFilter !== openssfFilter;
 
-      prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, archivedFilter, verifiedFilter, sortBy, openssfFilter };
+      prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter };
 
     const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     if (filtersChanged) {
@@ -269,7 +299,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -313,6 +343,7 @@ export const OverviewPage: React.FC = () => {
       typeFilter,
       showVerifiedOnly,
       archivedFilter,
+      activityFilter,
       sortBy,
       currentPage,
       scrollY: window.scrollY
@@ -405,6 +436,16 @@ export const OverviewPage: React.FC = () => {
           <span className="stat-label">Archived Actions</span>
           <span className="stat-value"><AnimatedCounter value={stats.archived} /></span>
         </button>
+
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setOpenssfFilter('above5')}
+          aria-label="Show actions with OpenSSF score"
+        >
+          <span className="stat-label">OpenSSF Actions</span>
+          <span className="stat-value"><AnimatedCounter value={stats.withOssf} /></span>
+        </button>
       </div>
 
       <div className="controls">
@@ -485,6 +526,15 @@ export const OverviewPage: React.FC = () => {
               <option value="hide">Hide archived</option>
               <option value="show">Show archived</option>
               <option value="only">Only archived</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Low-activity:</label>
+            <select data-testid="filter-activity" value={activityFilter} onChange={e => setActivityFilter(e.target.value as any)}>
+              <option value="hide">Hide low-activity</option>
+              <option value="show">Show all</option>
+              <option value="only">Only low-activity</option>
             </select>
           </div>
 

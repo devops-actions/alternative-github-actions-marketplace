@@ -41,7 +41,9 @@ describe('ActionsStats function', () => {
         PayloadJson: JSON.stringify({
           verified: true,
           actionType: { actionType: 'Node' },
-          repoInfo: { archived: true }
+          repoInfo: { archived: true },
+          ossf: true,
+          ossfScore: 5.2
         })
       },
       {
@@ -65,6 +67,7 @@ describe('ActionsStats function', () => {
     expect(context.res.headers['X-Actions-Count']).toBe(2);
     expect(context.res.headers['X-Verified-Count']).toBe(1);
     expect(context.res.headers['X-Archived-Count']).toBe(1);
+    expect(context.res.headers['X-Ossf-Count']).toBe(1);
 
     const body = JSON.parse(context.res.body);
     expect(body).toEqual(
@@ -72,6 +75,7 @@ describe('ActionsStats function', () => {
         total: 2,
         verified: 1,
         archived: 1,
+        withOssf: 1,
         byType: expect.objectContaining({ Node: 1, Docker: 1 })
       })
     );
