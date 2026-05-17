@@ -54,4 +54,5 @@ export interface ActionStats {
   byType: Record<string, number>;
   verified: number;
   archived: number;
+  withOssf: number;
 }

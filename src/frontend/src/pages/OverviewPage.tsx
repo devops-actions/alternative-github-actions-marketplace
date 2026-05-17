@@ -436,6 +436,16 @@ export const OverviewPage: React.FC = () => {
           <span className="stat-label">Archived Actions</span>
           <span className="stat-value"><AnimatedCounter value={stats.archived} /></span>
         </button>
+
+        <button
+          type="button"
+          className="stat-item stat-button"
+          onClick={() => setOpenssfFilter('above5')}
+          aria-label="Show actions with OpenSSF score"
+        >
+          <span className="stat-label">OpenSSF Actions</span>
+          <span className="stat-value"><AnimatedCounter value={stats.withOssf} /></span>
+        </button>
       </div>
 
       <div className="controls">

@@ -26,6 +26,7 @@ module.exports = async function actionsStats(context, req) {
   const byType = {};
   let verified = 0;
   let archived = 0;
+  let withOssf = 0;
 
   try {
     for await (const entity of tableClient.listEntities()) {
@@ -49,14 +50,20 @@ module.exports = async function actionsStats(context, req) {
         if (payload.repoInfo && payload.repoInfo.archived === true) {
           archived += 1;
         }
+
+        const rawScore = payload.openssf_score ?? payload.ossfScore ?? payload.ossf_score ?? null;
+        const hasOssf = payload.ossf === true || (rawScore !== null && rawScore !== undefined);
+        if (hasOssf) {
+          withOssf += 1;
+        }
       } catch (parseErr) {
         // skip malformed payloads entirely (don't include in totals)
       }
     }
 
-    context.log(`ActionsStats: total=${total}, verified=${verified}, archived=${archived}, table=${tableUrl}`);
+    context.log(`ActionsStats: total=${total}, verified=${verified}, archived=${archived}, withOssf=${withOssf}, table=${tableUrl}`);
 
-    const payload = { total, byType, verified, archived };
+    const payload = { total, byType, verified, archived, withOssf };
 
     context.res = {
       status: 200,
@@ -65,6 +72,7 @@ module.exports = async function actionsStats(context, req) {
         'X-Actions-Count': total,
         'X-Verified-Count': verified,
         'X-Archived-Count': archived,
+        'X-Ossf-Count': withOssf,
         'X-Table-Endpoint': tableUrl,
         'Content-Type': 'application/json'
       },

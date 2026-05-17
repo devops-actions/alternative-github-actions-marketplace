@@ -183,7 +183,7 @@ class ActionsService {
   private lastFetch: number = 0;
   private listeners: Array<() => void> = [];
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private stats: ActionStats = { total: 0, byType: {}, verified: 0, archived: 0 };
+  private stats: ActionStats = { total: 0, byType: {}, verified: 0, archived: 0, withOssf: 0 };
   private lastStatsFetch: number = 0;
   private inFlightActionsFetch: Promise<Action[]> | null = null;
   private inFlightStatsFetch: Promise<ActionStats> | null = null;
@@ -314,7 +314,8 @@ class ActionsService {
           total: Number(data?.total) || 0,
           byType: data?.byType || {},
           verified: Number(data?.verified) || 0,
-          archived: Number(data?.archived) || 0
+          archived: Number(data?.archived) || 0,
+          withOssf: Number(data?.withOssf) || 0
         };
         this.stats = stats;
         this.lastStatsFetch = now;
