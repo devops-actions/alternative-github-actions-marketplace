@@ -41,9 +41,14 @@ module.exports = async function actionsGet(context, req) {
 
   const partitionKey = ActionRecord.normalizeKey(owner);
   const rowKey = ActionRecord.normalizeKey(name);
+  // Some records were ingested with rowKey = "{owner}_{name}"; fall back to that format.
+  const rowKeyFallback = `${partitionKey}_${rowKey}`;
 
   try {
-    const entity = await getActionEntity(partitionKey, rowKey);
+    let entity = await getActionEntity(partitionKey, rowKey);
+    if (!entity) {
+      entity = await getActionEntity(partitionKey, rowKeyFallback);
+    }
 
     if (!entity) {
       context.res = {
@@ -78,10 +83,18 @@ module.exports = async function actionsGet(context, req) {
       metadata.etag = entity.etag;
     }
 
+    let body = record.toActionInfo(true, metadata);
+    // Records ingested with the legacy format store name as "{owner}_{name}".
+    // Strip the owner prefix so callers always receive the bare action name.
+    const ownerPrefix = `${partitionKey}_`;
+    if (typeof body.name === 'string' && body.name.startsWith(ownerPrefix)) {
+      body = { ...body, name: body.name.slice(ownerPrefix.length) };
+    }
+
     context.res = {
       status: 200,
       headers: withCorsHeaders(req),
-      body: record.toActionInfo(true, metadata)
+      body
     };
   } catch (error) {
     context.log.error('Failed to retrieve action: %s', error.message);
