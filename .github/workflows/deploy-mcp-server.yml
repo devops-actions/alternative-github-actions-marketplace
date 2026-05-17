@@ -130,6 +130,48 @@ jobs:
 
           echo "IMAGE_TAG=$imageTag" >> "$GITHUB_ENV"
 
+      - name: Ensure AcrPull role on Container App managed identity
+        run: |
+          set -e
+          caName="ca-mcp-${{ vars.RESOURCE_SUFFIX }}"
+          acrName="acr${{ vars.RESOURCE_SUFFIX }}"
+
+          principalId=$(az containerapp show \
+            --name "$caName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "identity.principalId" -o tsv 2>/dev/null || true)
+
+          if [ -z "$principalId" ]; then
+            echo "::error::Could not retrieve Container App managed identity; AcrPull role assignment skipped."
+            exit 1
+          fi
+
+          acrId=$(az acr show \
+            --name "$acrName" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "id" -o tsv)
+
+          if az role assignment create \
+            --assignee-object-id "$principalId" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$acrId" 2>/dev/null; then
+            echo "AcrPull role granted to $caName managed identity on $acrName."
+          else
+            existing=$(az role assignment list \
+              --assignee "$principalId" \
+              --role AcrPull \
+              --scope "$acrId" \
+              --query "length(@)" -o tsv 2>/dev/null || echo "0")
+            if [ "$existing" -gt 0 ]; then
+              echo "AcrPull role already assigned; nothing to do."
+            else
+              echo "::error::Could not create AcrPull role assignment (deployment identity may lack Microsoft.Authorization/roleAssignments/write)."
+              echo "::error::Grant it manually: az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role AcrPull --scope $acrId"
+              exit 1
+            fi
+          fi
+
       - name: Deploy to Container App
         run: |
           caName="ca-mcp-${{ vars.RESOURCE_SUFFIX }}"
