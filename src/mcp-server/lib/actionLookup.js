@@ -8,6 +8,19 @@ const { logToolCall } = require('./monitoring');
 const MAX_BATCH_SIZE = 20;
 
 /**
+ * Resolve the version string for a given commit SHA using a reverse lookup of versionShaMap.
+ * Returns the matching version tag (e.g. "v2.19.1") or null if not found.
+ */
+function resolveVersionFromSha(actionData, sha) {
+  if (!sha) return null;
+  const shaMap = actionData.versionShaMap;
+  if (!shaMap || typeof shaMap !== 'object') return null;
+  const normalizedSha = sha.toLowerCase();
+  const entry = Object.entries(shaMap).find(([, s]) => s && s.toLowerCase() === normalizedSha);
+  return entry ? entry[0] : null;
+}
+
+/**
  * Resolve the commit SHA for a given version using versionShaMap or legacy tagInfo objects.
  * Returns null if no SHA can be found.
  */
@@ -105,7 +118,7 @@ async function lookupSingleAction(parsed) {
     };
   }
 
-  const { owner, name, version, raw } = parsed;
+  const { owner, name, version, isHash, raw } = parsed;
 
   // Check cache first
   let actionData = getAction(owner, name);
@@ -124,6 +137,7 @@ async function lookupSingleAction(parsed) {
         latestVersion: null,
         commitSha: null,
         currentVersion: version,
+        currentVersionTag: null,
         isLatest: null,
         allVersions: []
       };
@@ -144,6 +158,7 @@ async function lookupSingleAction(parsed) {
       latestVersion: null,
       commitSha: null,
       currentVersion: version,
+      currentVersionTag: null,
       isLatest: null,
       allVersions: []
     };
@@ -151,7 +166,13 @@ async function lookupSingleAction(parsed) {
 
   logToolCall(owner, name, raw);
 
-  const { latestVersion, allVersions, isLatest } = resolveLatestVersion(actionData, version);
+  // For SHA-pinned inputs, resolve the version tag the SHA corresponds to.
+  // Pass null when unresolvable so resolveLatestVersion returns isLatest: null (unknown)
+  // rather than false (definitely not latest).
+  const currentVersionTag = isHash ? resolveVersionFromSha(actionData, version) : null;
+  const versionForComparison = isHash ? currentVersionTag : version;
+
+  const { latestVersion, allVersions, isLatest } = resolveLatestVersion(actionData, versionForComparison);
   const commitSha = resolveCommitSha(actionData, latestVersion);
 
   return {
@@ -163,6 +184,7 @@ async function lookupSingleAction(parsed) {
     latestVersion,
     commitSha,
     currentVersion: version,
+    currentVersionTag,
     isLatest,
     allVersions,
     cacheHit
@@ -192,4 +214,4 @@ async function lookupActions(actions) {
   return { results };
 }
 
-module.exports = { lookupActions, lookupSingleAction, resolveLatestVersion, resolveCommitSha, MAX_BATCH_SIZE };
+module.exports = { lookupActions, lookupSingleAction, resolveLatestVersion, resolveCommitSha, resolveVersionFromSha, MAX_BATCH_SIZE };
