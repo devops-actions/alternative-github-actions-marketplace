@@ -9,7 +9,7 @@ const { lookupActions, MAX_BATCH_SIZE } = require('./actionLookup');
  */
 function createMcpServer() {
   const server = new McpServer({
-    name: 'actions-marketplace',
+    name: 'actions-mkt',
     version: '1.0.0'
   });
 
