@@ -214,7 +214,13 @@ jobs:
 
           echo "MCP initialize response: $response"
 
-          if echo "$response" | jq -e '.result.serverInfo' > /dev/null 2>&1; then
+          # Response may be SSE (event: message / data: {...}) or plain JSON
+          jsonData=$(echo "$response" | grep '^data:' | sed 's/^data: //' | head -1)
+          if [ -z "$jsonData" ]; then
+            jsonData="$response"
+          fi
+
+          if echo "$jsonData" | jq -e '.result.serverInfo' > /dev/null 2>&1; then
             echo "MCP server responding correctly"
           else
             echo "::error::MCP server did not return expected initialize response"
