@@ -225,16 +225,6 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   }
 }
 
-resource staticWebAppCustomDomain 'Microsoft.Web/staticSites/customDomains@2022-09-01' = if (!empty(plausibleTrackingDomain)) {
-  name: '${staticWebApp.name}/${plausibleTrackingDomain}'
-  properties: {
-    validationMethod: 'cname-delegation'
-  }
-  dependsOn: [
-    staticWebApp
-  ]
-}
-
 // Custom domain for the marketplace site (e.g., marketplace.devopsjournal.io)
 // Prerequisite: CNAME <subdomain> -> SWA default hostname must exist in DNS before deployment
 resource staticWebAppSiteDomain 'Microsoft.Web/staticSites/customDomains@2022-09-01' = if (!empty(swaCustomDomain)) {
@@ -278,6 +268,8 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
 // Managed TLS certificate for the MCP custom domain.
 // Prerequisites: CNAME <subdomain> -> Container App FQDN and TXT asuid.<subdomain> -> mcpCustomDomainVerificationId
 // must exist in DNS before this cert can be provisioned.
+// dependsOn mcpContainerApp because Container Apps requires the hostname to be registered on the app
+// before a managed certificate can be created for it.
 resource mcpManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2023-05-01' = if (!empty(mcpCustomDomain)) {
   name: 'cert-mcp-${uniqueSuffix}'
   parent: containerAppsEnvironment
@@ -286,6 +278,7 @@ resource mcpManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2
     subjectName: mcpCustomDomain
     domainControlValidation: 'CNAME'
   }
+  dependsOn: [mcpContainerApp]
 }
 
 resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
@@ -310,8 +303,9 @@ resource mcpContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
         customDomains: !empty(mcpCustomDomain) ? [
           {
             name: mcpCustomDomain
-            certificateId: mcpManagedCert.id
-            bindingType: 'SniEnabled'
+            // bindingType 'Disabled' on first deploy: cert must be provisioned before binding can be upgraded to SniEnabled.
+            // ARM requires the hostname to be registered here first so mcpManagedCert can be created.
+            bindingType: 'Disabled'
           }
         ] : []
       }
