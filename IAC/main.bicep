@@ -77,8 +77,9 @@ var functionIpSecurityRestrictions = concat(functionDebugIpSecurityRestrictions,
 // This addresses preflight CORS failures when browser sends Origin with trailing slash
 var completeCorsOrigins = union(
   functionCorsAllowedOrigins,
-  !empty(staticWebAppHostname) ? ['https://${staticWebAppHostname}', 'https://${staticWebAppHostname}/'] : [],
-  !empty(swaCustomDomain)      ? ['https://${swaCustomDomain}', 'https://${swaCustomDomain}/']           : []
+  !empty(staticWebAppHostname)    ? ['https://${staticWebAppHostname}', 'https://${staticWebAppHostname}/']       : [],
+  !empty(swaCustomDomain)         ? ['https://${swaCustomDomain}', 'https://${swaCustomDomain}/']                 : [],
+  !empty(plausibleTrackingDomain) ? ['https://${plausibleTrackingDomain}', 'https://${plausibleTrackingDomain}/'] : []
 )
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
