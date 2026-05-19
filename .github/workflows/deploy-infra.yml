@@ -49,7 +49,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Lint Bicep template
         run: |
@@ -67,7 +67,7 @@ jobs:
           echo "Bicep template validation successful"
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@v2.3.0
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -152,7 +152,7 @@ jobs:
 
       - name: Deploy Bicep template
         id: deploy
-        uses: azure/arm-deploy@v2
+        uses: azure/arm-deploy@a1361c2c2cd398621955b16ca32e01c65ea340f5 # v2
         with:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -210,7 +210,7 @@ jobs:
 
       - name: Retrieve host default function key (optional)
         id: fetch_host_key
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             function_app_name="${{ steps.deploy.outputs.functionAppName }}"

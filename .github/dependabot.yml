@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # Keep GitHub Actions dependencies up to date
+  # Dependabot will open PRs to update the SHA pins with the new version tag in a comment
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps"
+    groups:
+      azure-actions:
+        patterns:
+          - "azure/*"
+          - "Azure/*"
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "github/*"
+
+  # Keep npm dependencies up to date for the backend
+  - package-ecosystem: npm
+    directory: /src/backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(backend)"
+
+  # Keep npm dependencies up to date for the frontend
+  - package-ecosystem: npm
+    directory: /src/frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(frontend)"
