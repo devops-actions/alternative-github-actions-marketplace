@@ -29,7 +29,7 @@ jobs:
     environment: prod
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Syntax check non-project JavaScript files
         run: |
@@ -45,7 +45,7 @@ jobs:
           done
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '22'
 
@@ -62,7 +62,7 @@ jobs:
         working-directory: src/backend
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@v3.0.0
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -96,7 +96,7 @@ jobs:
         run: zip -r ../../functionapp.zip . -x "*.git*" "node_modules/.cache/*" "tests/*"
 
       - name: Deploy function app
-        uses: azure/webapps-deploy@v3
+        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3
         with:
           app-name: ${{ steps.functionapp.outputs.function_app_name }}
           package: functionapp.zip

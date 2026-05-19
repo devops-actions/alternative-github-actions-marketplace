@@ -1,26 +1,59 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
-  - package-ecosystem: "github-actions" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Keep GitHub Actions SHA pins up to date (Dependabot updates the SHA and keeps the version comment)
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps"
+    groups:
+      azure-actions:
+        patterns:
+          - "azure/*"
+          - "Azure/*"
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "github/*"
 
-  - package-ecosystem: "npm"
-    directory: "/src/frontend"
+  - package-ecosystem: npm
+    directory: /src/frontend
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(frontend)"
 
-  - package-ecosystem: "npm"
-    directory: "/src/backend"
+  - package-ecosystem: npm
+    directory: /src/backend
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(backend)"
 
-  - package-ecosystem: "npm"
-    directory: "/src/mcp-server"
+  - package-ecosystem: npm
+    directory: /src/mcp-server
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(mcp)"
