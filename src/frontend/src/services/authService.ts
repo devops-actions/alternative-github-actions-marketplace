@@ -16,6 +16,23 @@ interface StaticWebAppsAuthResponse {
   clientPrincipal?: StaticWebAppsPrincipal | null;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function readResponsePayload(payload: unknown): StaticWebAppsPrincipal | null | undefined {
+  if (Array.isArray(payload)) {
+    return payload[0] as StaticWebAppsPrincipal | undefined;
+  }
+
+  if (isObject(payload) && 'clientPrincipal' in payload) {
+    const withPrincipal = payload as StaticWebAppsAuthResponse;
+    return withPrincipal.clientPrincipal;
+  }
+
+  return undefined;
+}
+
 function parseUser(principal: StaticWebAppsPrincipal | null | undefined): AuthenticatedUser | null {
   if (!principal) {
     return null;
@@ -52,12 +69,8 @@ export async function fetchAuthenticatedUser(): Promise<AuthenticatedUser | null
       return null;
     }
 
-    const payload = await response.json() as StaticWebAppsAuthResponse | StaticWebAppsPrincipal[];
-    if (Array.isArray(payload)) {
-      return parseUser(payload[0]);
-    }
-
-    return parseUser(payload.clientPrincipal);
+    const payload = await response.json() as unknown;
+    return parseUser(readResponsePayload(payload));
   } catch {
     return null;
   }

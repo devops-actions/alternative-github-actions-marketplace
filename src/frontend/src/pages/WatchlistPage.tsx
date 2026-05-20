@@ -33,7 +33,9 @@ function normalizeActionRef(input: string): string | null {
 }
 
 function getStorageKey(user: AuthenticatedUser): string {
-  return `watchlist-actions:v1:${user.userId}`;
+  const safeProvider = encodeURIComponent((user.identityProvider || 'unknown').trim().toLowerCase());
+  const safeUserId = encodeURIComponent(user.userId.trim());
+  return `watchlist-actions:v1:${safeProvider}:${safeUserId}`;
 }
 
 export const WatchlistPage: React.FC = () => {
@@ -83,6 +85,7 @@ export const WatchlistPage: React.FC = () => {
 
       setActions(parsed.filter((item): item is string => typeof item === 'string'));
     } catch {
+      console.warn('Failed to parse stored watchlist data. Resetting local watchlist cache.');
       setActions([]);
     }
   }, [user]);
