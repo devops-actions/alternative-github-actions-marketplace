@@ -181,6 +181,35 @@ body {
   position: relative;
 }
 
+.header-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  position: relative;
+}
+
+.header-link {
+  color: var(--c-header-text);
+  font-size: 13px;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  transition: background var(--t), border-color var(--t);
+}
+
+.header-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.header-user {
+  font-size: 13px;
+  color: var(--c-header-sub);
+}
+
 /* ===================================================
    STATS BAR
    =================================================== */
@@ -677,6 +706,109 @@ body {
   font-weight: 500;
   color: var(--c-text-2);
   padding: 0 4px;
+}
+
+/* ===================================================
+   AUTH + WATCHLIST
+   =================================================== */
+.auth-gate-card,
+.watchlist-card {
+  background: var(--c-surface);
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.watchlist-card h2 {
+  margin-bottom: 8px;
+}
+
+.watchlist-card p {
+  color: var(--c-text-2);
+}
+
+.primary-link-button {
+  display: inline-flex;
+  margin-top: 12px;
+  border: 1.5px solid var(--c-primary);
+  background: var(--c-primary);
+  color: #fff;
+  border-radius: var(--r-md);
+  text-decoration: none;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.primary-link-button:hover {
+  background: var(--c-primary-dark);
+}
+
+.watchlist-form {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.watchlist-form input,
+.watchlist-edit-row input {
+  flex: 1 1 280px;
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.watchlist-form button,
+.watchlist-actions button,
+.watchlist-edit-row button {
+  border: 1.5px solid var(--c-border-strong);
+  background: var(--c-surface);
+  color: var(--c-text);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.watchlist-form button:hover,
+.watchlist-actions button:hover,
+.watchlist-edit-row button:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.watchlist-list {
+  list-style: none;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.watchlist-item {
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  background: var(--c-surface-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.watchlist-actions,
+.watchlist-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* ===================================================

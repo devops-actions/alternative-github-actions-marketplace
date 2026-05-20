@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
 import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
@@ -389,8 +389,11 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="app">
       <div className="header">
-        <h1>Alternative GitHub Actions Marketplace</h1>        
+        <h1>Alternative GitHub Actions Marketplace</h1>
         <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
+        <div className="header-actions">
+          <Link to="/watchlist" className="header-link">My watchlist (OAuth)</Link>
+        </div>
       </div>
 
       <div className="stats-bar">

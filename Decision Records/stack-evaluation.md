@@ -19,3 +19,4 @@ Validate that the Static Web Apps free tier, backed by an Azure Functions API an
 - **Functions cold starts**: Warm-up timers or premium plan considerations if latency spikes become unacceptable.
 - **Table Storage query limits**: Optimize partition keys and use continuation tokens to stay within throughput limits.
 - **Search fidelity**: Revisit Azure AI Search or custom indexing if complex querying becomes necessary.
+- **OAuth configuration drift**: Keep deploy workflows as the source of truth for OAuth app settings so front-end protected routes and auth flows remain deployable without manual portal edits.
