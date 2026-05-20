@@ -217,6 +217,29 @@ jobs:
           app-name: ${{ needs.resolve.outputs.function_app_name }}
           package: functionapp.zip
 
+      - name: Configure OAuth app settings
+        if: ${{ env.DO_BACKEND == 'true' }}
+        env:
+          FUNCTION_APP_NAME: ${{ needs.resolve.outputs.function_app_name }}
+          OAUTH_APP_ID: ${{ secrets.OAUTH_APP_ID }}
+          OAUTH_APP_PEM_KEY: ${{ secrets.OAUTH_APP_PEM_KEY }}
+        run: |
+          set -e
+          if [ -z "$OAUTH_APP_ID" ] || [ -z "$OAUTH_APP_PEM_KEY" ]; then
+            echo "::warning::OAUTH_APP_ID/OAUTH_APP_PEM_KEY not configured; skipping OAuth app settings."
+            exit 0
+          fi
+
+          az functionapp config appsettings set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$FUNCTION_APP_NAME" \
+            --settings \
+              "OAUTH_APP_ID=$OAUTH_APP_ID" \
+              "OAUTH_APP_PEM_KEY=$OAUTH_APP_PEM_KEY" \
+              "GITHUB_APP_ID=$OAUTH_APP_ID" \
+              "GITHUB_APP_PRIVATE_KEY=$OAUTH_APP_PEM_KEY" \
+            > /dev/null
+
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest

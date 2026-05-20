@@ -8,6 +8,7 @@ This is the frontend application for the alternative GitHub Actions Marketplace.
 - **Search**: Search actions by name or owner
 - **Filtering**: Filter actions by type (Node/JavaScript, Docker, Composite)
 - **Detail View**: View comprehensive information about each action
+- **OAuth Watchlist**: GitHub-authenticated route for manually managing a personal action watchlist
 - **In-Memory Caching**: Actions data is loaded at startup and refreshed periodically (every 5 minutes)
 - **README Preview**: View action README files in an iframe
 
@@ -58,6 +59,8 @@ The built files will be in the `dist` directory.
 - `VITE_API_PROXY_TARGET`: Backend origin the Vite dev server should proxy `/api/*` requests to (default: `http://localhost:7071`)
 - `VITE_PLAUSIBLE_TRACKING_DOMAIN`: Domain for Plausible Analytics tracking (configured via `PLAUSIBLE_TRACKING_DOMAIN` repository variable)
 - `VITE_APPINSIGHTS_CONNECTION_STRING`: Application Insights connection string for telemetry
+
+The `/watchlist` route is marked as OAuth-protected in `staticwebapp.config.json` and redirects unauthenticated users to `/.auth/login/github`.
 
 ## Architecture
 

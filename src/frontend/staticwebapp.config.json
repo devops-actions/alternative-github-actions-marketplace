@@ -1,4 +1,20 @@
 {
+  "routes": [
+    {
+      "route": "/watchlist",
+      "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/watchlist/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "responseOverrides": {
+    "401": {
+      "statusCode": 302,
+      "redirect": "/.auth/login/github"
+    }
+  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [

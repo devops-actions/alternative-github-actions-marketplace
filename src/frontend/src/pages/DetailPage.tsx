@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService, formatDependentsCount } from '../services/actionsService';
@@ -145,6 +145,9 @@ export const DetailPage: React.FC = () => {
       <div className="header">
         <h1>Alternative GitHub Actions Marketplace</h1>
         <p>Browse and search through GitHub Actions with more information</p>
+        <div className="header-actions">
+          <Link to="/watchlist" className="header-link">My watchlist (OAuth)</Link>
+        </div>
       </div>
 
       <button className="back-button" onClick={handleBack}>
