@@ -1,0 +1,105 @@
+const { getTableClient } = require('../lib/tableStorage');
+const { withCorsHeaders } = require('../lib/cors');
+
+/**
+ * Returns data-freshness metrics for the actions database.
+ *
+ * The key field is LastSyncedUtc, which is set by ActionsUpsert whenever a
+ * record's payload *changes*. It is NOT updated when the pipeline runs but
+ * finds the same data — so this reflects "last time data changed", not
+ * "last time the pipeline checked this action". That distinction is surfaced
+ * clearly in the response via the `interpretation` field.
+ */
+module.exports = async function actionsStatus(context, req) {
+  if (req.method === 'OPTIONS') {
+    context.res = {
+      status: 204,
+      headers: withCorsHeaders(req, { Allow: 'GET,OPTIONS' })
+    };
+    return;
+  }
+
+  if (req.method !== 'GET') {
+    context.res = {
+      status: 405,
+      headers: withCorsHeaders(req, { Allow: 'GET,OPTIONS' }),
+      body: { error: 'Method not allowed.' }
+    };
+    return;
+  }
+
+  const tableClient = getTableClient();
+  const now = new Date();
+
+  let totalCount = 0;
+  let newestSyncedUtc = null;
+  let oldestSyncedUtc = null;
+
+  const buckets = {
+    within1day: 0,
+    within7days: 0,
+    within30days: 0,
+    olderThan30days: 0,
+    noTimestamp: 0
+  };
+
+  try {
+    for await (const entity of tableClient.listEntities()) {
+      totalCount += 1;
+
+      const raw = entity.LastSyncedUtc;
+      if (!raw) {
+        buckets.noTimestamp += 1;
+        continue;
+      }
+
+      const syncedAt = new Date(raw);
+      if (isNaN(syncedAt.getTime())) {
+        buckets.noTimestamp += 1;
+        continue;
+      }
+
+      if (!newestSyncedUtc || syncedAt > newestSyncedUtc) newestSyncedUtc = syncedAt;
+      if (!oldestSyncedUtc || syncedAt < oldestSyncedUtc) oldestSyncedUtc = syncedAt;
+
+      const ageMs = now - syncedAt;
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+
+      if (ageDays <= 1) {
+        buckets.within1day += 1;
+      } else if (ageDays <= 7) {
+        buckets.within7days += 1;
+      } else if (ageDays <= 30) {
+        buckets.within30days += 1;
+      } else {
+        buckets.olderThan30days += 1;
+      }
+    }
+
+    const payload = {
+      totalCount,
+      newestSyncedUtc: newestSyncedUtc ? newestSyncedUtc.toISOString() : null,
+      oldestSyncedUtc: oldestSyncedUtc ? oldestSyncedUtc.toISOString() : null,
+      ageDistribution: buckets,
+      generatedAt: now.toISOString(),
+      // Surface the semantic clearly so consumers can label it correctly.
+      interpretation: 'lastSyncedUtc is set when an action\'s data changes in the database. It is not updated on every pipeline run — actions whose data has not changed since the last upload will have an older timestamp.'
+    };
+
+    context.log(`ActionsStatus: total=${totalCount}, newest=${newestSyncedUtc}, oldest=${oldestSyncedUtc}`);
+
+    context.res = {
+      status: 200,
+      isRaw: true,
+      headers: withCorsHeaders(req, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload)
+    };
+  } catch (error) {
+    context.log.error('Error computing status:', error);
+    context.res = {
+      status: 500,
+      headers: withCorsHeaders(req),
+      body: { error: 'Failed to compute status.' }
+    };
+  }
+};

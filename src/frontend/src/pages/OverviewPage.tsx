@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
 import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
@@ -391,6 +391,7 @@ export const OverviewPage: React.FC = () => {
       <div className="header">
         <h1>Alternative GitHub Actions Marketplace</h1>        
         <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
+        <Link to="/status" className="header-status-link">View data freshness →</Link>
       </div>
 
       <div className="stats-bar">

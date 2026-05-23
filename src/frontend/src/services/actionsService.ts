@@ -1,4 +1,4 @@
-import { Action, ActionStats } from '../types/Action';
+import { Action, ActionStats, DbStatus } from '../types/Action';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -187,6 +187,7 @@ class ActionsService {
   private lastStatsFetch: number = 0;
   private inFlightActionsFetch: Promise<Action[]> | null = null;
   private inFlightStatsFetch: Promise<ActionStats> | null = null;
+  private inFlightDbStatusFetch: Promise<DbStatus> | null = null;
 
   constructor() {
     this.startAutoRefresh();
@@ -392,6 +393,30 @@ class ActionsService {
       console.error('Error fetching README:', error);
       throw error;
     }
+  }
+
+  async fetchDbStatus(): Promise<DbStatus> {
+    if (this.inFlightDbStatusFetch) {
+      return await this.inFlightDbStatusFetch;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/actions/status`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch DB status: ${response.statusText}`);
+        }
+        return await response.json() as DbStatus;
+      } catch (error) {
+        console.error('Error fetching DB status:', error);
+        throw error;
+      } finally {
+        this.inFlightDbStatusFetch = null;
+      }
+    })();
+
+    this.inFlightDbStatusFetch = fetchPromise;
+    return await fetchPromise;
   }
 
   destroy() {
