@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { OverviewPage } from './pages/OverviewPage';
 import { DetailPage } from './pages/DetailPage';
+import { StatusPage } from './pages/StatusPage';
 import { trackPageView as trackAppInsights } from './telemetry';
 import { trackPageView as trackPlausible } from './plausible';
 import './App.css';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<OverviewPage />} />
         <Route path="/action/:owner/:name" element={<DetailPage />} />
+        <Route path="/status" element={<StatusPage />} />
       </Routes>
     </Router>
   );
