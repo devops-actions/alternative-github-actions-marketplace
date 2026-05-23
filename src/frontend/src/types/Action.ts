@@ -49,6 +49,29 @@ export interface Action {
 
 export type ActionTypeFilter = 'All' | 'Node' | 'Docker' | 'Composite' | 'Unknown' | 'No file found';
 
+export interface DbStatusAgeDistribution {
+  within1day: number;
+  within7days: number;
+  within30days: number;
+  olderThan30days: number;
+  noTimestamp: number;
+}
+
+/**
+ * Freshness data from the /api/actions/status endpoint.
+ *
+ * Note: `newestSyncedUtc` reflects the last time any action's *data changed*
+ * in the database — not the last time the pipeline checked it. Actions whose
+ * data hasn't changed since a previous run will have an older timestamp.
+ */
+export interface DbStatus {
+  totalCount: number;
+  newestSyncedUtc: string | null;
+  oldestSyncedUtc: string | null;
+  ageDistribution: DbStatusAgeDistribution;
+  generatedAt: string;
+}
+
 export interface ActionStats {
   total: number;
   byType: Record<string, number>;

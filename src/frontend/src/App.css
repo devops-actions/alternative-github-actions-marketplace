@@ -1048,3 +1048,149 @@ body {
     font-size: 22px;
   }
 }
+
+.repo-link:hover {
+  background: #0256c5;
+  border-color: #0256c5;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(3, 102, 214, 0.3);
+}
+
+/* ============================================================
+   Status page styles
+   ============================================================ */
+
+.header-status-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(255,255,255,0.4);
+}
+
+.header-status-link:hover {
+  color: white;
+  border-bottom-color: white;
+}
+
+.status-card {
+  background: white;
+  border: 1px solid #d1d5da;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+.status-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #24292e;
+}
+
+.status-explanation {
+  font-size: 14px;
+  color: #586069;
+  line-height: 1.6;
+}
+
+.status-explanation a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.status-explanation a:hover {
+  text-decoration: underline;
+}
+
+.status-summary-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.status-summary-card {
+  flex: 1 1 200px;
+  background: white;
+  border: 1px solid #d1d5da;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+.status-summary-label {
+  font-size: 13px;
+  color: #586069;
+  margin-bottom: 6px;
+}
+
+.status-summary-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #0366d6;
+}
+
+.status-summary-sub {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.age-bucket {
+  margin-bottom: 20px;
+}
+
+.age-bucket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.age-bucket-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #24292e;
+}
+
+.age-bucket-count {
+  font-size: 13px;
+  color: #586069;
+}
+
+.age-bucket-bar-bg {
+  height: 12px;
+  background: #f1f3f5;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.age-bucket-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.age-bucket-desc {
+  font-size: 12px;
+  color: #999;
+}
+
+.status-generated {
+  font-size: 12px;
+  color: #999;
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+  .status-summary-row {
+    flex-direction: column;
+  }
+}
+
