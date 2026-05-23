@@ -83,12 +83,16 @@ jobs:
             exit 1
           fi
 
-          echo "FUNCTION_APP_NAME=$appName" >> "$GITHUB_ENV"
-          echo "FUNCTION_APP_HOSTNAME=$hostName" >> "$GITHUB_ENV"
-          echo "API_URL=https://$hostName/api" >> "$GITHUB_ENV"
+          {
+            echo "FUNCTION_APP_NAME=$appName"
+            echo "FUNCTION_APP_HOSTNAME=$hostName"
+            echo "API_URL=https://$hostName/api"
+          } >> "$GITHUB_ENV"
 
-          echo "function_app_name=$appName" >> "$GITHUB_OUTPUT"
-          echo "function_app_hostname=$hostName" >> "$GITHUB_OUTPUT"
+          {
+            echo "function_app_name=$appName"
+            echo "function_app_hostname=$hostName"
+          } >> "$GITHUB_OUTPUT"
           echo "Resolved Function App: $appName ($hostName)"
 
       - name: Package function app

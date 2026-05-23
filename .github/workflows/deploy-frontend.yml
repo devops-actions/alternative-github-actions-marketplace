@@ -144,7 +144,7 @@ jobs:
           swaName="${{ needs.resolve.outputs.swa_name }}"
           token=$(az staticwebapp secrets list --name "$swaName" --query "properties.apiKey" -o tsv)
           echo "::add-mask::$token"
-          echo "deployment_token=$token" >> $GITHUB_OUTPUT
+          echo "deployment_token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Copy staticwebapp.config.json into dist
         run: |
@@ -216,7 +216,7 @@ jobs:
           echo "Runner public IP: $runnerIp"
 
           ruleName="AllowGitHubRunnerE2E-${GITHUB_RUN_ID}"
-          echo "ALLOW_RULE_NAME=$ruleName" >> $GITHUB_ENV
+          echo "ALLOW_RULE_NAME=$ruleName" >> "$GITHUB_ENV"
 
           az functionapp config access-restriction add \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
@@ -228,7 +228,7 @@ jobs:
             --description "Temporary allow for GitHub Actions E2E tests"
 
           sleep 10
-          echo "RUNNER_PUBLIC_IP=$runnerIp" >> $GITHUB_ENV
+          echo "RUNNER_PUBLIC_IP=$runnerIp" >> "$GITHUB_ENV"
 
       - name: Diagnose API access + CORS (runner + browser origin)
         env:

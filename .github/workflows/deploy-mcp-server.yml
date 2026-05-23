@@ -79,7 +79,7 @@ jobs:
               echo "Health check passed"
               break
             fi
-            if [ $i -eq 10 ]; then
+            if [ "$i" -eq 10 ]; then
               echo "::error::Container failed to become healthy"
               docker logs "$container_id"
               exit 1
