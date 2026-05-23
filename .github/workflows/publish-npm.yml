@@ -68,7 +68,7 @@ jobs:
           fi
           # Remove 'v' prefix if present
           VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing version: $VERSION"
 
       - name: Update package version
