@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DbStatus } from '../types/Action';
 import { actionsService } from '../services/actionsService';
+import { NavBar } from '../components/NavBar';
 
 function formatRelativeTime(isoString: string | null): string {
   if (!isoString) return 'Unknown';
@@ -90,6 +91,7 @@ export const StatusPage: React.FC = () => {
   return (
     <div className="app">
       <div className="header">
+        <NavBar />
         <h1>Alternative GitHub Actions Marketplace</h1>
         <p>Database freshness status</p>
       </div>

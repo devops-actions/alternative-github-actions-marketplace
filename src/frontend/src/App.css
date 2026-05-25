@@ -1194,3 +1194,152 @@ body {
   }
 }
 
+/* ============================================================
+   NavBar
+   ============================================================ */
+
+.nav-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.nav-bar a {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  text-decoration: none;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid transparent;
+  transition: color var(--t), background var(--t), border-color var(--t);
+  letter-spacing: 0.2px;
+}
+
+.nav-bar a:hover {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-bar a.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* ============================================================
+   State of Actions page
+   ============================================================ */
+
+.soa-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin: 28px 0 12px;
+}
+
+.soa-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.soa-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.soa-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 900px) {
+  .soa-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .soa-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .soa-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.soa-card {
+  background: var(--c-surface);
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.soa-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 10px;
+}
+
+.soa-metric {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--c-text);
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+
+.soa-metric-label {
+  font-size: 12px;
+  color: var(--c-text-3);
+}
+
+.soa-donut {
+  flex-shrink: 0;
+}
+
+.soa-bar-track {
+  height: 8px;
+  background: var(--c-surface-2);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+}
+
+.soa-bar-fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  transition: width 0.5s ease;
+  min-width: 0;
+}
+
+.soa-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soa-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.soa-pct-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
