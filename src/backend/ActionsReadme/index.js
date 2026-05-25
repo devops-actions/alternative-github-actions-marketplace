@@ -21,7 +21,11 @@ async function fetchReadmeFromGitHub(owner, name, version) {
     throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
   }
 
-  return await response.text();
+  const html = await response.text();
+  if (!html) {
+    throw new Error(`GitHub API returned empty body for ${owner}/${repoName}@${ref}`);
+  }
+  return html;
 }
 
 async function getRepoUpdatedAt(owner, name) {

@@ -523,6 +523,12 @@ jobs:
         working-directory: src/backend
         run: node -e "require('./examples/list-actions.js').statsExample()"
 
+      - name: Backend smoke test via client (readme)
+        env:
+          API_URL: ${{ needs.resolve.outputs.api_base_url }}
+        working-directory: src/backend
+        run: node examples/fetch-readme.js actions actions_checkout
+
       - name: Install frontend deps
         run: npm ci
         working-directory: src/frontend
