@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
 import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
 import { AnimatedCounter } from '../components/AnimatedCounter';
+import { NavBar } from '../components/NavBar';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -389,9 +390,9 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="app">
       <div className="header">
+        <NavBar />
         <h1>Alternative GitHub Actions Marketplace</h1>        
         <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
-        <Link to="/status" className="header-status-link">View data freshness →</Link>
       </div>
 
       <div className="stats-bar">
