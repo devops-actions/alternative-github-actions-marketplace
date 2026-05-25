@@ -6,7 +6,7 @@ const { createAppAuth } = require('@octokit/auth-app');
  */
 async function getGitHubAuthHeaders() {
   const headers = {
-    'Accept': 'application/vnd.github.v3.html',
+    'Accept': 'application/vnd.github.html+json',
     'User-Agent': 'Alternative-GitHub-Actions-Marketplace'
   };
 

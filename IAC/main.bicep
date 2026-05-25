@@ -102,6 +102,10 @@ resource table 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-01-0
   name: '${storageAccount.name}/default/${tableName}'
 }
 
+resource readmesTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-01-01' = {
+  name: '${storageAccount.name}/default/readmes'
+}
+
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
   name: '${storageAccount.name}/default/${fileShareName}'
   properties: {

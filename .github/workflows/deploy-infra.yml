@@ -243,6 +243,30 @@ jobs:
           fi
           echo "Resource names validated: $DEPLOYED_FUNC_NAME matches expected suffix."
 
+      - name: Configure GitHub token for readme fetching
+        env:
+          GITHUB_TOKEN_FUNC: ${{ secrets.GITHUB_TOKEN_FUNC }}
+        run: |
+          functionAppName="${{ steps.deploy.outputs.functionAppName }}"
+
+          if [ -z "$functionAppName" ]; then
+            echo "::warning::Function app name not available, skipping GITHUB_TOKEN configuration"
+            exit 0
+          fi
+
+          if [ -z "$GITHUB_TOKEN_FUNC" ]; then
+            echo "::warning::GITHUB_TOKEN_FUNC secret not set; readme endpoint will use unauthenticated GitHub API (60 req/hr limit)"
+            exit 0
+          fi
+
+          echo "Configuring GITHUB_TOKEN for $functionAppName..."
+          az functionapp config appsettings set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$functionAppName" \
+            --settings "GITHUB_TOKEN=$GITHUB_TOKEN_FUNC" \
+            > /dev/null
+          echo "GITHUB_TOKEN configured successfully"
+
       - name: Configure GitHub App settings
         if: vars.RUNTIME_APP_ID != ''
         env:
