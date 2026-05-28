@@ -56,7 +56,7 @@ module.exports = async function actionsStats(context, req) {
         if (hasOssf) {
           withOssf += 1;
         }
-      } catch (parseErr) {
+      } catch (_parseErr) {
         // skip malformed payloads entirely (don't include in totals)
       }
     }

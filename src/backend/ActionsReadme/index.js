@@ -44,7 +44,7 @@ async function getRepoUpdatedAt(owner, name) {
     if (payload.repoInfo && payload.repoInfo.updated_at) {
       return new Date(payload.repoInfo.updated_at);
     }
-  } catch (error) {
+  } catch (_error) {
     // If we can't get the action data, just proceed without caching
     return null;
   }

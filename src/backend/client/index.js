@@ -44,7 +44,7 @@ class ActionsMarketplaceClient {
       let errorBody;
       try {
         errorBody = await response.json();
-      } catch (jsonError) {
+      } catch (_jsonError) {
         const textBody = await response.text();
         throw new MarketplaceApiError(
           `Failed to upsert action via HTTP API: ${response.status} ${textBody}`,
@@ -242,7 +242,7 @@ class ActionsMarketplaceClient {
             rowKey: entity.rowKey
           });
           entities.push(actionInfo);
-        } catch (error) {
+        } catch (_error) {
           // Skip entities that can't be parsed
           continue;
         }
