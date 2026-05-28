@@ -4,14 +4,14 @@ This short guide shows how to run the build/test steps locally that the CI workf
 
 Backend (run tests):
 
-- cd src\backend
+- cd src/backend
 - npm ci
 - npm test -- --coverage --coverageReporters=text-summary
 - npm run integration
 
 Frontend (build):
 
-- cd src\frontend
+- cd src/frontend
 - npm ci
 - npm run build
 
