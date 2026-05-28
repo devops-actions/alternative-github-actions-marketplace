@@ -6,7 +6,8 @@ Backend (run tests):
 
 - cd src\backend
 - npm ci
-- npm test
+- npm test -- --coverage --coverageReporters=text-summary
+- npm run integration
 
 Frontend (build):
 

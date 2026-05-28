@@ -34,3 +34,11 @@ Notes
 
 - The workflow is a demonstration and uses the same deploy actions/patterns present elsewhere in the repo. Adjust `app_name`, slot names and tokens to match your Azure resources.
 - If your repo uses a different deployment mechanism (slots, staging APIs), modify the deploy steps accordingly.
+
+Current inconsistencies vs `.github/workflows/deploy-backend.yml`
+
+- Trigger model differs: `deploy-backend.yml` is manual-only (`workflow_dispatch`), while `staged-deploy.yml` runs on push, tags, PR, and manual dispatch.
+- App name source differs: `deploy-backend.yml` resolves the function app from `RESOURCE_SUFFIX`; `staged-deploy.yml` expects `vars.FUNCTION_APP_NAME`.
+- Packaging flow differs: `deploy-backend.yml` creates `functionapp.zip`; `staged-deploy.yml` references `functionapp.zip` but does not build/package it in deploy jobs.
+- Smoke test strictness differs: `deploy-backend.yml` tracks and fails on smoke-test errors; `staged-deploy.yml` currently tolerates smoke-test failure (`|| true`).
+- Environment naming differs: `deploy-backend.yml` uses `environment: prod`; `staged-deploy.yml` uses `environment: production`.

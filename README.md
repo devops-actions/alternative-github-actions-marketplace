@@ -37,3 +37,13 @@ The application is deployed to Azure using:
 - **Azure Static Web Apps** (Free tier) - Hosts the frontend
 - **Azure Functions** (Consumption plan) - Hosts the backend API
 - **Azure Table Storage** - Stores action metadata
+
+## CI coverage and integration tests
+
+The `swa-test` workflow now validates backend quality with:
+
+- Backend unit tests with Jest code coverage summary output
+- Backend Cucumber integration tests
+- Frontend production build verification
+
+See `/Decision Records/test-environment.md` for the equivalent local commands.

@@ -32,9 +32,13 @@ jobs:
         working-directory: src/backend
         run: npm ci
 
-      - name: Run backend unit tests
+      - name: Run backend unit tests with coverage
         working-directory: src/backend
-        run: npm test
+        run: npm test -- --coverage --coverageReporters=text-summary
+
+      - name: Run backend integration tests
+        working-directory: src/backend
+        run: npm run integration
 
       - name: Install frontend dependencies
         working-directory: src/frontend
