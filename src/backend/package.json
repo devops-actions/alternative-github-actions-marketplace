@@ -9,6 +9,7 @@
     "seed-data": "node scripts/seed-test-data.js",
     "lint": "eslint .",
     "test": "jest",
+    "mutation": "stryker run",
     "integration": "cucumber-js \"integration/features/**/*.feature\" --require \"integration/features/step_definitions/**/*.js\" --require \"integration/support/**/*.js\" --format pretty --format summary",
     "prepublishOnly": "npm test && npm run lint"
   },
@@ -48,6 +49,8 @@
   "devDependencies": {
     "@azure/functions": "^4.14.0",
     "@cucumber/cucumber": "^12.9.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/jest-runner": "^9.6.1",
     "eslint": "^10.4.0",
     "jest": "^30.4.2"
   },
