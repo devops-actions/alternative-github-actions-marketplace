@@ -227,5 +227,52 @@ describe('ActionsUpsert error handling', () => {
       expect(mockContext.res.body.created).toBe(true);
       expect(mockContext.res.body.errorCode).toBeUndefined();
     });
+
+    it('returns 200 when action is unchanged (matches existing)', async () => {
+      const { ActionRecord } = require('../lib/actionRecord');
+      const { getActionEntity } = require('../lib/tableStorage');
+      const record = ActionRecord.fromRequest({
+        owner: 'test-owner',
+        name: 'test-action',
+        description: 'Test action'
+      });
+      // Return an entity with the same hash so matchesExisting returns true
+      const entity = record.toEntity();
+      getActionEntity.mockResolvedValue(entity);
+
+      const req = {
+        method: 'POST',
+        body: {
+          owner: 'test-owner',
+          name: 'test-action',
+          description: 'Test action'
+        }
+      };
+
+      await actionsUpsert(mockContext, req);
+
+      expect(mockContext.res.status).toBe(200);
+      expect(mockContext.res.body.updated).toBe(false);
+    });
+  });
+
+  describe('HTTP method handling', () => {
+    it('returns 204 for OPTIONS request', async () => {
+      const req = { method: 'OPTIONS' };
+
+      await actionsUpsert(mockContext, req);
+
+      expect(mockContext.res.status).toBe(204);
+      expect(mockContext.res.headers['Allow']).toBe('POST,OPTIONS');
+    });
+
+    it('returns 405 for non-POST/OPTIONS methods', async () => {
+      const req = { method: 'GET' };
+
+      await actionsUpsert(mockContext, req);
+
+      expect(mockContext.res.status).toBe(405);
+      expect(mockContext.res.body.error).toBe('Method not allowed.');
+    });
   });
 });

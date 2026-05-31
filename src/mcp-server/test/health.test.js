@@ -27,9 +27,25 @@ describe('health endpoint', () => {
     expect(typeof body.uptime).toBe('number');
   });
 
+  test('GET /health includes cache stats', async () => {
+    const res = await fetch(`${baseUrl}/health`);
+    const body = await res.json();
+    expect(body.cache).toBeDefined();
+    expect(typeof body.cache.size).toBe('number');
+  });
+
   test('GET /mcp returns 405', async () => {
     const res = await fetch(`${baseUrl}/mcp`);
     expect(res.status).toBe(405);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
+  });
+
+  test('DELETE /mcp returns 405', async () => {
+    const res = await fetch(`${baseUrl}/mcp`, { method: 'DELETE' });
+    expect(res.status).toBe(405);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
   });
 
   test('POST /mcp with initialize returns 200', async () => {
@@ -51,6 +67,19 @@ describe('health endpoint', () => {
       })
     });
     expect(res.status).toBe(200);
+  });
+
+  test('POST /mcp with invalid JSON body returns error', async () => {
+    const res = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream'
+      },
+      body: 'not valid json'
+    });
+    // Express will reject malformed JSON with 400
+    expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });
 

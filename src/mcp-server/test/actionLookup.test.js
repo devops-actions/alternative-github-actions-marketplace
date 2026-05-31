@@ -160,3 +160,82 @@ describe('SHA-pinned isLatest via lookupSingleAction', () => {
     expect(isLatest).toBe(false);
   });
 });
+
+describe('resolveLatestVersion edge cases', () => {
+  test('handles single (non-array) releaseInfo value', () => {
+    const actionData = { releaseInfo: 'v1.0.0', tagInfo: [] };
+    const result = resolveLatestVersion(actionData, null);
+    expect(result.latestVersion).toBe('v1.0.0');
+    expect(result.allVersions).toEqual(['v1.0.0']);
+  });
+
+  test('handles single (non-array) tagInfo value', () => {
+    const actionData = { releaseInfo: [], tagInfo: 'v2.0.0' };
+    const result = resolveLatestVersion(actionData, null);
+    expect(result.latestVersion).toBe('v2.0.0');
+  });
+
+  test('handles releaseInfo with object entries (legacy tag_name format)', () => {
+    const actionData = {
+      releaseInfo: [{ tag_name: 'v3.0.0' }, { tag_name: 'v2.0.0' }],
+      tagInfo: []
+    };
+    const result = resolveLatestVersion(actionData, null);
+    expect(result.latestVersion).toBe('v3.0.0');
+    expect(result.allVersions).toContain('v2.0.0');
+  });
+
+  test('handles tagInfo with object entries (legacy sha/tag format)', () => {
+    const actionData = {
+      releaseInfo: [],
+      tagInfo: [{ sha: 'abc', tag: 'v1.0.0' }, { sha: 'def', tag: 'v1.1.0' }]
+    };
+    const result = resolveLatestVersion(actionData, null);
+    // Last tag in oldest-first order is the latest
+    expect(result.latestVersion).toBe('v1.1.0');
+  });
+
+  test('filters out null/undefined entries in versions', () => {
+    const actionData = {
+      releaseInfo: [null, 'v1.0.0', undefined],
+      tagInfo: []
+    };
+    const result = resolveLatestVersion(actionData, null);
+    expect(result.latestVersion).toBe('v1.0.0');
+    expect(result.allVersions).toEqual(['v1.0.0']);
+  });
+
+  test('handles missing releaseInfo and tagInfo', () => {
+    const result = resolveLatestVersion({}, null);
+    expect(result.latestVersion).toBeNull();
+    expect(result.allVersions).toEqual([]);
+    expect(result.isLatest).toBeNull();
+  });
+});
+
+describe('resolveCommitSha legacy tagInfo path', () => {
+  test('falls back to legacy tagInfo [{sha, tag}] array', () => {
+    const actionData = {
+      tagInfo: [{ sha: 'legacysha', tag: 'v1.0.0' }, { sha: 'other', tag: 'v2.0.0' }]
+    };
+    expect(resolveCommitSha(actionData, 'v1.0.0')).toBe('legacysha');
+  });
+
+  test('returns null when version not in legacy tagInfo', () => {
+    const actionData = {
+      tagInfo: [{ sha: 'legacysha', tag: 'v1.0.0' }]
+    };
+    expect(resolveCommitSha(actionData, 'v9.9.9')).toBeNull();
+  });
+
+  test('returns null when tagInfo contains non-object entries', () => {
+    const actionData = { tagInfo: ['v1.0.0', 'v2.0.0'] };
+    expect(resolveCommitSha(actionData, 'v1.0.0')).toBeNull();
+  });
+
+  test('returns null when tagInfo is not an array', () => {
+    const actionData = { tagInfo: 'notanarray' };
+    expect(resolveCommitSha(actionData, 'v1.0.0')).toBeNull();
+  });
+});
+
