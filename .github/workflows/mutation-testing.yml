@@ -1,0 +1,288 @@
+name: Mutation Testing
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backend:
+    name: Backend mutation tests
+    runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.score.outputs.score }}
+      killed: ${{ steps.score.outputs.killed }}
+      total: ${{ steps.score.outputs.total }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: src/backend
+
+      - name: Run mutation tests
+        run: npm run mutation
+        working-directory: src/backend
+        continue-on-error: true
+
+      - name: Parse mutation score
+        id: score
+        working-directory: src/backend
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('reports/mutation/mutation.json', 'utf8'));
+          const metrics = report.files
+            ? Object.values(report.files).reduce(
+                (acc, f) => {
+                  acc.killed  += f.mutants.filter(m => m.status === 'Killed').length;
+                  acc.survived += f.mutants.filter(m => m.status === 'Survived').length;
+                  acc.timeout  += f.mutants.filter(m => m.status === 'Timeout').length;
+                  acc.total    += f.mutants.filter(m => !['Ignored','NoCoverage'].includes(m.status)).length;
+                  return acc;
+                },
+                { killed: 0, survived: 0, timeout: 0, total: 0 }
+              )
+            : { killed: 0, survived: 0, timeout: 0, total: 0 };
+          const score = metrics.total > 0
+            ? Math.round((metrics.killed + metrics.timeout) / metrics.total * 100)
+            : 0;
+          const output = `score=${score}\nkilled=${metrics.killed + metrics.timeout}\ntotal=${metrics.total}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, output + '\n');
+          console.log(`Mutation score: ${score}% (${metrics.killed + metrics.timeout}/${metrics.total})`);
+          EOF
+
+      - name: Write step summary
+        if: always()
+        working-directory: src/backend
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync('reports/mutation/mutation.json', 'utf8'));
+          } catch {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              '## Backend mutation tests\n\n:warning: Report not generated — mutation run may have failed.\n');
+            process.exit(0);
+          }
+
+          const files = report.files || {};
+          const rows = [];
+          let totalKilled = 0, totalSurvived = 0, totalTimeout = 0, totalNoCov = 0;
+
+          for (const [filePath, file] of Object.entries(files)) {
+            const killed   = file.mutants.filter(m => m.status === 'Killed').length;
+            const survived = file.mutants.filter(m => m.status === 'Survived').length;
+            const timeout  = file.mutants.filter(m => m.status === 'Timeout').length;
+            const noCov    = file.mutants.filter(m => m.status === 'NoCoverage').length;
+            const total    = file.mutants.filter(m => !['Ignored','NoCoverage'].includes(m.status)).length;
+            const score    = total > 0 ? Math.round((killed + timeout) / total * 100) : 0;
+            const icon     = score >= 80 ? ':white_check_mark:' : score >= 70 ? ':warning:' : ':x:';
+            rows.push(`| ${filePath} | ${score}% ${icon} | ${killed + timeout} | ${survived} | ${noCov} |`);
+            totalKilled   += killed + timeout;
+            totalSurvived += survived;
+            totalTimeout  += timeout;
+            totalNoCov    += noCov;
+          }
+
+          const grandTotal = totalKilled + totalSurvived;
+          const grandScore = grandTotal > 0 ? Math.round(totalKilled / grandTotal * 100) : 0;
+          const grandIcon  = grandScore >= 80 ? ':white_check_mark:' : grandScore >= 70 ? ':warning:' : ':x:';
+
+          const summary = [
+            '## Backend mutation tests',
+            '',
+            `**Overall score: ${grandScore}% ${grandIcon}** (${totalKilled} killed / ${grandTotal} tested, ${totalNoCov} no coverage)`,
+            '',
+            '| File | Score | Killed | Survived | No coverage |',
+            '|------|-------|--------|----------|-------------|',
+            ...rows,
+          ].join('\n');
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n');
+          EOF
+
+  mcp-server:
+    name: MCP server mutation tests
+    runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.score.outputs.score }}
+      killed: ${{ steps.score.outputs.killed }}
+      total: ${{ steps.score.outputs.total }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: src/mcp-server
+
+      - name: Run mutation tests
+        run: npm run mutation
+        working-directory: src/mcp-server
+        continue-on-error: true
+
+      - name: Parse mutation score
+        id: score
+        working-directory: src/mcp-server
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('reports/mutation/mutation.json', 'utf8'));
+          const metrics = report.files
+            ? Object.values(report.files).reduce(
+                (acc, f) => {
+                  acc.killed  += f.mutants.filter(m => m.status === 'Killed').length;
+                  acc.survived += f.mutants.filter(m => m.status === 'Survived').length;
+                  acc.timeout  += f.mutants.filter(m => m.status === 'Timeout').length;
+                  acc.total    += f.mutants.filter(m => !['Ignored','NoCoverage'].includes(m.status)).length;
+                  return acc;
+                },
+                { killed: 0, survived: 0, timeout: 0, total: 0 }
+              )
+            : { killed: 0, survived: 0, timeout: 0, total: 0 };
+          const score = metrics.total > 0
+            ? Math.round((metrics.killed + metrics.timeout) / metrics.total * 100)
+            : 0;
+          const output = `score=${score}\nkilled=${metrics.killed + metrics.timeout}\ntotal=${metrics.total}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, output + '\n');
+          console.log(`Mutation score: ${score}% (${metrics.killed + metrics.timeout}/${metrics.total})`);
+          EOF
+
+      - name: Write step summary
+        if: always()
+        working-directory: src/mcp-server
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync('reports/mutation/mutation.json', 'utf8'));
+          } catch {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              '## MCP server mutation tests\n\n:warning: Report not generated — mutation run may have failed.\n');
+            process.exit(0);
+          }
+
+          const files = report.files || {};
+          const rows = [];
+          let totalKilled = 0, totalSurvived = 0, totalNoCov = 0;
+
+          for (const [filePath, file] of Object.entries(files)) {
+            const killed   = file.mutants.filter(m => m.status === 'Killed').length;
+            const survived = file.mutants.filter(m => m.status === 'Survived').length;
+            const timeout  = file.mutants.filter(m => m.status === 'Timeout').length;
+            const noCov    = file.mutants.filter(m => m.status === 'NoCoverage').length;
+            const total    = file.mutants.filter(m => !['Ignored','NoCoverage'].includes(m.status)).length;
+            const score    = total > 0 ? Math.round((killed + timeout) / total * 100) : 0;
+            const icon     = score >= 80 ? ':white_check_mark:' : score >= 70 ? ':warning:' : ':x:';
+            rows.push(`| ${filePath} | ${score}% ${icon} | ${killed + timeout} | ${survived} | ${noCov} |`);
+            totalKilled   += killed + timeout;
+            totalSurvived += survived;
+            totalNoCov    += noCov;
+          }
+
+          const grandTotal = totalKilled + totalSurvived;
+          const grandScore = grandTotal > 0 ? Math.round(totalKilled / grandTotal * 100) : 0;
+          const grandIcon  = grandScore >= 80 ? ':white_check_mark:' : grandScore >= 70 ? ':warning:' : ':x:';
+
+          const summary = [
+            '## MCP server mutation tests',
+            '',
+            `**Overall score: ${grandScore}% ${grandIcon}** (${totalKilled} killed / ${grandTotal} tested, ${totalNoCov} no coverage)`,
+            '',
+            '| File | Score | Killed | Survived | No coverage |',
+            '|------|-------|--------|----------|-------------|',
+            ...rows,
+          ].join('\n');
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n');
+          EOF
+
+  report:
+    name: Report mutation findings
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [backend, mcp-server]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BACKEND_SCORE: ${{ needs.backend.outputs.score || '0' }}
+      MCP_SCORE: ${{ needs['mcp-server'].outputs.score || '0' }}
+      ISSUE_LABEL: mutation-testing
+      ISSUE_TITLE: 'Mutation testing: low scores detected'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Create or update issue on low scores
+        run: |
+          THRESHOLD=70
+          BACKEND_LOW=false
+          MCP_LOW=false
+
+          [ "$BACKEND_SCORE" -lt "$THRESHOLD" ] && BACKEND_LOW=true
+          [ "$MCP_SCORE" -lt "$THRESHOLD" ]     && MCP_LOW=true
+
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DATE=$(date -u '+%Y-%m-%d')
+
+          if $BACKEND_LOW || $MCP_LOW; then
+            BODY="## Mutation test scores below ${THRESHOLD}%
+
+          | Package | Score |
+          |---------|-------|
+          | Backend | ${BACKEND_SCORE}% |
+          | MCP server | ${MCP_SCORE}% |
+
+          Detected on ${DATE}. [View run](${RUN_URL})
+
+          Improve test coverage to kill more mutants. Scores below ${THRESHOLD}% indicate gaps in behavioural tests."
+
+            EXISTING=$(gh issue list \
+              --label "$ISSUE_LABEL" \
+              --state open \
+              --json number \
+              --jq '.[0].number' 2>/dev/null || echo '')
+
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$BODY"
+              echo "Updated existing issue #${EXISTING}"
+            else
+              gh issue create \
+                --title "$ISSUE_TITLE" \
+                --label "$ISSUE_LABEL" \
+                --body "$BODY"
+              echo "Created new issue"
+            fi
+          else
+            EXISTING=$(gh issue list \
+              --label "$ISSUE_LABEL" \
+              --state open \
+              --json number \
+              --jq '.[0].number' 2>/dev/null || echo '')
+
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" \
+                --body "Mutation scores recovered as of ${DATE} (backend: ${BACKEND_SCORE}%, MCP server: ${MCP_SCORE}%). Closing. [View run](${RUN_URL})"
+              gh issue close "$EXISTING"
+              echo "Closed issue #${EXISTING} — scores recovered"
+            else
+              echo "All scores above threshold (backend: ${BACKEND_SCORE}%, MCP: ${MCP_SCORE}%). No issue needed."
+            fi
+          fi

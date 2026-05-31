@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest --forceExit",
+    "mutation": "stryker run",
     "lint": "node -c index.js && node -c lib/*.js"
   },
   "engines": {
@@ -19,6 +20,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/jest-runner": "^9.6.1",
     "jest": "^30.4.2"
   }
 }
