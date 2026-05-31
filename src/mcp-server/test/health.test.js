@@ -78,8 +78,8 @@ describe('health endpoint', () => {
       },
       body: 'not valid json'
     });
-    // Express will reject malformed JSON with 400
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    // Express rejects malformed JSON with 400
+    expect(res.status).toBe(400);
   });
 });
 

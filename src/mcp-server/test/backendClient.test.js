@@ -58,7 +58,6 @@ describe('fetchAction', () => {
 
     // Re-require to pick up the env var (the module reads it at load time)
     jest.resetModules();
-    process.env.BACKEND_API_URL = 'https://custom.api.example.com/api';
     const { fetchAction: fetchActionFresh } = require('../lib/backendClient');
 
     await fetchActionFresh('actions', 'checkout');
