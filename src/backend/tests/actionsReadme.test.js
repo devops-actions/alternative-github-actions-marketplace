@@ -58,7 +58,7 @@ describe('actionsReadme function', () => {
     }));
 
     jest.mock('../lib/githubAuth', () => ({
-      getGitHubAuthHeaders: mockGetGitHubAuthHeaders
+      getPublicReadHeaders: mockGetGitHubAuthHeaders
     }));
 
     global.fetch = jest.fn();

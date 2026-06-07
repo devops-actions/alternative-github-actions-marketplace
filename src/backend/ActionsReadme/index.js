@@ -1,5 +1,5 @@
 const { withCorsHeaders } = require('../lib/cors');
-const { getGitHubAuthHeaders } = require('../lib/githubAuth');
+const { getPublicReadHeaders } = require('../lib/githubAuth');
 const { getCachedReadme, cacheReadme, isCacheValid } = require('../lib/readmeCache');
 const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
@@ -10,7 +10,7 @@ async function fetchReadmeFromGitHub(owner, name, version) {
   const repoName = extractRepoName(owner, name);
   const url = `https://api.github.com/repos/${owner}/${repoName}/readme?ref=${ref}`;
   
-  const headers = await getGitHubAuthHeaders();
+  const headers = await getPublicReadHeaders();
 
   const response = await fetch(url, { headers });
   
