@@ -110,4 +110,65 @@ describe('ActionsGet function', () => {
     expect(context.res.status).toBe(500);
     expect(context.res.body).toEqual({ error: 'Stored action payload is invalid.' });
   });
+
+  it('returns 204 for OPTIONS request', async () => {
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'OPTIONS' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(204);
+    expect(context.res.headers['Allow']).toBe('GET,OPTIONS');
+  });
+
+  it('returns 405 for non-GET/OPTIONS method', async () => {
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'POST' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(405);
+    expect(context.res.body.error).toBe('Method not allowed.');
+  });
+
+  it('falls back to legacy rowKey when primary lookup returns null', async () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    const entity = {
+      ...record.toEntity(new Date('2025-06-01T00:00:00Z')),
+      etag: 'W/"legacy-etag"'
+    };
+
+    // First call (primary key) returns null, second call (fallback key) returns entity
+    getActionEntity
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(entity);
+
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'GET' };
+
+    await actionsGet(context, req);
+
+    expect(getActionEntity).toHaveBeenCalledTimes(2);
+    expect(context.res.status).toBe(200);
+  });
+
+  it('includes Timestamp metadata when present in entity', async () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    const timestamp = new Date('2025-03-15T09:00:00Z');
+    const entity = {
+      ...record.toEntity(new Date('2025-03-15T09:00:00Z')),
+      Timestamp: timestamp,
+      etag: 'W/"ts-etag"'
+    };
+
+    getActionEntity.mockResolvedValue(entity);
+
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'GET' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body._metadata.timestamp).toBeDefined();
+  });
 });
