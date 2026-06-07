@@ -80,4 +80,172 @@ describe('ActionsStats function', () => {
       })
     );
   });
+
+  it('handles OPTIONS method with 204', async () => {
+    const context = createContext();
+    const req = { method: 'OPTIONS', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(204);
+    expect(context.res.headers['Allow']).toBe('GET,OPTIONS');
+  });
+
+  it('returns 405 for non-GET/OPTIONS methods', async () => {
+    const context = createContext();
+    const req = { method: 'POST', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(405);
+    expect(context.res.body.error).toBe('Method not allowed.');
+  });
+
+  it('returns 500 when table query fails', async () => {
+    const fakeClient = {
+      url: 'http://127.0.0.1:10002/devstoreaccount1/actions',
+      async *listEntities() {
+        throw new Error('connection refused');
+      }
+    };
+    getTableClient.mockReturnValue(fakeClient);
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(500);
+    expect(context.res.body.error).toBe('Failed to compute stats.');
+  });
+
+  it('skips malformed PayloadJson without throwing', async () => {
+    const entities = [
+      { PayloadJson: 'not valid json' },
+      {
+        PayloadJson: JSON.stringify({
+          verified: true,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false }
+        })
+      }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const body = JSON.parse(context.res.body);
+    // Only the valid entity should be counted
+    expect(body.total).toBe(1);
+    expect(body.verified).toBe(1);
+  });
+
+  it('counts entities with openssf_score field', async () => {
+    const entities = [
+      {
+        PayloadJson: JSON.stringify({
+          verified: false,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false },
+          openssf_score: 7.5
+        })
+      }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    const body = JSON.parse(context.res.body);
+    expect(body.withOssf).toBe(1);
+    expect(context.res.headers['X-Ossf-Count']).toBe(1);
+  });
+
+  it('counts entities with ossf_score field', async () => {
+    const entities = [
+      {
+        PayloadJson: JSON.stringify({
+          verified: false,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false },
+          ossf_score: 6.0
+        })
+      }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    const body = JSON.parse(context.res.body);
+    expect(body.withOssf).toBe(1);
+  });
+
+  it('returns zero counts for empty table', async () => {
+    getTableClient.mockReturnValue(createFakeTableClient([]));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const body = JSON.parse(context.res.body);
+    expect(body.total).toBe(0);
+    expect(body.verified).toBe(0);
+    expect(body.archived).toBe(0);
+    expect(body.withOssf).toBe(0);
+    expect(body.byType).toEqual({});
+  });
+
+  it('handles entity with PayloadJson as object (not string)', async () => {
+    const entities = [
+      {
+        PayloadJson: {
+          verified: true,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false }
+        }
+      }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const body = JSON.parse(context.res.body);
+    expect(body.total).toBe(1);
+    expect(body.verified).toBe(1);
+  });
+
+  it('handles table URL with query string (strips it)', async () => {
+    const fakeClient = {
+      url: 'http://127.0.0.1:10002/devstoreaccount1/actions?sv=2021',
+      async *listEntities() {
+        yield { PayloadJson: JSON.stringify({ verified: false, actionType: null, repoInfo: null }) };
+      }
+    };
+    getTableClient.mockReturnValue(fakeClient);
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const tableEndpoint = context.res.headers['X-Table-Endpoint'];
+    expect(tableEndpoint).not.toContain('?');
+    expect(tableEndpoint).toContain('actions');
+  });
 });
