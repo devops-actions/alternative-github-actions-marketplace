@@ -1,4 +1,4 @@
-const { getGitHubAuthHeaders } = require('../lib/githubAuth');
+const { getGitHubAuthHeaders, getPublicReadHeaders } = require('../lib/githubAuth');
 
 // Mock the @octokit/auth-app module
 jest.mock('@octokit/auth-app', () => ({
@@ -97,6 +97,55 @@ describe('githubAuth', () => {
       const headers = await getGitHubAuthHeaders();
 
       expect(headers.Authorization).toBe('Bearer ghs_app_token');
+    });
+  });
+
+  describe('getPublicReadHeaders', () => {
+    it('should return basic headers when no auth is configured', async () => {
+      const headers = await getPublicReadHeaders();
+
+      expect(headers).toEqual({
+        'Accept': 'application/vnd.github.html+json',
+        'User-Agent': 'Alternative-GitHub-Actions-Marketplace'
+      });
+      expect(headers.Authorization).toBeUndefined();
+    });
+
+    it('should use PAT when GITHUB_TOKEN is set', async () => {
+      process.env.GITHUB_TOKEN = 'ghp_test_token';
+
+      const headers = await getPublicReadHeaders();
+
+      expect(headers.Authorization).toBe('Bearer ghp_test_token');
+    });
+
+    it('should not use GitHub App even when App credentials are set', async () => {
+      process.env.GITHUB_APP_ID = '12345';
+      process.env.GITHUB_APP_PRIVATE_KEY = 'fake-private-key';
+      process.env.GITHUB_APP_INSTALLATION_ID = '67890';
+
+      const mockAuth = jest.fn().mockResolvedValue({ token: 'ghs_app_token' });
+      createAppAuth.mockReturnValue(mockAuth);
+
+      const headers = await getPublicReadHeaders();
+
+      expect(createAppAuth).not.toHaveBeenCalled();
+      expect(headers.Authorization).toBeUndefined();
+    });
+
+    it('should use PAT over GitHub App when both are configured', async () => {
+      process.env.GITHUB_APP_ID = '12345';
+      process.env.GITHUB_APP_PRIVATE_KEY = 'fake-private-key';
+      process.env.GITHUB_APP_INSTALLATION_ID = '67890';
+      process.env.GITHUB_TOKEN = 'ghp_token';
+
+      const mockAuth = jest.fn().mockResolvedValue({ token: 'ghs_app_token' });
+      createAppAuth.mockReturnValue(mockAuth);
+
+      const headers = await getPublicReadHeaders();
+
+      expect(createAppAuth).not.toHaveBeenCalled();
+      expect(headers.Authorization).toBe('Bearer ghp_token');
     });
   });
 });
