@@ -204,3 +204,94 @@ describe('ActionsList function', () => {
     expect(context.res.body.every(a => a.owner === 'testowner')).toBe(true);
   });
 });
+
+describe('ActionsList real table client path', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function createRealStyleTableClient(entities, throwError) {
+    return {
+      url: 'https://real.table.core.windows.net/actions',
+      async *listEntities() {
+        if (throwError) throw throwError;
+        for (const entity of entities) {
+          yield entity;
+        }
+      }
+    };
+  }
+
+  function createTestEntity(owner, name) {
+    const { ActionRecord } = require('../lib/actionRecord');
+    const record = ActionRecord.fromRequest({
+      owner,
+      name,
+      description: 'test',
+      actionType: { actionType: 'Node' },
+      repoInfo: { archived: false, updated_at: '2024-01-01' }
+    });
+    return record.toEntity();
+  }
+
+  test('returns entities via listEntities async generator', async () => {
+    const entities = [
+      createTestEntity('actions', 'checkout'),
+      createTestEntity('actions', 'setup-node')
+    ];
+    getTableClient.mockReturnValue(createRealStyleTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', query: {}, headers: {} };
+
+    await actionsList(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toHaveLength(2);
+    expect(context.res.headers['X-Actions-Count']).toBe(2);
+  });
+
+  test('applies limit during iteration', async () => {
+    const entities = Array.from({ length: 10 }, (_, i) =>
+      createTestEntity('org', `action${i}`)
+    );
+    getTableClient.mockReturnValue(createRealStyleTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', query: { limit: '3' }, headers: {} };
+
+    await actionsList(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toHaveLength(3);
+  });
+
+  test('filters by owner using OData query option', async () => {
+    const entities = [
+      createTestEntity('myorg', 'myaction')
+    ];
+    getTableClient.mockReturnValue(createRealStyleTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', query: { owner: 'myorg' }, headers: {} };
+
+    await actionsList(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toHaveLength(1);
+  });
+
+  test('returns 500 when listEntities throws', async () => {
+    getTableClient.mockReturnValue(
+      createRealStyleTableClient([], new Error('storage unavailable'))
+    );
+
+    const context = createContext();
+    const req = { method: 'GET', query: {}, headers: {} };
+
+    await actionsList(context, req);
+
+    expect(context.res.status).toBe(500);
+    expect(context.res.body.error).toBe('Failed to query actions from table storage.');
+  });
+});

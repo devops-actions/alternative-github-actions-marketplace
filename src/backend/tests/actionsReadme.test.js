@@ -29,3 +29,218 @@ describe('actionsReadme', () => {
     });
   });
 });
+
+describe('actionsReadme function', () => {
+  let actionsReadme;
+  let mockGetActionEntity;
+  let mockGetCachedReadme;
+  let mockCacheReadme;
+  let mockIsCacheValid;
+  let mockGetGitHubAuthHeaders;
+
+  beforeEach(() => {
+    jest.resetModules();
+
+    mockGetActionEntity = jest.fn();
+    mockGetCachedReadme = jest.fn();
+    mockCacheReadme = jest.fn();
+    mockIsCacheValid = jest.fn();
+    mockGetGitHubAuthHeaders = jest.fn().mockResolvedValue({});
+
+    jest.mock('../lib/tableStorage', () => ({
+      getActionEntity: mockGetActionEntity
+    }));
+
+    jest.mock('../lib/readmeCache', () => ({
+      getCachedReadme: mockGetCachedReadme,
+      cacheReadme: mockCacheReadme,
+      isCacheValid: mockIsCacheValid
+    }));
+
+    jest.mock('../lib/githubAuth', () => ({
+      getGitHubAuthHeaders: mockGetGitHubAuthHeaders
+    }));
+
+    global.fetch = jest.fn();
+
+    actionsReadme = require('../ActionsReadme');
+  });
+
+  afterEach(() => {
+    delete global.fetch;
+    jest.resetModules();
+  });
+
+  function createContext(owner, name) {
+    return {
+      log: Object.assign(jest.fn(), {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn()
+      }),
+      bindingData: { owner, name }
+    };
+  }
+
+  it('returns 204 for OPTIONS request', async () => {
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'OPTIONS', headers: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(204);
+    expect(context.res.headers['Allow']).toBe('GET,OPTIONS');
+  });
+
+  it('returns 405 for non-GET/OPTIONS methods', async () => {
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'POST', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(405);
+    expect(context.res.body.error).toBe('Method not allowed.');
+  });
+
+  it('returns 400 when owner is missing', async () => {
+    const context = createContext(undefined, 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('required');
+  });
+
+  it('returns 400 when name is missing', async () => {
+    const context = createContext('actions', undefined);
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('required');
+  });
+
+  it('serves cached README when cache is valid', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    const cachedEntry = { content: '<h1>README</h1>', cachedAt: new Date() };
+    mockGetCachedReadme.mockResolvedValue(cachedEntry);
+    mockIsCacheValid.mockReturnValue(true);
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toBe('<h1>README</h1>');
+    expect(context.res.headers['X-Cache']).toBe('HIT');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches README from GitHub when cache is invalid', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockIsCacheValid.mockReturnValue(false);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h1>Fresh README</h1>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toBe('<h1>Fresh README</h1>');
+    expect(context.res.headers['X-Cache']).toBe('MISS');
+  });
+
+  it('returns 404 when GitHub returns 404', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: jest.fn().mockResolvedValue('')
+    });
+
+    const context = createContext('actions', 'missing');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(404);
+    expect(context.res.body.error).toBe('README not found.');
+  });
+
+  it('returns 500 when GitHub returns non-ok non-404 error', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: jest.fn().mockResolvedValue('')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(500);
+    expect(context.res.body.error).toBe('Failed to fetch README.');
+  });
+
+  it('continues serving README even when caching fails', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockRejectedValue(new Error('cache write failed'));
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<p>README content</p>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toBe('<p>README content</p>');
+    expect(context.log.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to cache README'));
+  });
+
+  it('fetches README with a specific version from query param', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h2>v3 README</h2>')
+    });
+
+    const context = createContext('github', 'codeql-action');
+    const req = { method: 'GET', headers: {}, query: { version: 'v3' } };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('ref=v3'),
+      expect.any(Object)
+    );
+  });
+});
