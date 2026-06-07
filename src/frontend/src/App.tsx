@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { OverviewPage } from './pages/OverviewPage';
 import { DetailPage } from './pages/DetailPage';
 import { StatusPage } from './pages/StatusPage';
+import { StateOfActionsPage } from './pages/StateOfActionsPage';
 import { trackPageView as trackAppInsights } from './telemetry';
 import { trackPageView as trackPlausible } from './plausible';
 import './App.css';
@@ -26,6 +27,7 @@ const App: React.FC = () => {
         <Route path="/" element={<OverviewPage />} />
         <Route path="/action/:owner/:name" element={<DetailPage />} />
         <Route path="/status" element={<StatusPage />} />
+        <Route path="/state" element={<StateOfActionsPage />} />
       </Routes>
     </Router>
   );

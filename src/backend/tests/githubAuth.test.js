@@ -28,7 +28,7 @@ describe('githubAuth', () => {
       const headers = await getGitHubAuthHeaders();
       
       expect(headers).toEqual({
-        'Accept': 'application/vnd.github.v3.html',
+        'Accept': 'application/vnd.github.html+json',
         'User-Agent': 'Alternative-GitHub-Actions-Marketplace'
       });
       expect(headers.Authorization).toBeUndefined();
