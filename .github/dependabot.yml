@@ -1,8 +1,4 @@
 version: 2
-permissions:
-  contents: read
-  security-events: write
-  actions: read
 updates:
   # Keep GitHub Actions SHA pins up to date (Dependabot updates the SHA and keeps the version comment)
   - package-ecosystem: github-actions
