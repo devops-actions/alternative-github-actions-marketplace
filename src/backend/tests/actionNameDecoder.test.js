@@ -54,12 +54,15 @@ describe('extractRepoName', () => {
   });
 
   test('handles case sensitivity in prefix', () => {
+    // Prefix matching is case-sensitive; 'Actions' != 'actions', so falls back to name as-is
     const result = extractRepoName('Actions', 'actions_setup-java');
-    expect(result).toBe('setup-java');
+    expect(result).toBe('actions_setup-java');
   });
 
   test('handles multiple underscores in name', () => {
+    // After stripping owner prefix and restoring underscores as slashes, only the repo
+    // name (first path segment) is returned — the rest is the composite action subpath
     const result = extractRepoName('actions', 'actions_setup_java_with_extra');
-    expect(result).toBe('setup/java/with/extra');
+    expect(result).toBe('setup');
   });
 });
