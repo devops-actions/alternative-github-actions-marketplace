@@ -17,13 +17,24 @@ function createContext() {
   };
 }
 
-function createFakeTableClient(entities) {
+function createFakeTableClient(entities, { cacheEntity = null } = {}) {
   return {
     url: 'http://127.0.0.1:10002/devstoreaccount1/actions',
     async *listEntities() {
       for (const entity of entities) {
         yield entity;
       }
+    },
+    async getEntity(partitionKey, rowKey) {
+      if (partitionKey === 'statsCache' && rowKey === 'aggregate' && cacheEntity) {
+        return cacheEntity;
+      }
+      const err = new Error('Not Found');
+      err.statusCode = 404;
+      throw err;
+    },
+    async upsertEntity() {
+      // no-op for tests
     }
   };
 }
@@ -234,7 +245,9 @@ describe('ActionsStats function', () => {
       url: 'http://127.0.0.1:10002/devstoreaccount1/actions?sv=2021',
       async *listEntities() {
         yield { PayloadJson: JSON.stringify({ verified: false, actionType: null, repoInfo: null }) };
-      }
+      },
+      async getEntity() { const e = new Error(); e.statusCode = 404; throw e; },
+      async upsertEntity() {}
     };
     getTableClient.mockReturnValue(fakeClient);
 
@@ -247,5 +260,47 @@ describe('ActionsStats function', () => {
     const tableEndpoint = context.res.headers['X-Table-Endpoint'];
     expect(tableEndpoint).not.toContain('?');
     expect(tableEndpoint).toContain('actions');
+  });
+
+  it('returns cached stats without scanning entities', async () => {
+    const cachedData = {
+      stats: { total: 99, byType: { Node: 50, Docker: 49 }, verified: 10, archived: 5, withOssf: 20 }
+    };
+    const cacheEntity = { CacheJson: JSON.stringify(cachedData), etag: '"abc"' };
+    getTableClient.mockReturnValue(createFakeTableClient([], { cacheEntity }));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const body = JSON.parse(context.res.body);
+    expect(body.total).toBe(99);
+    expect(body.verified).toBe(10);
+    expect(body.archived).toBe(5);
+    expect(body.withOssf).toBe(20);
+  });
+
+  it('forces full scan when refresh=true even with cached data', async () => {
+    const cachedData = {
+      stats: { total: 99, byType: {}, verified: 0, archived: 0, withOssf: 0 }
+    };
+    const cacheEntity = { CacheJson: JSON.stringify(cachedData), etag: '"abc"' };
+    const entities = [
+      { PayloadJson: JSON.stringify({ verified: true, actionType: { actionType: 'Node' }, repoInfo: { archived: false } }) }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities, { cacheEntity }));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {}, query: { refresh: 'true' } };
+
+    await actionsStats(context, req);
+
+    expect(context.res.status).toBe(200);
+    const body = JSON.parse(context.res.body);
+    // Should reflect the actual scan result (1 entity), not the stale cache (99)
+    expect(body.total).toBe(1);
+    expect(body.verified).toBe(1);
   });
 });
