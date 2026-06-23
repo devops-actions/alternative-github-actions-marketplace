@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
@@ -54,8 +54,9 @@ export const OverviewPage: React.FC = () => {
   const initialStats = actionsService.getStats();
 
   const [actions, setActions] = useState<Action[]>(initialActions);
-  const [filteredActions, setFilteredActions] = useState<Action[]>([]);
   const [searchQuery, setSearchQuery] = useState(() => (initialPersisted?.searchQuery ?? ''));
+  // Defer search query so each keystroke does not trigger a synchronous filter pass
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [typeFilter, setTypeFilter] = useState<ActionTypeFilter>(() => {
     const candidate = initialPersisted?.typeFilter;
     const supported: ActionTypeFilter[] = ['All', 'Node', 'Docker', 'Composite', 'Unknown', 'No file found'];
@@ -89,7 +90,7 @@ export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
 
   const prevFiltersRef = useRef({
-    searchQuery,
+    searchQuery: deferredSearchQuery,
     typeFilter,
     showVerifiedOnly,
     archivedFilter,
@@ -215,10 +216,12 @@ export const OverviewPage: React.FC = () => {
     });
   }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, currentPage]);
 
-  useEffect(() => {
+  // Memoize filter+sort to avoid recomputing on every render.
+  // Uses deferredSearchQuery so typing does not block the UI.
+  const filteredActions = useMemo(() => {
     let filtered = actions;
 
-    const normalizedQuery = searchQuery.trim();
+    const normalizedQuery = deferredSearchQuery.trim();
     if (normalizedQuery) {
       filtered = filtered.filter(action => matchesSearchQuery({ owner: action.owner, name: action.name }, normalizedQuery));
     }
@@ -266,7 +269,7 @@ export const OverviewPage: React.FC = () => {
     }
 
     // Apply sorting
-    filtered = [...filtered].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
         const aDeps = parseDependentsCount(a?.dependents?.dependents);
         const bDeps = parseDependentsCount(b?.dependents?.dependents);
@@ -278,12 +281,13 @@ export const OverviewPage: React.FC = () => {
         return bDate - aDate; // Descending (most recent first)
       }
     });
+  }, [actions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
 
-    setFilteredActions(filtered);
-
+  // Reset page to 1 when filter criteria change; clamp when only the actions list updates.
+  useEffect(() => {
     const prev = prevFiltersRef.current;
     const filtersChanged =
-      prev.searchQuery !== searchQuery ||
+      prev.searchQuery !== deferredSearchQuery ||
       prev.typeFilter !== typeFilter ||
       prev.showVerifiedOnly !== showVerifiedOnly ||
       prev.verifiedFilter !== verifiedFilter ||
@@ -292,15 +296,15 @@ export const OverviewPage: React.FC = () => {
       prev.sortBy !== sortBy ||
       prev.openssfFilter !== openssfFilter;
 
-      prevFiltersRef.current = { searchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter };
+    prevFiltersRef.current = { searchQuery: deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter };
 
-    const nextTotalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const nextTotalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
     if (filtersChanged) {
       setCurrentPage(1);
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [actions, searchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [filteredActions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
