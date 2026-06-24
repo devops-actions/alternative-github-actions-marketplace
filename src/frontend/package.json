@@ -17,7 +17,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@microsoft/applicationinsights-web": "^3.4.1",
+    "@microsoft/applicationinsights-web": "^3.4.2",
     "@plausible-analytics/tracker": "^0.4.5",
     "@types/dompurify": "^3.2.0",
     "dompurify": "^3.4.11",
