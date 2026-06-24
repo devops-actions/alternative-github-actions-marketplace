@@ -47,7 +47,7 @@
     "@octokit/auth-app": "^8.2.0"
   },
   "devDependencies": {
-    "@azure/functions": "^4.16.0",
+    "@azure/functions": "^4.16.1",
     "@cucumber/cucumber": "^13.0.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/jest-runner": "^9.6.1",
