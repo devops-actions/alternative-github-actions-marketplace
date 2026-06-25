@@ -88,9 +88,41 @@ describe('mcpServer', () => {
   test('lookup-action-versions tool handler handles null input', async () => {
     const server = createMcpServer();
     const handler = server.getToolHandler('lookup-action-versions');
-    
+
     const result = await handler({ actions: null });
-    
+
     expect(result.isError).toBe(true);
+  });
+
+  test('lookup-action-versions tool handler returns success result for valid action', async () => {
+    const actionLookup = require('../lib/actionLookup');
+    const spy = jest.spyOn(actionLookup, 'lookupActions').mockResolvedValueOnce({
+      results: [
+        {
+          input: 'actions/checkout@v4',
+          found: true,
+          owner: 'actions',
+          name: 'checkout',
+          latestVersion: 'v4.2.2',
+          isLatest: false,
+          currentVersion: 'v4',
+          allVersions: ['v4.2.2', 'v4.2.1']
+        }
+      ]
+    });
+
+    const server = createMcpServer();
+    const handler = server.getToolHandler('lookup-action-versions');
+
+    const result = await handler({ actions: ['actions/checkout@v4'] });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toBeDefined();
+    expect(result.content[0].type).toBe('text');
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.results).toBeDefined();
+    expect(parsed.results).toHaveLength(1);
+
+    spy.mockRestore();
   });
 });

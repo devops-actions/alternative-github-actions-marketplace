@@ -101,4 +101,65 @@ describe('ActionRecord', () => {
     expect(payloadOnly).not.toHaveProperty('_metadata');
     expect(payloadOnly).toEqual(JSON.parse(record.canonicalJson));
   });
+
+  it('exposes openssf_score from openssf_score field', () => {
+    const record = ActionRecord.fromRequest({ ...basePayload, openssf_score: 8.5 });
+    const info = record.toActionInfo(true);
+    expect(info.openssf_score).toBe(8.5);
+  });
+
+  it('exposes openssf_score from ossfScore field when openssf_score is absent', () => {
+    const payload = { ...basePayload };
+    delete payload.openssf_score;
+    const record = ActionRecord.fromRequest({ ...payload, ossfScore: 7.0 });
+    const info = record.toActionInfo(true);
+    expect(info.openssf_score).toBe(7.0);
+  });
+
+  it('exposes openssf_score from ossf_score field when others are absent', () => {
+    const payload = { ...basePayload };
+    delete payload.openssf_score;
+    delete payload.ossfScore;
+    const record = ActionRecord.fromRequest({ ...payload, ossf_score: 6.5 });
+    const info = record.toActionInfo(true);
+    expect(info.openssf_score).toBe(6.5);
+  });
+
+  it('sets openssf_score to null when no score field is present', () => {
+    const payload = { ...basePayload };
+    delete payload.openssf_score;
+    delete payload.ossfScore;
+    delete payload.ossf_score;
+    const record = ActionRecord.fromRequest(payload);
+    const info = record.toActionInfo(true);
+    expect(info.openssf_score).toBeNull();
+  });
+
+  it('sets openssf_score to null when score is not a finite number', () => {
+    const record = ActionRecord.fromRequest({ ...basePayload, openssf_score: 'not-a-number' });
+    const info = record.toActionInfo(true);
+    expect(info.openssf_score).toBeNull();
+  });
+
+  it('matchesExisting returns false for null entity', () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    expect(record.matchesExisting(null)).toBe(false);
+  });
+
+  it('matchesExisting returns false for undefined entity', () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    expect(record.matchesExisting(undefined)).toBe(false);
+  });
+
+  it('throws when fromEntity receives null', () => {
+    expect(() => ActionRecord.fromEntity(null)).toThrow('Entity is required.');
+  });
+
+  it('sanitize returns null for array input', () => {
+    expect(ActionRecord.sanitize([])).toBeNull();
+  });
+
+  it('sanitize returns null for null input', () => {
+    expect(ActionRecord.sanitize(null)).toBeNull();
+  });
 });
