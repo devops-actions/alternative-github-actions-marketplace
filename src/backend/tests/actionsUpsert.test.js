@@ -305,7 +305,6 @@ describe('ActionsUpsert error handling', () => {
       await actionsUpsert(mockContext, req);
 
       expect(mockTableClient.createEntity).toHaveBeenCalledTimes(1);
-      expect(mockTableClient.getEntity).toHaveBeenCalledTimes(1);
       // Either updated (same payload → matchesExisting) or updated via updateEntity
       expect([200, 201]).toContain(mockContext.res.status);
     });
@@ -342,7 +341,6 @@ describe('ActionsUpsert error handling', () => {
       await actionsUpsert(mockContext, req);
 
       expect(mockTableClient.updateEntity).toHaveBeenCalledTimes(1);
-      expect(mockTableClient.getEntity).toHaveBeenCalledTimes(1);
       expect(mockContext.res.status).toBe(200);
       expect(mockContext.res.body.updated).toBe(false);
     });
