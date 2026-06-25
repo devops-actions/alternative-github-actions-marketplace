@@ -171,4 +171,64 @@ describe('ActionsGet function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body._metadata.timestamp).toBeDefined();
   });
+
+  it('normalizes LastSyncedUtc with .000Z suffix to Z', async () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    const entity = {
+      ...record.toEntity(new Date('2025-06-01T12:00:00Z')),
+      LastSyncedUtc: '2025-06-01T12:00:00.000Z',
+      etag: 'W/"norm-etag"'
+    };
+
+    getActionEntity.mockResolvedValue(entity);
+
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'GET' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body._metadata.lastSyncedUtc).toBe('2025-06-01T12:00:00Z');
+  });
+
+  it('preserves LastSyncedUtc that does not end with .000Z', async () => {
+    const record = ActionRecord.fromRequest(basePayload);
+    const entity = {
+      ...record.toEntity(new Date('2025-06-01T12:00:01Z')),
+      LastSyncedUtc: '2025-06-01T12:00:01Z',
+      etag: 'W/"no-norm-etag"'
+    };
+
+    getActionEntity.mockResolvedValue(entity);
+
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'GET' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body._metadata.lastSyncedUtc).toBe('2025-06-01T12:00:01Z');
+  });
+
+  it('strips owner_name prefix from legacy rowKey names', async () => {
+    const ownerLower = basePayload.owner.toLowerCase();
+    const nameLower = basePayload.name.toLowerCase();
+    const legacyName = `${ownerLower}_${nameLower}`;
+    const legacyPayload = { ...basePayload, name: legacyName };
+    const record = ActionRecord.fromRequest(legacyPayload);
+    const entity = {
+      ...record.toEntity(new Date('2025-06-01T00:00:00Z')),
+      etag: 'W/"legacy-name-etag"'
+    };
+
+    getActionEntity.mockResolvedValue(entity);
+
+    const context = createContext(basePayload.owner, basePayload.name);
+    const req = { method: 'GET' };
+
+    await actionsGet(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body.name).toBe(nameLower);
+  });
 });

@@ -275,4 +275,76 @@ describe('ActionsUpsert error handling', () => {
       expect(mockContext.res.body.error).toBe('Method not allowed.');
     });
   });
+
+  describe('conflict handling', () => {
+    it('retries on 409 conflict during createEntity (race condition)', async () => {
+      const { getActionEntity } = require('../lib/tableStorage');
+      // First call: no existing entity
+      getActionEntity.mockResolvedValue(null);
+
+      const conflictError = Object.assign(new Error('EntityAlreadyExists'), { statusCode: 409 });
+      mockTableClient.createEntity.mockRejectedValue(conflictError);
+
+      // After conflict, getEntity returns the existing entity
+      const { ActionRecord } = require('../lib/actionRecord');
+      const record = ActionRecord.fromRequest({
+        owner: 'conflict-owner',
+        name: 'conflict-action',
+        description: 'test'
+      });
+      const existingEntity = record.toEntity();
+      mockTableClient.getEntity.mockResolvedValue(existingEntity);
+      // After retry: updateEntity succeeds
+      mockTableClient.updateEntity.mockResolvedValue({});
+
+      const req = {
+        method: 'POST',
+        body: { owner: 'conflict-owner', name: 'conflict-action', description: 'test' }
+      };
+
+      await actionsUpsert(mockContext, req);
+
+      expect(mockTableClient.createEntity).toHaveBeenCalledTimes(1);
+      expect(mockTableClient.getEntity).toHaveBeenCalledTimes(1);
+      // Either updated (same payload → matchesExisting) or updated via updateEntity
+      expect([200, 201]).toContain(mockContext.res.status);
+    });
+
+    it('short-circuits on 412 ETag mismatch when hash matches latest', async () => {
+      const { ActionRecord } = require('../lib/actionRecord');
+      const { getActionEntity } = require('../lib/tableStorage');
+
+      const record = ActionRecord.fromRequest({
+        owner: 'etag-owner',
+        name: 'etag-action',
+        description: 'unchanged'
+      });
+      const existingEntity = record.toEntity();
+      existingEntity.etag = 'old-etag';
+
+      // getActionEntity returns entity with same hash → matchesExisting passes in upsert handler
+      // but we need to exercise persistActionRecord's 412 path
+      // To do that: getActionEntity returns entity with DIFFERENT hash so matchesExisting is false
+      const differentEntity = { ...existingEntity, PayloadHash: 'different-hash', etag: 'old-etag' };
+      getActionEntity.mockResolvedValue(differentEntity);
+
+      const etagError = Object.assign(new Error('PreconditionFailed'), { statusCode: 412 });
+      mockTableClient.updateEntity.mockRejectedValue(etagError);
+
+      // After 412, getEntity returns entity with SAME hash as record (concurrent write by someone else with same data)
+      mockTableClient.getEntity.mockResolvedValue(existingEntity);
+
+      const req = {
+        method: 'POST',
+        body: { owner: 'etag-owner', name: 'etag-action', description: 'unchanged' }
+      };
+
+      await actionsUpsert(mockContext, req);
+
+      expect(mockTableClient.updateEntity).toHaveBeenCalledTimes(1);
+      expect(mockTableClient.getEntity).toHaveBeenCalledTimes(1);
+      expect(mockContext.res.status).toBe(200);
+      expect(mockContext.res.body.updated).toBe(false);
+    });
+  });
 });

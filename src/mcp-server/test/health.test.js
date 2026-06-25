@@ -81,5 +81,19 @@ describe('health endpoint', () => {
     // Express rejects malformed JSON with 400
     expect(res.status).toBe(400);
   });
+
+  test('POST /mcp with oversized body returns 413', async () => {
+    // The app is configured with `limit: "1kb"` for express.json
+    const largeBody = JSON.stringify({ data: 'x'.repeat(2048) });
+    const res = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream'
+      },
+      body: largeBody
+    });
+    expect(res.status).toBe(413);
+  });
 });
 
