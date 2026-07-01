@@ -36,6 +36,27 @@ async function getGitHubAuthHeaders() {
   return headers;
 }
 
+/**
+ * Creates GitHub authentication headers for reading public content.
+ * Uses only a Personal Access Token (never a GitHub App installation token).
+ * GitHub App installation tokens are scoped to specific repos/orgs; using one
+ * outside its installation scope causes GitHub to return 404 even for public repos.
+ * @returns {Promise<Object>} Headers object with optional Authorization
+ */
+async function getPublicReadHeaders() {
+  const headers = {
+    'Accept': 'application/vnd.github.html+json',
+    'User-Agent': 'Alternative-GitHub-Actions-Marketplace'
+  };
+
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+
+  return headers;
+}
+
 module.exports = {
-  getGitHubAuthHeaders
+  getGitHubAuthHeaders,
+  getPublicReadHeaders
 };

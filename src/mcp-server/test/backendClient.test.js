@@ -112,4 +112,21 @@ describe('fetchActionsList', () => {
 
     await expect(fetchActionsList()).rejects.toThrow('503');
   });
+
+  test('strips trailing slashes from BACKEND_API_URL', async () => {
+    process.env.BACKEND_API_URL = 'https://custom.api.example.com/api///';
+    global.fetch.mockResolvedValue(makeFetchResponse({ status: 200, ok: true, json: [] }));
+
+    jest.resetModules();
+    const { fetchActionsList: freshFetchList } = require('../lib/backendClient');
+
+    await freshFetchList({ limit: 10 });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/custom\.api\.example\.com\/api\/actions\/list/),
+      expect.any(Object)
+    );
+    // Ensure no double slashes in the path
+    const calledUrl = global.fetch.mock.calls[0][0];
+    expect(calledUrl).not.toMatch(/\/\/actions/);
+  });
 });
