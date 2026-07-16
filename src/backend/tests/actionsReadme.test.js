@@ -243,4 +243,80 @@ describe('actionsReadme function', () => {
       expect.any(Object)
     );
   });
+
+  it('strips characters that are not valid in a git ref from the version query param', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h2>sanitized README</h2>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = {
+      method: 'GET',
+      headers: {},
+      // Attempt to inject extra path/query segments via the version param.
+      query: { version: '../../evil?foo=bar&x=<script>' }
+    };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    const fetchedUrl = global.fetch.mock.calls[0][0];
+    // The only "?" in the URL should be the one separating the readme path
+    // from the "ref" query param itself — no extra query params or markup
+    // should have leaked in from the (malicious) version value.
+    expect(fetchedUrl.indexOf('?')).toBe(fetchedUrl.lastIndexOf('?'));
+    expect(fetchedUrl).not.toMatch(/[<>&]/);
+    expect(fetchedUrl).toContain('ref=../../evilfoobarxscript');
+  });
+
+  it('falls back to "main" when the sanitized version is empty', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h2>main README</h2>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: { version: '!!!***' } };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('ref=main'),
+      expect.any(Object)
+    );
+  });
+
+  it('returns 400 when owner contains invalid characters', async () => {
+    const context = createContext('actions/evil', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('invalid characters');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when name contains invalid characters', async () => {
+    const context = createContext('actions', 'checkout/../secrets');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('invalid characters');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

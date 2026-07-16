@@ -5,6 +5,23 @@ const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { extractRepoName } = require('../lib/actionNameDecoder');
 
+// GitHub owner/org names: alphanumeric and hyphens only.
+const VALID_OWNER = /^[a-zA-Z0-9-]+$/;
+// Action "name" route segment may encode composite action paths as
+// {owner}_{repo}_{subpath} (see actionNameDecoder.js), so it also allows
+// underscores and dots (e.g. ".github").
+const VALID_NAME = /^[a-zA-Z0-9._-]+$/;
+// Characters that are valid in a git ref/tag/branch name.
+const INVALID_REF_CHARS = /[^a-zA-Z0-9._\-/]/g;
+
+function sanitizeVersion(rawVersion) {
+  if (!rawVersion) {
+    return 'main';
+  }
+  const sanitized = String(rawVersion).replace(INVALID_REF_CHARS, '');
+  return sanitized || 'main';
+}
+
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
   const repoName = extractRepoName(owner, name);
@@ -72,13 +89,22 @@ module.exports = async function actionsReadme(context, req) {
 
   const owner = context.bindingData && context.bindingData.owner;
   const name = context.bindingData && context.bindingData.name;
-  const version = req.query && req.query.version;
+  const version = sanitizeVersion(req.query && req.query.version);
 
   if (!owner || !name) {
     context.res = {
       status: 400,
       headers: withCorsHeaders(req),
       body: { error: 'Owner and name route parameters are required.' }
+    };
+    return;
+  }
+
+  if (!VALID_OWNER.test(owner) || !VALID_NAME.test(name)) {
+    context.res = {
+      status: 400,
+      headers: withCorsHeaders(req),
+      body: { error: 'Owner and name route parameters contain invalid characters.' }
     };
     return;
   }
