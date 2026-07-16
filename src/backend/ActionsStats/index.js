@@ -1,6 +1,9 @@
 const { getTableClient } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
 const { readCache, writeCache } = require('../lib/statsCache');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
 async function computeStats(tableClient) {
   let total = 0;
@@ -100,7 +103,8 @@ module.exports = async function actionsStats(context, req) {
         'X-Archived-Count': archived,
         'X-Ossf-Count': withOssf,
         'X-Table-Endpoint': tableUrl,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
       }),
       body: JSON.stringify(payload)
     };

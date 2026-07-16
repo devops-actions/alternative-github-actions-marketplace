@@ -56,6 +56,8 @@ describe('ActionsGet function', () => {
 
     // New field: openssf_score should be exposed (nullable) and reflect the payload's score when available.
     expect(context.res.body.openssf_score).toBe(basePayload.ossfScore);
+
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=600');
   });
 
   it('returns 404 when the entity is missing', async () => {
@@ -68,6 +70,7 @@ describe('ActionsGet function', () => {
 
     expect(context.res.status).toBe(404);
     expect(context.res.body).toEqual({ error: 'Action not found.' });
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 
   it('returns 400 when owner or name is missing', async () => {

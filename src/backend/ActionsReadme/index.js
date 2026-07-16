@@ -4,6 +4,9 @@ const { getCachedReadme, cacheReadme, isCacheValid } = require('../lib/readmeCac
 const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { extractRepoName } = require('../lib/actionNameDecoder');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 1800; // 30 minutes
 
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
@@ -95,9 +98,10 @@ module.exports = async function actionsReadme(context, req) {
       context.log.info(`Serving cached README for ${owner}/${name}@${version || 'main'}`);
       context.res = {
         status: 200,
-        headers: withCorsHeaders(req, { 
+        headers: withCorsHeaders(req, {
           'Content-Type': 'text/html; charset=utf-8',
-          'X-Cache': 'HIT'
+          'X-Cache': 'HIT',
+          ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
         }),
         body: cachedReadme.content
       };
@@ -128,9 +132,10 @@ module.exports = async function actionsReadme(context, req) {
 
     context.res = {
       status: 200,
-      headers: withCorsHeaders(req, { 
+      headers: withCorsHeaders(req, {
         'Content-Type': 'text/html; charset=utf-8',
-        'X-Cache': 'MISS'
+        'X-Cache': 'MISS',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
       }),
       body: readmeHtml
     };

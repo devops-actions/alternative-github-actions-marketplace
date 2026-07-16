@@ -1,6 +1,9 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { getActionEntity } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 600; // 10 minutes
 
 function normalizeLastSynced(value) {
   if (typeof value !== 'string') {
@@ -93,7 +96,7 @@ module.exports = async function actionsGet(context, req) {
 
     context.res = {
       status: 200,
-      headers: withCorsHeaders(req),
+      headers: withCorsHeaders(req, cacheControlHeaders(CACHE_MAX_AGE_SECONDS)),
       body
     };
   } catch (error) {
