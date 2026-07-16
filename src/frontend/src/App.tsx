@@ -4,15 +4,40 @@ import { OverviewPage } from './pages/OverviewPage';
 import { DetailPage } from './pages/DetailPage';
 import { StatusPage } from './pages/StatusPage';
 import { StateOfActionsPage } from './pages/StateOfActionsPage';
-import { trackPageView as trackAppInsights } from './telemetry';
 import { trackPageView as trackPlausible } from './plausible';
 import './App.css';
+
+type TelemetryModule = typeof import('./telemetry');
+
+let telemetryModulePromise: Promise<TelemetryModule> | null = null;
+
+// Application Insights (~200KB gzipped) is only needed when telemetry is
+// actually configured, and never in local/dev builds. Loading it via a
+// dynamic import lets Vite split it into its own chunk so it doesn't add to
+// the initial bundle for users who never trigger it.
+function loadTelemetry(): Promise<TelemetryModule> | null {
+  if (!import.meta.env.PROD || !import.meta.env.VITE_APPINSIGHTS_CONNECTION_STRING) {
+    return null;
+  }
+
+  if (!telemetryModulePromise) {
+    telemetryModulePromise = import('./telemetry').then((telemetry) => {
+      telemetry.initTelemetry();
+      return telemetry;
+    });
+  }
+
+  return telemetryModulePromise;
+}
 
 const AnalyticsTracker: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    trackAppInsights(document.title || location.pathname, window.location.href);
+    const name = document.title || location.pathname;
+    const uri = window.location.href;
+
+    loadTelemetry()?.then((telemetry) => telemetry.trackPageView(name, uri));
     trackPlausible();
   }, [location]);
 
