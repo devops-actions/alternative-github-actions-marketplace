@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { normalizePartitionKey, normalizeRowKey } = require('./keyUtils');
 
 class ActionRecord {
   constructor(raw, canonicalJson, hash, partitionKey, rowKey) {
@@ -23,8 +24,8 @@ class ActionRecord {
     const canonicalJson = ActionRecord.canonicalize(sanitized);
     const hash = ActionRecord.hashPayload(canonicalJson);
 
-    const partitionKey = ActionRecord.normalizeKey(owner);
-    const rowKey = ActionRecord.normalizeKey(name);
+    const partitionKey = normalizePartitionKey(owner);
+    const rowKey = normalizeRowKey(name);
 
     return new ActionRecord({ ...sanitized, owner, name }, canonicalJson, hash, partitionKey, rowKey);
   }
@@ -51,10 +52,6 @@ class ActionRecord {
       throw new Error(`Missing required field: ${fieldName}`);
     }
     return value;
-  }
-
-  static normalizeKey(value) {
-    return String(value).trim().toLowerCase();
   }
 
   static sortValue(value) {
@@ -107,8 +104,8 @@ class ActionRecord {
 
     const canonicalJson = ActionRecord.canonicalize(sanitized);
     const expectedHash = entity.PayloadHash || ActionRecord.hashPayload(canonicalJson);
-    const partitionKey = entity.partitionKey || entity.PartitionKey || ActionRecord.normalizeKey(owner);
-    const rowKey = entity.rowKey || entity.RowKey || ActionRecord.normalizeKey(name);
+    const partitionKey = entity.partitionKey || entity.PartitionKey || normalizePartitionKey(owner);
+    const rowKey = entity.rowKey || entity.RowKey || normalizeRowKey(name);
 
     return new ActionRecord({ ...sanitized, owner, name }, canonicalJson, expectedHash, partitionKey, rowKey);
   }

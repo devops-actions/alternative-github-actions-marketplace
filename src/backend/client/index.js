@@ -1,6 +1,7 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { createTableClient } = require('../lib/tableStorage');
 const { MarketplaceApiError } = require('../lib/errors');
+const { normalizePartitionKey } = require('../lib/keyUtils');
 
 class ActionsMarketplaceClient {
   constructor(options = {}) {
@@ -228,7 +229,7 @@ class ActionsMarketplaceClient {
       
       if (owner) {
         // Sanitize owner to prevent OData injection - escape single quotes first, then normalize case
-        const sanitizedOwner = String(owner).replace(/'/g, "''").toLowerCase();
+        const sanitizedOwner = normalizePartitionKey(String(owner).replace(/'/g, "''"));
         queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
       }
       
