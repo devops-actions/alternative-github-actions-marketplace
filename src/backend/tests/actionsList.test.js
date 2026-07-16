@@ -87,7 +87,8 @@ describe('ActionsList function', () => {
     await actionsList(context, req);
 
     expect(context.res.status).toBe(200);
-    expect(context.res.body).toHaveLength(50);
+    expect(context.res.body.items).toHaveLength(50);
+    expect(context.res.body.nextCursor).toBeTruthy();
   });
 
   test('should handle small limit values', async () => {
@@ -104,7 +105,8 @@ describe('ActionsList function', () => {
     await actionsList(context, req);
 
     expect(context.res.status).toBe(200);
-    expect(context.res.body).toHaveLength(10);
+    expect(context.res.body.items).toHaveLength(10);
+    expect(context.res.body.nextCursor).toBeTruthy();
   });
 
   test('should ignore invalid limit values', async () => {
@@ -155,7 +157,8 @@ describe('ActionsList function', () => {
     await actionsList(context, req);
 
     expect(context.res.status).toBe(200);
-    expect(context.res.body).toHaveLength(100);
+    expect(context.res.body.items).toHaveLength(100);
+    expect(context.res.body.nextCursor).toBeNull();
   });
 
   test('should handle OPTIONS request', async () => {
@@ -201,8 +204,68 @@ describe('ActionsList function', () => {
     await actionsList(context, req);
 
     expect(context.res.status).toBe(200);
-    expect(context.res.body).toHaveLength(25);
-    expect(context.res.body.every(a => a.owner === 'testowner')).toBe(true);
+    expect(context.res.body.items).toHaveLength(25);
+    expect(context.res.body.items.every(a => a.owner === 'testowner')).toBe(true);
+  });
+
+  test('paginates through all pages using nextCursor until exhausted (fake client)', async () => {
+    const entities = createTestEntities(10);
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const seenNames = [];
+    let cursor;
+    let guard = 0;
+
+    do {
+      const context = createContext();
+      const req = {
+        method: 'GET',
+        query: cursor ? { limit: '3', cursor } : { limit: '3' },
+        headers: {}
+      };
+
+      await actionsList(context, req);
+
+      expect(context.res.status).toBe(200);
+      context.res.body.items.forEach(a => seenNames.push(a.name));
+      cursor = context.res.body.nextCursor;
+      guard += 1;
+    } while (cursor && guard < 10);
+
+    expect(seenNames).toHaveLength(10);
+    expect(new Set(seenNames).size).toBe(10);
+  });
+
+  test('returns 400 for a malformed cursor', async () => {
+    const entities = createTestEntities(10);
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = {
+      method: 'GET',
+      query: { limit: '3', cursor: 'not-valid-base64-json!!' },
+      headers: {}
+    };
+
+    await actionsList(context, req);
+
+    expect(context.res.status).toBe(400);
+  });
+
+  test('exposes X-Total-Count header reflecting the filtered total', async () => {
+    const entities = createTestEntities(10);
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = {
+      method: 'GET',
+      query: { limit: '3' },
+      headers: {}
+    };
+
+    await actionsList(context, req);
+
+    expect(context.res.headers['X-Total-Count']).toBe(10);
   });
 });
 
@@ -211,14 +274,46 @@ describe('ActionsList real table client path', () => {
     jest.clearAllMocks();
   });
 
+  // Mimics the shape of the @azure/data-tables PagedAsyncIterableIterator:
+  // both a plain async iterable (`for await`) and a `.byPage()` page iterator
+  // that carries a `continuationToken` on each returned page.
   function createRealStyleTableClient(entities, throwError) {
     return {
       url: 'https://real.table.core.windows.net/actions',
-      async *listEntities() {
-        if (throwError) throw throwError;
-        for (const entity of entities) {
-          yield entity;
-        }
+      listEntities() {
+        return {
+          async *[Symbol.asyncIterator]() {
+            if (throwError) throw throwError;
+            for (const entity of entities) {
+              yield entity;
+            }
+          },
+          byPage(settings = {}) {
+            const maxPageSize = settings.maxPageSize || entities.length || 1;
+            let startIndex = 0;
+            if (settings.continuationToken !== undefined) {
+              const parsed = Number(settings.continuationToken);
+              startIndex = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            }
+
+            return {
+              async next() {
+                if (throwError) throw throwError;
+                if (startIndex >= entities.length) {
+                  return { done: true, value: undefined };
+                }
+                const page = entities.slice(startIndex, startIndex + maxPageSize);
+                const nextIndex = startIndex + page.length;
+                page.continuationToken = nextIndex < entities.length ? String(nextIndex) : undefined;
+                startIndex = nextIndex;
+                return { done: false, value: page };
+              },
+              [Symbol.asyncIterator]() {
+                return this;
+              }
+            };
+          }
+        };
       }
     };
   }
@@ -253,7 +348,7 @@ describe('ActionsList real table client path', () => {
     expect(context.res.headers['Cache-Control']).toBe('public, max-age=300');
   });
 
-  test('applies limit during iteration', async () => {
+  test('applies limit using a single cursor-based page (first page, no cursor)', async () => {
     const entities = Array.from({ length: 10 }, (_, i) =>
       createTestEntity('org', `action${i}`)
     );
@@ -265,7 +360,60 @@ describe('ActionsList real table client path', () => {
     await actionsList(context, req);
 
     expect(context.res.status).toBe(200);
-    expect(context.res.body).toHaveLength(3);
+    expect(context.res.body.items).toHaveLength(3);
+    expect(context.res.body.items.map(a => a.name)).toEqual(['action0', 'action1', 'action2']);
+    expect(context.res.body.nextCursor).toBeTruthy();
+  });
+
+  test('fetches the next page using the cursor from the previous page', async () => {
+    const entities = Array.from({ length: 10 }, (_, i) =>
+      createTestEntity('org', `action${i}`)
+    );
+    getTableClient.mockReturnValue(createRealStyleTableClient(entities));
+
+    const firstContext = createContext();
+    await actionsList(firstContext, { method: 'GET', query: { limit: '3' }, headers: {} });
+    const firstCursor = firstContext.res.body.nextCursor;
+    expect(firstCursor).toBeTruthy();
+
+    const secondContext = createContext();
+    await actionsList(secondContext, {
+      method: 'GET',
+      query: { limit: '3', cursor: firstCursor },
+      headers: {}
+    });
+
+    expect(secondContext.res.status).toBe(200);
+    expect(secondContext.res.body.items).toHaveLength(3);
+    expect(secondContext.res.body.items.map(a => a.name)).toEqual(['action3', 'action4', 'action5']);
+    expect(secondContext.res.body.nextCursor).toBeTruthy();
+  });
+
+  test('returns a null nextCursor on the last page', async () => {
+    const entities = Array.from({ length: 10 }, (_, i) =>
+      createTestEntity('org', `action${i}`)
+    );
+    getTableClient.mockReturnValue(createRealStyleTableClient(entities));
+
+    // Walk through pages of 4 until nextCursor is null: page1 [0-3], page2 [4-7], page3 [8-9].
+    let cursor;
+    let lastBody;
+    let guard = 0;
+    do {
+      const context = createContext();
+      await actionsList(context, {
+        method: 'GET',
+        query: cursor ? { limit: '4', cursor } : { limit: '4' },
+        headers: {}
+      });
+      lastBody = context.res.body;
+      cursor = lastBody.nextCursor;
+      guard += 1;
+    } while (cursor && guard < 10);
+
+    expect(lastBody.items).toHaveLength(2);
+    expect(lastBody.items.map(a => a.name)).toEqual(['action8', 'action9']);
+    expect(lastBody.nextCursor).toBeNull();
   });
 
   test('filters by owner using OData query option', async () => {

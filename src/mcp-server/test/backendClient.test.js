@@ -101,6 +101,18 @@ describe('fetchActionsList', () => {
     );
   });
 
+  test('unwraps a paginated { items, nextCursor } response into an array', async () => {
+    const list = [{ owner: 'actions', name: 'checkout' }];
+    global.fetch.mockResolvedValue(makeFetchResponse({
+      status: 200,
+      ok: true,
+      json: { items: list, nextCursor: 'abc123' }
+    }));
+
+    const result = await fetchActionsList({ limit: 50 });
+    expect(result).toEqual(list);
+  });
+
   test('throws error for non-ok response', async () => {
     global.fetch.mockResolvedValue(makeFetchResponse({ status: 500, ok: false, json: null }));
 
