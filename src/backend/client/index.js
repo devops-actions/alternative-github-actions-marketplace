@@ -44,7 +44,7 @@ class ActionsMarketplaceClient {
       let errorBody;
       try {
         errorBody = await response.json();
-      } catch (jsonError) {
+      } catch {
         const textBody = await response.text();
         throw new MarketplaceApiError(
           `Failed to upsert action via HTTP API: ${response.status} ${textBody}`,
@@ -242,15 +242,15 @@ class ActionsMarketplaceClient {
             rowKey: entity.rowKey
           });
           entities.push(actionInfo);
-        } catch (error) {
+        } catch {
           // Skip entities that can't be parsed
           continue;
         }
       }
-      
+
       return entities;
     } catch (error) {
-      throw new Error(`Failed to list actions from table storage: ${error.message}`);
+      throw new Error(`Failed to list actions from table storage: ${error.message}`, { cause: error });
     }
   }
 }

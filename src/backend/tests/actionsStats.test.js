@@ -115,6 +115,7 @@ describe('ActionsStats function', () => {
   it('returns 500 when table query fails', async () => {
     const fakeClient = {
       url: 'http://127.0.0.1:10002/devstoreaccount1/actions',
+      // eslint-disable-next-line require-yield -- must stay an async generator to match the real client's iterable interface
       async *listEntities() {
         throw new Error('connection refused');
       }
