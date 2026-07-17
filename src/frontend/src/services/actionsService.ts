@@ -1,10 +1,18 @@
 import { Action, ActionStats, DbStatus } from '../types/Action';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const README_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface ReadmeCacheEntry {
+  content: string | null;
+  cachedAt: number;
+}
 
 function getApiBaseUrl(): string {
   const fallback = '/api';
-  const configured = import.meta.env.VITE_API_BASE_URL;
+  // Optional chaining on `env` keeps this safe when the module is imported outside of
+  // Vite (e.g. by the Playwright test runner), where `import.meta.env` is undefined.
+  const configured = import.meta.env?.VITE_API_BASE_URL;
 
   if (!configured) {
     return fallback;
@@ -177,7 +185,7 @@ function extractArrayFromUnknown(value: unknown): unknown[] {
   return [];
 }
 
-class ActionsService {
+export class ActionsService {
   private actions: Action[] = [];
   private loading: boolean = false;
   private lastFetch: number = 0;
@@ -188,6 +196,7 @@ class ActionsService {
   private inFlightActionsFetch: Promise<Action[]> | null = null;
   private inFlightStatsFetch: Promise<ActionStats> | null = null;
   private inFlightDbStatusFetch: Promise<DbStatus> | null = null;
+  private readmeCache: Map<string, ReadmeCacheEntry> = new Map();
 
   constructor() {
     this.startAutoRefresh();
@@ -375,6 +384,12 @@ class ActionsService {
   }
 
   async fetchReadme(owner: string, name: string, version?: string): Promise<string | null> {
+    const cacheKey = `${owner.toLowerCase()}/${name.toLowerCase()}@${version ?? ''}`;
+    const cached = this.readmeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.cachedAt) < README_TTL_MS) {
+      return cached.content;
+    }
+
     try {
       const versionParam = version ? `?version=${encodeURIComponent(version)}` : '';
       const response = await fetch(
@@ -383,12 +398,15 @@ class ActionsService {
       );
       if (!response.ok) {
         if (response.status === 404) {
+          this.readmeCache.set(cacheKey, { content: null, cachedAt: Date.now() });
           return null;
         }
         throw new Error(`Failed to fetch README: ${response.statusText}`);
       }
 
-      return await response.text();
+      const content = await response.text();
+      this.readmeCache.set(cacheKey, { content, cachedAt: Date.now() });
+      return content;
     } catch (error) {
       console.error('Error fetching README:', error);
       throw error;
@@ -424,6 +442,7 @@ class ActionsService {
       clearInterval(this.refreshTimer);
     }
     this.listeners = [];
+    this.readmeCache.clear();
   }
 }
 
