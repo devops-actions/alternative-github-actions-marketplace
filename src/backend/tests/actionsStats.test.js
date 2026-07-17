@@ -79,6 +79,7 @@ describe('ActionsStats function', () => {
     expect(context.res.headers['X-Verified-Count']).toBe(1);
     expect(context.res.headers['X-Archived-Count']).toBe(1);
     expect(context.res.headers['X-Ossf-Count']).toBe(1);
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=300');
 
     const body = JSON.parse(context.res.body);
     expect(body).toEqual(
@@ -129,6 +130,7 @@ describe('ActionsStats function', () => {
 
     expect(context.res.status).toBe(500);
     expect(context.res.body.error).toBe('Failed to compute stats.');
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 
   it('skips malformed PayloadJson without throwing', async () => {

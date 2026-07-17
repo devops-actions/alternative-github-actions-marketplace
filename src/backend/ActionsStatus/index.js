@@ -1,6 +1,9 @@
 const { getTableClient } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
 const { readCache, writeCache } = require('../lib/statsCache');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
 /**
  * Returns data-freshness metrics for the actions database.
@@ -122,7 +125,10 @@ module.exports = async function actionsStatus(context, req) {
     context.res = {
       status: 200,
       isRaw: true,
-      headers: withCorsHeaders(req, { 'Content-Type': 'application/json' }),
+      headers: withCorsHeaders(req, {
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
+      }),
       body: JSON.stringify(payload)
     };
   } catch (error) {

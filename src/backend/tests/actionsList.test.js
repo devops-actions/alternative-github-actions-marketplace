@@ -70,6 +70,7 @@ describe('ActionsList function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toHaveLength(100);
     expect(context.res.headers['X-Actions-Count']).toBe(100);
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=300');
   });
 
   test('should limit results when limit parameter is provided', async () => {
@@ -249,6 +250,7 @@ describe('ActionsList real table client path', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toHaveLength(2);
     expect(context.res.headers['X-Actions-Count']).toBe(2);
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=300');
   });
 
   test('applies limit during iteration', async () => {
@@ -293,5 +295,6 @@ describe('ActionsList real table client path', () => {
 
     expect(context.res.status).toBe(500);
     expect(context.res.body.error).toBe('Failed to query actions from table storage.');
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 });

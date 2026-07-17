@@ -136,6 +136,7 @@ describe('actionsReadme function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toBe('<h1>README</h1>');
     expect(context.res.headers['X-Cache']).toBe('HIT');
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=1800');
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -159,6 +160,7 @@ describe('actionsReadme function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toBe('<h1>Fresh README</h1>');
     expect(context.res.headers['X-Cache']).toBe('MISS');
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=1800');
   });
 
   it('returns 404 when GitHub returns 404', async () => {
@@ -178,6 +180,7 @@ describe('actionsReadme function', () => {
 
     expect(context.res.status).toBe(404);
     expect(context.res.body.error).toBe('README not found.');
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 
   it('returns 500 when GitHub returns non-ok non-404 error', async () => {

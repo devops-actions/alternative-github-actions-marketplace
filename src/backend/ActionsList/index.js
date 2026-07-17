@@ -1,6 +1,9 @@
 const { getTableClient } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { withCorsHeaders } = require('../lib/cors');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
 module.exports = async function actionsList(context, req) {
   if (req.method === 'OPTIONS') {
@@ -71,7 +74,8 @@ module.exports = async function actionsList(context, req) {
       headers: {
         'X-Actions-Count': results.length,
         'X-Table-Endpoint': tableUrl,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
       },
       body: results
     };
@@ -117,7 +121,8 @@ module.exports = async function actionsList(context, req) {
       headers: {
         'X-Actions-Count': results.length,
         'X-Table-Endpoint': tableUrl,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
       },
       body: results
     };
