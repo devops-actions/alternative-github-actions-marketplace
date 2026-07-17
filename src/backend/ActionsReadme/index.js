@@ -5,6 +5,7 @@ const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { extractRepoName } = require('../lib/actionNameDecoder');
 const { cacheControlHeaders } = require('../lib/cacheHeaders');
+const { normalizePartitionKey, normalizeRowKey } = require('../lib/keyUtils');
 
 const CACHE_MAX_AGE_SECONDS = 1800; // 30 minutes
 
@@ -49,8 +50,8 @@ async function fetchReadmeFromGitHub(owner, name, version) {
 }
 
 async function getRepoUpdatedAt(owner, name) {
-  const partitionKey = ActionRecord.normalizeKey(owner);
-  const rowKey = ActionRecord.normalizeKey(name);
+  const partitionKey = normalizePartitionKey(owner);
+  const rowKey = normalizeRowKey(name);
   
   try {
     const entity = await getActionEntity(partitionKey, rowKey);

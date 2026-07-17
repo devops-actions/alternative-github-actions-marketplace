@@ -1,4 +1,5 @@
 const { createTableClient } = require('./tableStorage');
+const { normalizePartitionKey, normalizeRowKey } = require('./keyUtils');
 
 const readmeTableName = process.env.README_TABLE_NAME || 'readmes';
 
@@ -14,14 +15,14 @@ function getReadmeTableClient(options = {}) {
  * Uses the same normalization as action records
  */
 function getReadmePartitionKey(owner, name) {
-  return `${owner.toLowerCase()}-${name.toLowerCase()}`;
+  return `${normalizePartitionKey(owner)}-${normalizeRowKey(name)}`;
 }
 
 /**
  * Creates a row key for README storage based on version
  */
 function getReadmeRowKey(version) {
-  return (version || 'main').toLowerCase();
+  return normalizeRowKey(version || 'main');
 }
 
 /**

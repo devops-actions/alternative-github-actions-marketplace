@@ -2,6 +2,7 @@ const { getTableClient } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { withCorsHeaders } = require('../lib/cors');
 const { cacheControlHeaders } = require('../lib/cacheHeaders');
+const { normalizePartitionKey } = require('../lib/keyUtils');
 
 const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
@@ -89,7 +90,7 @@ module.exports = async function actionsList(context, req) {
     
     if (owner) {
       // Sanitize owner to prevent OData injection - escape single quotes first, then normalize case
-      const sanitizedOwner = String(owner).replace(/'/g, "''").toLowerCase();
+      const sanitizedOwner = normalizePartitionKey(String(owner).replace(/'/g, "''"));
       queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
     }
     

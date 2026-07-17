@@ -2,6 +2,7 @@ const { ActionRecord } = require('../lib/actionRecord');
 const { getActionEntity } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
 const { cacheControlHeaders } = require('../lib/cacheHeaders');
+const { normalizePartitionKey, normalizeRowKey } = require('../lib/keyUtils');
 
 const CACHE_MAX_AGE_SECONDS = 600; // 10 minutes
 
@@ -42,8 +43,8 @@ module.exports = async function actionsGet(context, req) {
     return;
   }
 
-  const partitionKey = ActionRecord.normalizeKey(owner);
-  const rowKey = ActionRecord.normalizeKey(name);
+  const partitionKey = normalizePartitionKey(owner);
+  const rowKey = normalizeRowKey(name);
   // Some records were ingested with rowKey = "{owner}_{name}"; fall back to that format.
   const rowKeyFallback = `${partitionKey}_${rowKey}`;
 
