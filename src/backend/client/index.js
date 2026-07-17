@@ -212,12 +212,19 @@ class ActionsMarketplaceClient {
     }
 
     const body = await response.json();
-    
-    if (!Array.isArray(body)) {
-      throw new Error('Invalid response format: expected an array of actions');
+
+    // The endpoint returns a plain array when no `limit` is requested, or a
+    // paginated `{ items, nextCursor }` envelope when `limit` (and optionally
+    // `cursor`) is used. Normalize both shapes to a plain array for callers.
+    if (Array.isArray(body)) {
+      return body;
     }
 
-    return body;
+    if (body && Array.isArray(body.items)) {
+      return body.items;
+    }
+
+    throw new Error('Invalid response format: expected an array of actions');
   }
 
   async _listViaTable(options = {}) {
