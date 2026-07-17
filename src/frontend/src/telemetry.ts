@@ -4,7 +4,14 @@ const connectionString = import.meta.env.VITE_APPINSIGHTS_CONNECTION_STRING;
 
 let appInsights: ApplicationInsights | null = null;
 
-if (connectionString) {
+// Initialization is triggered lazily (see App.tsx), so this module is only
+// downloaded and evaluated when telemetry is actually needed. This keeps the
+// ~200KB Application Insights SDK out of the initial bundle.
+export function initTelemetry(): void {
+  if (!connectionString || appInsights) {
+    return;
+  }
+
   const config: IConfiguration = {
     connectionString
   };
