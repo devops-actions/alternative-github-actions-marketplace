@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ActionsService } from '../src/services/actionsService';
+import { ActionsService, parseDependentsCount, formatDependentsCount } from '../src/services/actionsService';
 
 type FetchStub = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -134,5 +134,33 @@ test.describe('actionsService README client-side cache', () => {
     } finally {
       service.destroy();
     }
+  });
+});
+
+test.describe('dependents count parsing', () => {
+  test('parseDependentsCount strips thousands separators instead of truncating', () => {
+    // Regression test: parseInt() alone stops at the first comma, so
+    // "16,842,392" would incorrectly parse as 16.
+    expect(parseDependentsCount('16,842,392')).toBe(16842392);
+    expect(parseDependentsCount('15,356,161')).toBe(15356161);
+    expect(parseDependentsCount('999')).toBe(999);
+    expect(parseDependentsCount('999+')).toBe(999.5);
+    expect(parseDependentsCount('1,234+')).toBe(1234.5);
+    expect(parseDependentsCount(undefined)).toBe(0);
+    expect(parseDependentsCount('')).toBe(0);
+    expect(parseDependentsCount('not-a-number')).toBe(0);
+  });
+
+  test('formatDependentsCount strips thousands separators instead of truncating', () => {
+    // Use toLocaleString() for the expected value so this test doesn't
+    // depend on the runtime's locale (thousands separator may be "," or ".").
+    expect(formatDependentsCount('16,842,392')).toBe((16842392).toLocaleString());
+    expect(formatDependentsCount('15,356,161')).toBe((15356161).toLocaleString());
+    expect(formatDependentsCount('999')).toBe('999');
+    expect(formatDependentsCount('999+')).toBe('999+');
+    expect(formatDependentsCount('1,234+')).toBe(`${(1234).toLocaleString()}+`);
+    expect(formatDependentsCount(undefined)).toBe('0');
+    expect(formatDependentsCount('')).toBe('0');
+    expect(formatDependentsCount('not-a-number')).toBe('0');
   });
 });
