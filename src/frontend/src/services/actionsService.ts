@@ -46,7 +46,11 @@ const API_BASE_URL = getApiBaseUrl();
 export function parseDependentsCount(value: string | undefined): number {
   if (!value) return 0;
   const isPlus = value.endsWith('+');
-  const num = parseInt(value, 10);
+  // Values may be comma-formatted (e.g. "15,356,161"); parseInt stops at the
+  // first non-digit character, so strip thousands separators first or large
+  // counts get silently truncated (e.g. "16,842,392" -> 16).
+  const digitsOnly = value.replace(/,/g, '');
+  const num = parseInt(digitsOnly, 10);
   if (!Number.isFinite(num)) return 0;
   // Fractional bump ensures "999+" sorts strictly above "999".
   return isPlus ? num + 0.5 : num;
@@ -56,7 +60,9 @@ export function parseDependentsCount(value: string | undefined): number {
 export function formatDependentsCount(value: string | undefined): string {
   if (!value) return '0';
   const isPlus = value.endsWith('+');
-  const num = parseInt(value, 10);
+  // Strip thousands separators before parsing; see parseDependentsCount.
+  const digitsOnly = value.replace(/,/g, '');
+  const num = parseInt(digitsOnly, 10);
   if (!Number.isFinite(num)) return '0';
   return isPlus ? `${num.toLocaleString()}+` : num.toLocaleString();
 }
