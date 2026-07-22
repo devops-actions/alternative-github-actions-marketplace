@@ -11,7 +11,7 @@ const { computeStats } = require('../lib/computeStats');
 // upsert pipeline already keeps the cache incrementally patched per-write,
 // but this timer provides a periodic full recompute as a safety net so the
 // cache never drifts and never needs to be (re)built inside a user request.
-// A ~1 hour cadence is far tighter than the ~24h staleness the UI tolerates.
+// A ~8 hour cadence is comfortably tighter than the ~24h staleness the UI tolerates.
 module.exports = async function statsWarmup(context) {
   const tableClient = getTableClient();
 
