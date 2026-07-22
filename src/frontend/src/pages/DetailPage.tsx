@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService, formatDependentsCount } from '../services/actionsService';
-import { splitOwnerRepo } from '../services/utils';
+import { splitOwnerRepo, isGitHubOwnedAction } from '../services/utils';
+import { GitHubOwnedBadge } from '../components/GitHubOwnedBadge';
 
 export const DetailPage: React.FC = () => {
   const { owner, name } = useParams<{ owner: string; name: string }>();
@@ -155,6 +156,7 @@ export const DetailPage: React.FC = () => {
         <div className="detail-header">
           <h1 className="detail-title">{`${action.owner} / ${splitOwnerRepo(action).repo}`}</h1>
           <div className="detail-badges">
+            {isGitHubOwnedAction(action) && <GitHubOwnedBadge />}
             <span
               className={`action-badge ${getActionTypeBadgeClass(
                 action.actionType.actionType

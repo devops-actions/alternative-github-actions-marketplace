@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'r
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
-import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
+import { normalizeRepoName, matchesSearchQuery, isActionVerified, isGitHubOwnedAction } from '../services/utils';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import { NavBar } from '../components/NavBar';
+import { GitHubOwnedBadge } from '../components/GitHubOwnedBadge';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -25,6 +26,7 @@ type OverviewUiState = {
   currentPage: number;
   scrollY?: number;
   openssfFilter?: 'all' | 'above5' | 'above7';
+  githubOwnedFilter?: 'all' | 'only' | 'hide';
 };
 
 function readOverviewState(): Partial<OverviewUiState> | null {
@@ -79,6 +81,10 @@ export const OverviewPage: React.FC = () => {
     const candidate = initialPersisted?.openssfFilter as string | undefined;
     return candidate === 'above5' || candidate === 'above7' ? candidate : 'all';
   });
+  const [githubOwnedFilter, setGithubOwnedFilter] = useState<'all' | 'only' | 'hide'>(() => {
+    const candidate = (initialPersisted as any)?.githubOwnedFilter as string | undefined;
+    return candidate === 'only' || candidate === 'hide' ? candidate : 'all';
+  });
   const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
   const [currentPage, setCurrentPage] = useState(() => {
     const candidate = Number(initialPersisted?.currentPage);
@@ -97,7 +103,8 @@ export const OverviewPage: React.FC = () => {
     activityFilter,
     verifiedFilter,
     sortBy,
-    openssfFilter
+    openssfFilter,
+    githubOwnedFilter
   });
   const restoredScrollRef = useRef(false);
 
@@ -132,6 +139,7 @@ export const OverviewPage: React.FC = () => {
     setActivityFilter('hide');
     setOpenssfFilter('all');
     setSortBy('updated');
+    setGithubOwnedFilter('all');
     setCurrentPage(1);
     try {
       sessionStorage.removeItem(OVERVIEW_STATE_KEY);
@@ -212,9 +220,10 @@ export const OverviewPage: React.FC = () => {
       activityFilter,
       sortBy,
       openssfFilter,
+      githubOwnedFilter,
       currentPage
     });
-  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, currentPage]);
+  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, githubOwnedFilter, currentPage]);
 
   // Memoize filter+sort to avoid recomputing on every render.
   // Uses deferredSearchQuery so typing does not block the UI.
@@ -268,6 +277,12 @@ export const OverviewPage: React.FC = () => {
       });
     }
 
+    if (githubOwnedFilter === 'only') {
+      filtered = filtered.filter(action => isGitHubOwnedAction(action));
+    } else if (githubOwnedFilter === 'hide') {
+      filtered = filtered.filter(action => !isGitHubOwnedAction(action));
+    }
+
     // Apply sorting
     return [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
@@ -281,7 +296,7 @@ export const OverviewPage: React.FC = () => {
         return bDate - aDate; // Descending (most recent first)
       }
     });
-  }, [actions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [actions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter]);
 
   // Reset page to 1 when filter criteria change; clamp when only the actions list updates.
   useEffect(() => {
@@ -294,9 +309,10 @@ export const OverviewPage: React.FC = () => {
       prev.archivedFilter !== archivedFilter ||
       prev.activityFilter !== activityFilter ||
       prev.sortBy !== sortBy ||
-      prev.openssfFilter !== openssfFilter;
+      prev.openssfFilter !== openssfFilter ||
+      prev.githubOwnedFilter !== githubOwnedFilter;
 
-    prevFiltersRef.current = { searchQuery: deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter };
+    prevFiltersRef.current = { searchQuery: deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter };
 
     const nextTotalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
     if (filtersChanged) {
@@ -304,7 +320,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [filteredActions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [filteredActions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -554,6 +570,15 @@ export const OverviewPage: React.FC = () => {
           </div>
 
           <div className="filter-group">
+            <label>GitHub-owned:</label>
+            <select data-testid="filter-github-owned" value={githubOwnedFilter} onChange={e => setGithubOwnedFilter(e.target.value as any)}>
+              <option value="all">All</option>
+              <option value="only">Only GitHub-owned</option>
+              <option value="hide">Hide GitHub-owned</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label>Sort by:</label>
             <button data-testid="sort-updated"
               className={sortBy === 'updated' ? 'active' : ''}
@@ -598,7 +623,10 @@ export const OverviewPage: React.FC = () => {
               >
                 <div className="action-header">
                   <div className="action-title">
-                      <div className="action-owner">{action.owner}</div>
+                      <div className="action-owner">
+                        {action.owner}
+                        {isGitHubOwnedAction(action) && <GitHubOwnedBadge />}
+                      </div>
                       <div className="action-name">{normalizeRepoName(action.owner, action.name)}</div>
                   </div>
                   <span
