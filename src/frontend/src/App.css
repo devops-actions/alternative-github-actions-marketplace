@@ -1091,29 +1091,29 @@ body {
 }
 
 .status-card {
-  background: white;
-  border: 1px solid #d1d5da;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  box-shadow: var(--shadow-sm);
 }
 
 .status-card-title {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #24292e;
+  color: var(--c-text);
 }
 
 .status-explanation {
   font-size: 14px;
-  color: #586069;
+  color: var(--c-text-2);
   line-height: 1.6;
 }
 
 .status-explanation a {
-  color: #0366d6;
+  color: var(--c-primary);
   text-decoration: none;
 }
 
@@ -1130,28 +1130,28 @@ body {
 
 .status-summary-card {
   flex: 1 1 200px;
-  background: white;
-  border: 1px solid #d1d5da;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  box-shadow: var(--shadow-sm);
 }
 
 .status-summary-label {
   font-size: 13px;
-  color: #586069;
+  color: var(--c-text-2);
   margin-bottom: 6px;
 }
 
 .status-summary-value {
   font-size: 22px;
   font-weight: 600;
-  color: #0366d6;
+  color: var(--c-primary);
 }
 
 .status-summary-sub {
   font-size: 12px;
-  color: #999;
+  color: var(--c-text-3);
   margin-top: 4px;
 }
 
@@ -1169,17 +1169,17 @@ body {
 .age-bucket-label {
   font-size: 14px;
   font-weight: 600;
-  color: #24292e;
+  color: var(--c-text);
 }
 
 .age-bucket-count {
   font-size: 13px;
-  color: #586069;
+  color: var(--c-text-2);
 }
 
 .age-bucket-bar-bg {
   height: 12px;
-  background: #f1f3f5;
+  background: var(--c-surface-2);
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 4px;
@@ -1194,12 +1194,12 @@ body {
 
 .age-bucket-desc {
   font-size: 12px;
-  color: #999;
+  color: var(--c-text-3);
 }
 
 .status-generated {
   font-size: 12px;
-  color: #999;
+  color: var(--c-text-3);
   text-align: right;
   margin-bottom: 20px;
 }
