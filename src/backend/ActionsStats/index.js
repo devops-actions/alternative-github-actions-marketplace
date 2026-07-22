@@ -2,50 +2,9 @@ const { getTableClient } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
 const { readCache, writeCache } = require('../lib/statsCache');
 const { cacheControlHeaders } = require('../lib/cacheHeaders');
+const { computeStats } = require('../lib/computeStats');
 
 const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
-
-async function computeStats(tableClient) {
-  let total = 0;
-  const byType = {};
-  let verified = 0;
-  let archived = 0;
-  let withOssf = 0;
-
-  for await (const entity of tableClient.listEntities()) {
-    try {
-      const payload = typeof entity.PayloadJson === 'string'
-        ? JSON.parse(entity.PayloadJson)
-        : (entity.PayloadJson || {});
-
-      // Only count entities that we can successfully parse and inspect.
-      total += 1;
-
-      const type = payload.actionType && payload.actionType.actionType;
-      if (type) {
-        byType[type] = (byType[type] || 0) + 1;
-      }
-
-      if (payload.verified === true) {
-        verified += 1;
-      }
-
-      if (payload.repoInfo && payload.repoInfo.archived === true) {
-        archived += 1;
-      }
-
-      const rawScore = payload.openssf_score ?? payload.ossfScore ?? payload.ossf_score ?? null;
-      const hasOssf = payload.ossf === true || (rawScore !== null && rawScore !== undefined);
-      if (hasOssf) {
-        withOssf += 1;
-      }
-    } catch (_parseErr) {
-      // skip malformed payloads entirely (don't include in totals)
-    }
-  }
-
-  return { total, byType, verified, archived, withOssf };
-}
 
 module.exports = async function actionsStats(context, req) {
   if (req.method === 'OPTIONS') {
