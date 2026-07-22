@@ -18,6 +18,12 @@ on:
         required: true
         default: true
         type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/frontend/**'
+      - 'src/backend/**'
 
 
 env:
