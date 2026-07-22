@@ -20,6 +20,7 @@
 - `main.bicep` exposes `assignTableDataContributor`; leave it `false` unless the deployment identity can create role assignments, otherwise grant Storage Table Data Contributor manually post-deploy.
 - Azure Functions runtime targets Node.js 22; develop and test with Node 22+ to stay aligned with production.
 - Workflows set Azure CLI automation-friendly env vars (only show errors, disable telemetry/dynamic install); mirror them locally to match CI behavior. See the docs here: https://jessehouwing.net/recommendations-for-using-azure-cli-in-your-workflow/
+- `/actions/stats` (used by the About page) is backed by a cache row in Table Storage (`lib/statsCache.js`) rather than scanning the full table on every request. `ActionsUpsert` patches it incrementally, and the `StatsWarmup` timer function (`src/backend/StatsWarmup`) recomputes it hourly as a safety net so the cache never needs to be rebuilt inside a user request. Stats can lag reality by up to ~24h; the `/actions/list` endpoint used for search must stay uncached/fresh.
 
 ## SWA + Functions integration notes
 - Browser calls from Static Web Apps require CORS + preflight: all HTTP Functions should respond to `OPTIONS` and include `Access-Control-Allow-*` headers.
