@@ -13,6 +13,9 @@ export const NavBar: React.FC = () => {
       <NavLink to="/status" className={({ isActive }) => isActive ? 'active' : undefined}>
         Data Status
       </NavLink>
+      <NavLink to="/about" className={({ isActive }) => isActive ? 'active' : undefined}>
+        About
+      </NavLink>
     </nav>
   );
 };

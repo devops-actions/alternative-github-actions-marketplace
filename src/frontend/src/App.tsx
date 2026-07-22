@@ -4,6 +4,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { DetailPage } from './pages/DetailPage';
 import { StatusPage } from './pages/StatusPage';
 import { StateOfActionsPage } from './pages/StateOfActionsPage';
+import { AboutPage } from './pages/AboutPage';
 import { trackPageView as trackPlausible } from './plausible';
 import './App.css';
 
@@ -53,6 +54,7 @@ const App: React.FC = () => {
         <Route path="/action/:owner/:name" element={<DetailPage />} />
         <Route path="/status" element={<StatusPage />} />
         <Route path="/state" element={<StateOfActionsPage />} />
+        <Route path="/about" element={<AboutPage />} />
       </Routes>
     </Router>
   );
