@@ -20,7 +20,7 @@ export const AboutPage: React.FC = () => {
           style={{
             background: 'none',
             border: 'none',
-            color: '#0366d6',
+            color: 'var(--c-primary)',
             cursor: 'pointer',
             fontSize: 14,
             padding: '4px 0'
