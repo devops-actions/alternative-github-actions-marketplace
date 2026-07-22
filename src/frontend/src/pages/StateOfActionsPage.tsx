@@ -11,8 +11,6 @@ import { NavBar } from '../components/NavBar';
 interface ComputedStats {
   criticalVulnCount: number;
   highVulnCount: number;
-  dependabotEnabledCount: number;
-  secretScanningCount: number;
   ossfScoreBands: number[];
   avgOssfScore: number;
   nodeVersions: Record<string, number>;
@@ -30,8 +28,6 @@ function computeStats(actions: Action[]): ComputedStats {
     return {
       criticalVulnCount: 0,
       highVulnCount: 0,
-      dependabotEnabledCount: 0,
-      secretScanningCount: 0,
       ossfScoreBands: [0, 0, 0, 0, 0],
       avgOssfScore: 0,
       nodeVersions: {},
@@ -42,8 +38,6 @@ function computeStats(actions: Action[]): ComputedStats {
 
   let criticalVulnCount = 0;
   let highVulnCount = 0;
-  let dependabotEnabledCount = 0;
-  let secretScanningCount = 0;
   // bands: 0-2, 2-4, 4-6, 6-8, 8-10
   const ossfScoreBands = [0, 0, 0, 0, 0];
   let ossfScoreSum = 0;
@@ -57,8 +51,6 @@ function computeStats(actions: Action[]): ComputedStats {
   for (const a of actions) {
     if (a.vulnerabilityStatus?.critical > 0) criticalVulnCount++;
     if (a.vulnerabilityStatus?.high > 0) highVulnCount++;
-    if (a.dependabotEnabled) dependabotEnabledCount++;
-    if (a.secretScanningEnabled) secretScanningCount++;
 
     if (a.ossf && typeof a.ossfScore === 'number' && a.ossfScore > 0) {
       const band = Math.min(Math.floor(a.ossfScore / 2), 4);
@@ -91,8 +83,6 @@ function computeStats(actions: Action[]): ComputedStats {
   return {
     criticalVulnCount,
     highVulnCount,
-    dependabotEnabledCount,
-    secretScanningCount,
     ossfScoreBands,
     avgOssfScore: ossfScoreActionCount > 0 ? ossfScoreSum / ossfScoreActionCount : 0,
     nodeVersions,
@@ -346,7 +336,7 @@ export const StateOfActionsPage: React.FC = () => {
 
       {/* Security overview */}
       <div className="soa-section-title">Security Overview</div>
-      <div className="soa-grid soa-grid-4">
+      <div className="soa-grid soa-grid-2">
         <SecurityCard
           title="Critical Vulnerabilities"
           count={computed.criticalVulnCount}
@@ -360,20 +350,6 @@ export const StateOfActionsPage: React.FC = () => {
           total={total}
           color="var(--c-amber)"
           subtitle="Actions with at least one high CVE"
-        />
-        <SecurityCard
-          title="Dependabot Enabled"
-          count={computed.dependabotEnabledCount}
-          total={total}
-          color="var(--c-green)"
-          subtitle="Actions with Dependabot alerts enabled"
-        />
-        <SecurityCard
-          title="Secret Scanning"
-          count={computed.secretScanningCount}
-          total={total}
-          color="var(--c-sky)"
-          subtitle="Actions with secret scanning enabled"
         />
       </div>
 
