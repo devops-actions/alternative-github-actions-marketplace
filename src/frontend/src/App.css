@@ -500,6 +500,9 @@ body {
   color: var(--c-text-3);
   margin-bottom: 2px;
   letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .action-name {
@@ -560,6 +563,19 @@ body {
   font-size: 11px;
   font-weight: 700;
   border: 1.5px solid var(--c-red-border);
+}
+
+.github-owned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  border: 1.5px solid var(--c-border);
 }
 
 /* ===================================================

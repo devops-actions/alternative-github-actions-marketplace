@@ -46,3 +46,11 @@ export function isActionVerified(action: Partial<Action> | { verified?: unknown 
   }
   return false;
 }
+
+// GitHub-owned actions live under these orgs (e.g. actions/checkout, github/codeql-action).
+const GITHUB_OWNED_ORGS = new Set(['actions', 'github']);
+
+export function isGitHubOwnedAction(action: Partial<Action> | { owner?: string }) {
+  const owner = String((action && (action as any).owner) || '').toLowerCase().trim();
+  return GITHUB_OWNED_ORGS.has(owner);
+}
