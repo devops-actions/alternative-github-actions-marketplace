@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NavBar } from '../components/NavBar';
+import { actionsService } from '../services/actionsService';
 
 export const AboutPage: React.FC = () => {
   const navigate = useNavigate();
+  const [archivedCount, setArchivedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    actionsService.fetchStats()
+      .then(stats => setArchivedCount(stats.archived))
+      .catch(() => setArchivedCount(null));
+  }, []);
 
   return (
     <div className="app">
@@ -38,6 +46,21 @@ export const AboutPage: React.FC = () => {
           top of the same public data, adding details like action type (Node/JavaScript, Docker,
           Composite), release history, and dependents count, plus search and filtering that make
           it easier to find the Action you need.
+        </p>
+        <p className="status-explanation" style={{ marginTop: 8 }}>
+          By default the overview <strong>hides archived repositories</strong>
+          {archivedCount !== null ? ` (currently ${archivedCount.toLocaleString()} of them)` : ''}, so
+          you're not pointed at Actions whose source repo has been shut down — you can still opt
+          in and show or filter to only archived ones if you want to see them.
+        </p>
+        <p className="status-explanation" style={{ marginTop: 8 }}>
+          We also surface signals that help you judge whether an Action is trustworthy and
+          well maintained, such as <strong>repo activity</strong> (based on dependents count and
+          how recently the repo was updated) and its{' '}
+          <a href="https://openssf.org/" target="_blank" rel="noopener noreferrer">
+            OpenSSF
+          </a>{' '}
+          Scorecard score, so you can filter out Actions that look abandoned or risky.
         </p>
       </div>
 
