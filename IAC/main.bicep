@@ -109,8 +109,10 @@ resource readmesTable 'Microsoft.Storage/storageAccounts/tableServices/tables@20
   name: '${storageAccount.name}/default/readmes'
 }
 
-// Holds the precomputed actions snapshot served by /api/actions/snapshot.
-// Stays private (allowBlobPublicAccess is false on the account) — the blob is
+// Holds the precomputed action feeds: the overview snapshot served by
+// /api/actions/snapshot, and the versions feed (latest version + commit SHA per
+// action) served by /api/actions/versions. Both are separate blobs in here.
+// Stays private (allowBlobPublicAccess is false on the account) — the blobs are
 // only ever read by the Function App's managed identity / connection string.
 resource snapshotsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   name: '${storageAccount.name}/default/snapshots'
