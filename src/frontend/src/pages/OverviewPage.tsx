@@ -363,7 +363,18 @@ export const OverviewPage: React.FC = () => {
   const hiddenByFilters = Math.max(0, actions.length - filteredActions.length);
   const hasActiveFilters = hiddenByFilters > 0;
 
-  const handleActionClick = (action: Action) => {
+  const handleActionClick = (action: Action, event?: React.MouseEvent) => {
+    const detailUrl = `/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`;
+
+    if (event) {
+      const isModifiedClick = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+      if (isModifiedClick) {
+        // Let the browser open the <a href> in a new tab/window.
+        return;
+      }
+      event.preventDefault();
+    }
+
     writeOverviewState({
       searchQuery,
       typeFilter,
@@ -374,7 +385,7 @@ export const OverviewPage: React.FC = () => {
       currentPage,
       scrollY: window.scrollY
     });
-    navigate(`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`);
+    navigate(detailUrl);
   };
 
   const getActionTypeBadgeClass = (type: string) => {
@@ -624,10 +635,11 @@ export const OverviewPage: React.FC = () => {
         <>
           <div className="actions-grid">
             {pagedActions.map(action => (
-              <div
+              <a
                 key={`${action.owner}/${action.name}`}
                 className={`action-card ${action.repoInfo?.archived ? 'archived' : ''}`}
-                onClick={() => handleActionClick(action)}
+                href={`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`}
+                onClick={e => handleActionClick(action, e)}
               >
                 <div className="action-header">
                   <div className="action-title">
@@ -692,7 +704,7 @@ export const OverviewPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
 
