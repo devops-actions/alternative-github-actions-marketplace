@@ -21,16 +21,16 @@
     "@plausible-analytics/tracker": "^0.4.5",
     "@types/dompurify": "^3.2.0",
     "dompurify": "^3.4.12",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.0",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-react": "^6.0.4",
     "dotenv": "^17.4.2",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
