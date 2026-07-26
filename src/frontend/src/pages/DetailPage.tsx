@@ -17,7 +17,18 @@ export const DetailPage: React.FC = () => {
   const [readmeLoading, setReadmeLoading] = useState(false);
   const [readmeError, setReadmeError] = useState<string | null>(null);
 
-  const handleBack = () => {
+  const backHref = typeof document !== 'undefined' ? document.referrer || '/' : '/';
+
+  const handleBack = (event?: React.MouseEvent) => {
+    if (event) {
+      const isModifiedClick = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+      if (isModifiedClick) {
+        // Let the browser open the <a href> in a new tab/window.
+        return;
+      }
+      event.preventDefault();
+    }
+
     if (window.history.length > 1) {
       navigate(-1);
       return;
@@ -131,9 +142,9 @@ export const DetailPage: React.FC = () => {
   if (error || !action) {
     return (
       <div className="app">
-        <button className="back-button" onClick={handleBack}>
+        <a className="back-button" href={backHref} onClick={e => handleBack(e)}>
           ← Back to Overview
-        </button>
+        </a>
         <div className="error-message">{error || 'Action not found'}</div>
       </div>
     );
@@ -148,9 +159,9 @@ export const DetailPage: React.FC = () => {
         <p>Browse and search through GitHub Actions with more information</p>
       </div>
 
-      <button className="back-button" onClick={handleBack}>
+      <a className="back-button" href={backHref} onClick={e => handleBack(e)}>
         ← Back to Overview
-      </button>
+      </a>
 
       <div className="detail-page">
         <div className="detail-header">
