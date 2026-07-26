@@ -17,6 +17,10 @@ local.settings.json
 
 # Editor and tooling
 .vscode/
+# The extension's own launch config is part of its development setup, not a
+# personal editor preference, so it is tracked.
+!vscode-extension/.vscode/
+!vscode-extension/.vscode/launch.json
 .vs/
 .DS_Store
 Thumbs.db

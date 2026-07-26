@@ -4,7 +4,7 @@ Alternative for the GitHub Marketplace, hosting my own version with more informa
 
 ## Components
 
-This repository consists of three main components:
+This repository consists of four main components:
 
 ### Frontend Application
 
@@ -23,6 +23,18 @@ This repository consists of three main components:
 - RESTful API endpoints
 - Azure Table Storage integration
 - Authentication and authorization
+
+### VS Code Extension
+
+**[VS Code Extension](vscode-extension/README.md)** - Browse the marketplace from
+your editor, and give AI agents the real latest version and commit SHA of any action
+
+- Contributes language model tools so GitHub Copilot resolves action versions
+  instead of recalling stale ones from training data
+- Caches a compact snapshot of the whole dataset locally, refreshed at most once
+  a day, so search and version lookups work offline
+- Stats and search panel mirroring the website, plus copy/insert of SHA-pinned
+  `uses:` values
 
 ### Client Package
 
