@@ -26,7 +26,7 @@ function isAbsoluteUrl(url) {
 function resolveRelativeUrl(relativeUrl, baseUrl) {
   try {
     return new URL(relativeUrl, baseUrl).toString();
-  } catch (error) {
+  } catch {
     return relativeUrl;
   }
 }
