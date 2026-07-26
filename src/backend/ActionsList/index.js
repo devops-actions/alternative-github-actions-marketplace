@@ -7,6 +7,11 @@ const { readCache } = require('../lib/statsCache');
 
 const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
+// Azure Table Storage rejects a `maxPageSize` above 1000 entities. Callers may
+// still ask for a larger `limit`; we satisfy it by fetching several pages of at
+// most this size and accumulating until `limit` entities are collected.
+const MAX_TABLE_PAGE_SIZE = 1000;
+
 // Encodes an opaque continuation value (string, number, or object) into a
 // URL-safe cursor for clients to pass back on the next request.
 function encodeCursor(continuationToken) {
@@ -58,9 +63,11 @@ module.exports = async function actionsList(context, req) {
     ? String(req.query.owner)
     : (context.bindingData && context.bindingData.owner);
 
-  // Parse limit parameter. When provided, it also acts as the page size for
-  // cursor-based pagination (see `cursor` below) and the response is wrapped
-  // as `{ items, nextCursor }`. When omitted, the full result set is returned
+  // Parse limit parameter. When provided, it is the maximum number of entities
+  // returned by this request (see `cursor` below) and the response is wrapped
+  // as `{ items, nextCursor }`. Any positive limit is honoured, including ones
+  // above the Table Storage page cap, which are served as multiple pages
+  // internally. When omitted, the full result set is returned
   // as a plain array, preserving the historic behaviour relied on by callers
   // that need the complete dataset in one shot (e.g. the frontend's
   // background full fetch, or the E2E test harness).
@@ -168,19 +175,45 @@ module.exports = async function actionsList(context, req) {
     }
 
     if (limit !== null) {
-      // Cursor-based pagination: fetch a single page of `limit` entities using
-      // Azure Table Storage's continuation token, instead of scanning the
-      // whole table and slicing in memory.
-      const pageSettings = { maxPageSize: limit };
-      if (continuationToken !== undefined) {
-        pageSettings.continuationToken = continuationToken;
+      // Cursor-based pagination: fetch entities using Azure Table Storage's
+      // continuation token, instead of scanning the whole table and slicing in
+      // memory. Table Storage caps a page at MAX_TABLE_PAGE_SIZE entities, and
+      // may also return a short page while still having more to give, so keep
+      // pulling pages until `limit` entities are collected or the table is
+      // exhausted. Each page requests only as many entities as are still
+      // needed, so the continuation token we hand back always points exactly
+      // after the last entity we returned.
+      const pageEntities = [];
+      let pageToken = continuationToken;
+
+      while (pageEntities.length < limit) {
+        const remaining = limit - pageEntities.length;
+        const pageSettings = { maxPageSize: Math.min(remaining, MAX_TABLE_PAGE_SIZE) };
+        if (pageToken !== undefined) {
+          pageSettings.continuationToken = pageToken;
+        }
+
+        const pageIterator = tableClient.listEntities(queryOptions).byPage(pageSettings);
+        const { value: page } = await pageIterator.next();
+        const batch = page || [];
+        pageEntities.push(...batch);
+
+        const previousToken = pageToken;
+        pageToken = page && page.continuationToken;
+
+        // Stop once the table has nothing more to give. The zero-progress check
+        // guards against a page that returns no entities without advancing the
+        // token, which would otherwise spin forever.
+        if (pageToken === undefined || pageToken === null || pageToken === '') {
+          break;
+        }
+        if (batch.length === 0 && pageToken === previousToken) {
+          break;
+        }
       }
 
-      const pageIterator = tableClient.listEntities(queryOptions).byPage(pageSettings);
-      const { value: page } = await pageIterator.next();
-      const pageEntities = page || [];
       const results = pageEntities.map(entityToActionInfo).filter(Boolean);
-      const nextCursor = encodeCursor(page && page.continuationToken);
+      const nextCursor = encodeCursor(pageToken);
 
       const headers = {
         'X-Actions-Count': results.length,
