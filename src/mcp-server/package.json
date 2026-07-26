@@ -12,6 +12,9 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@babel/core": ">=7.29.6"
+  },
   "dependencies": {
     "@hono/node-server": "2.0.12",
     "@modelcontextprotocol/sdk": "^1.29.0",
