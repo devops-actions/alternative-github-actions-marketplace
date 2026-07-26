@@ -3,8 +3,7 @@ import * as vscode from 'vscode';
 import type { DatasetStore } from '../datasetStore';
 import { getDashboardHtml } from './dashboardHtml';
 import { MarketplacePanel } from './marketplacePanel';
-
-const STATE_OF_ACTIONS_URL = 'https://alternative-github-actions-marketplace.devopsjournal.io/state';
+import { STATE_OF_ACTIONS_URL } from '../config';
 
 type InboundMessage =
   | { type: 'ready' }

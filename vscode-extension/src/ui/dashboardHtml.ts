@@ -238,7 +238,7 @@ export function getDashboardHtml(webview: vscode.Webview): string {
     els.stats.appendChild(card(number(stats.verified), 'verified actions', verifiedPercent + '% verified'));
     els.stats.appendChild(card(number(stats.archived), 'archived', archivedPercent + '% archived'));
     els.stats.appendChild(card(number(stats.withOssf), 'with OpenSSF score',
-      ossfPercent + '% have OSSF data' + (stats.averageOssfScore === null ? '' : ' \\u00b7 avg ' + stats.averageOssfScore)));
+      ossfPercent + '% have OpenSSF data' + (stats.averageOssfScore === null ? '' : ' \\u00b7 avg ' + stats.averageOssfScore)));
 
     const types = Object.entries(stats.byType).sort((a, b) => b[1] - a[1]);
     if (types.length > 0) {

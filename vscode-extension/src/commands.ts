@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { DatasetStore } from './datasetStore';
 import { MarketplacePanel } from './ui/marketplacePanel';
 import { formatPinnedRef } from './data/actionRef';
+import { STATE_OF_ACTIONS_URL } from './config';
 
 interface ActionQuickPickItem extends vscode.QuickPickItem {
   pinnedRef: string;
@@ -168,8 +169,6 @@ async function showDatasetInfo(store: DatasetStore, output: vscode.LogOutputChan
   ].join('\n'));
   output.show(true);
 }
-
-const STATE_OF_ACTIONS_URL = 'https://alternative-github-actions-marketplace.devopsjournal.io/state';
 
 export function registerCommands(
   store: DatasetStore,
