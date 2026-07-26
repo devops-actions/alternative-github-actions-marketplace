@@ -13,6 +13,9 @@ param tableName string = 'actions'
 @description('Assign Storage Table Data Contributor role to the function app managed identity. Requires role assignment permissions on the storage account scope.')
 param assignTableDataContributor bool = false
 
+@description('Assign Storage Blob Data Contributor role to the function app managed identity. Only needed when the app authenticates to blob storage via managed identity instead of the AzureWebJobsStorage connection string.')
+param assignBlobDataContributor bool = false
+
 @description('Assign AcrPull role to the MCP Container App managed identity. Requires role assignment permissions on the Container Registry scope.')
 param assignAcrPullRole bool = false
 
@@ -106,6 +109,16 @@ resource readmesTable 'Microsoft.Storage/storageAccounts/tableServices/tables@20
   name: '${storageAccount.name}/default/readmes'
 }
 
+// Holds the precomputed actions snapshot served by /api/actions/snapshot.
+// Stays private (allowBlobPublicAccess is false on the account) — the blob is
+// only ever read by the Function App's managed identity / connection string.
+resource snapshotsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  name: '${storageAccount.name}/default/snapshots'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
   name: '${storageAccount.name}/default/${fileShareName}'
   properties: {
@@ -190,6 +203,14 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           value: 'https://${storageAccount.name}.table.${az.environment().suffixes.storage}'
         }
         {
+          name: 'ACTIONS_BLOB_URL'
+          value: 'https://${storageAccount.name}.blob.${az.environment().suffixes.storage}'
+        }
+        {
+          name: 'ACTIONS_SNAPSHOT_CONTAINER'
+          value: split(snapshotsContainer.name, '/')[2]
+        }
+        {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: '1'
         }
@@ -211,6 +232,16 @@ resource tableDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-0
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b8fa-4a7e-88f8-87b6abefc6c0')
+  }
+}
+
+resource blobDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (assignBlobDataContributor) {
+  name: guid(storageAccount.id, 'StorageBlobDataContributor', functionApp.id)
+  scope: storageAccount
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
   }
 }
 

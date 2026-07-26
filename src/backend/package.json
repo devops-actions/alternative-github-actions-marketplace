@@ -43,6 +43,7 @@
   "dependencies": {
     "@azure/data-tables": "^13.2.2",
     "@azure/identity": "^4.13.1",
+    "@azure/storage-blob": "^12.33.0",
     "@octokit/app": "^16.1.2",
     "@octokit/auth-app": "^8.2.0"
   },

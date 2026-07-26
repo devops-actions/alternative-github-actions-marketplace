@@ -1,3 +1,5 @@
+const { STATS_CACHE_PARTITION } = require('./statsCache');
+
 // Scans the full actions table and aggregates the counts used by the
 // /actions/stats endpoint. This is an O(n) scan over every entity, so it is
 // deliberately kept out of the request hot path (see StatsWarmup, which runs
@@ -11,6 +13,13 @@ async function computeStats(tableClient) {
   let withOssf = 0;
 
   for await (const entity of tableClient.listEntities()) {
+    // The stats cache is stored in this same table under its own partition.
+    // Counting it inflated `total` by one, which is why /actions/stats
+    // reported one more action than /actions/list ever returned.
+    if (entity.partitionKey === STATS_CACHE_PARTITION) {
+      continue;
+    }
+
     try {
       const payload = typeof entity.PayloadJson === 'string'
         ? JSON.parse(entity.PayloadJson)

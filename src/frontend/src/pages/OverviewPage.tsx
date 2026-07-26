@@ -174,25 +174,23 @@ export const OverviewPage: React.FC = () => {
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const force = attempt > 0;
-        
-        // First, fetch stats and initial page of actions for quick display
-        const [statsData, initialActions] = await Promise.all([
+
+        // One request for the whole dataset. This used to show a 50-row
+        // preview first and swap in the full list once the ~50s scan finished,
+        // but that preview was the first 50 rows in PartitionKey order — owners
+        // starting with "0" — of which only a handful survived the default
+        // filters. The snapshot arrives fast enough and pre-sorted, so the
+        // first render is already the real, correctly ordered result.
+        const [statsData, allActions] = await Promise.all([
           actionsService.fetchStats(force),
-          actionsService.fetchActionsPage(50)
+          actionsService.fetchActions(force)
         ]);
-        
+
         setStats(statsData);
-        setActions(initialActions);
+        setActions(allActions);
         setError(null);
         setLoading(false);
-        
-        // Then fetch the full list in the background
-        actionsService.fetchActions(force).then(fullActions => {
-          setActions(fullActions);
-        }).catch(err => {
-          console.warn('Failed to load complete actions list in background. Limited view active:', err);
-        });
-        
+
         return;
       } catch (err) {
         lastErr = err;
@@ -358,6 +356,13 @@ export const OverviewPage: React.FC = () => {
   const showingFrom = filteredActions.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const showingTo = Math.min(currentPage * PAGE_SIZE, filteredActions.length);
 
+  // The stat tiles report database totals while the grid reports what survives
+  // the filters, and the defaults (hide archived, hide low-activity) remove
+  // roughly 70% of the dataset. Without spelling that out, the two numbers just
+  // look like they disagree.
+  const hiddenByFilters = Math.max(0, actions.length - filteredActions.length);
+  const hasActiveFilters = hiddenByFilters > 0;
+
   const handleActionClick = (action: Action) => {
     writeOverviewState({
       searchQuery,
@@ -411,11 +416,14 @@ export const OverviewPage: React.FC = () => {
     <div className="app">
       <div className="header">
         <NavBar />
-        <h1>Alternative GitHub Actions Marketplace</h1>        
+        <h1>Alternative GitHub Actions Marketplace</h1>
         <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
       </div>
 
-      <div className="stats-bar">
+      {/* These tiles count the whole database. The grid below counts only what
+          passes the current filters, so the two differ by design — the
+          pagination summary spells out the gap. */}
+      <div className="stats-bar" aria-label="Database totals across all actions">
         <button
           type="button"
           className="stat-item stat-button"
@@ -690,7 +698,21 @@ export const OverviewPage: React.FC = () => {
 
           <div className="pagination">
             <div className="pagination-summary">
-              Showing {showingFrom}-{showingTo} of {filteredActions.length.toLocaleString()} actions
+              Showing {showingFrom}-{showingTo} of {filteredActions.length.toLocaleString()} matching
+              {hasActiveFilters && (
+                <>
+                  {' · '}
+                  <span className="pagination-hidden">
+                    {hiddenByFilters.toLocaleString()} hidden by filters
+                  </span>
+                  {' · '}
+                  {actions.length.toLocaleString()} total
+                  {' · '}
+                  <button type="button" className="link-button" onClick={clearFilters}>
+                    Reset filters
+                  </button>
+                </>
+              )}
             </div>
             <div className="pagination-controls">
               <button

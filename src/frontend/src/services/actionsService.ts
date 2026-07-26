@@ -203,6 +203,7 @@ export class ActionsService {
   private inFlightStatsFetch: Promise<ActionStats> | null = null;
   private inFlightDbStatusFetch: Promise<DbStatus> | null = null;
   private readmeCache: Map<string, ReadmeCacheEntry> = new Map();
+  private snapshotGeneratedAt: string | null = null;
 
   constructor() {
     this.startAutoRefresh();
@@ -228,9 +229,37 @@ export class ActionsService {
     this.listeners.forEach(listener => listener());
   }
 
+  // Fetches the precomputed snapshot: every action the list pages need, in one
+  // request, already sorted newest-first.
+  //
+  // Uses the default HTTP cache rather than `no-store` so the endpoint's
+  // Cache-Control/ETag actually do something — a repeat visit inside the
+  // freshness window costs no network at all, and outside it costs a 304.
+  private async fetchSnapshot(): Promise<Action[] | null> {
+    const response = await fetch(`${API_BASE_URL}/actions/snapshot`);
+
+    if (response.status === 503) {
+      // No snapshot built yet (fresh environment, or the pipeline has never
+      // completed). Signal the caller to fall back rather than showing an error.
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch actions snapshot: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const items = extractArrayFromUnknown(data);
+    this.snapshotGeneratedAt = (data && typeof data === 'object' && typeof data.generatedAt === 'string')
+      ? data.generatedAt
+      : null;
+
+    return items.map(normalizeAction);
+  }
+
   async fetchActions(force: boolean = false): Promise<Action[]> {
     const now = Date.now();
-    
+
     if (!force && this.actions.length > 0 && (now - this.lastFetch) < REFRESH_INTERVAL) {
       return this.actions;
     }
@@ -243,35 +272,43 @@ export class ActionsService {
 
     const fetchPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch actions: ${response.statusText}`);
+        let items = await this.fetchSnapshot();
+
+        if (items === null) {
+          // Fall back to the full list scan. Slow (~50s over ~35k actions) but
+          // correct, so the site still works before the first snapshot exists.
+          console.warn('Actions snapshot unavailable; falling back to the full /actions/list scan.');
+          const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch actions: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const fallbackItems = extractArrayFromUnknown(data);
+          const hasCountHeader = response.headers.has('x-actions-count');
+          const declaredCount = Number(response.headers.get('x-actions-count') || '0');
+
+          const serverExplicitlyEmpty =
+            (hasCountHeader && declaredCount === 0) ||
+            (Array.isArray(data) && data.length === 0);
+
+          // If the server claims there are results but we couldn't extract them,
+          // keep any previously cached actions instead of wiping the UI.
+          if (fallbackItems.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
+            const responseType = Array.isArray(data) ? 'array' : typeof data;
+            const keys = (data && typeof data === 'object' && !Array.isArray(data))
+              ? Object.keys(data)
+              : [];
+            console.warn(
+              `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
+            );
+            items = this.actions;
+          } else {
+            items = fallbackItems.map(normalizeAction);
+          }
         }
 
-        const data = await response.json();
-
-        const items = extractArrayFromUnknown(data);
-        const hasCountHeader = response.headers.has('x-actions-count');
-        const declaredCount = Number(response.headers.get('x-actions-count') || '0');
-
-        const serverExplicitlyEmpty =
-          (hasCountHeader && declaredCount === 0) ||
-          (Array.isArray(data) && data.length === 0);
-
-        // If the server claims there are results but we couldn't extract them,
-        // keep any previously cached actions instead of wiping the UI.
-        if (items.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
-          const responseType = Array.isArray(data) ? 'array' : typeof data;
-          const keys = (data && typeof data === 'object' && !Array.isArray(data))
-            ? Object.keys(data)
-            : [];
-          console.warn(
-            `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
-          );
-        } else {
-          this.actions = items.map(normalizeAction);
-        }
-
+        this.actions = items;
         this.lastFetch = now;
         this.notify();
         return this.actions;
@@ -286,6 +323,12 @@ export class ActionsService {
 
     this.inFlightActionsFetch = fetchPromise;
     return await fetchPromise;
+  }
+
+  // ISO timestamp of when the served snapshot was built, or null when the
+  // data came from the live-scan fallback.
+  getSnapshotGeneratedAt(): string | null {
+    return this.snapshotGeneratedAt;
   }
 
   async fetchActionsPage(limit: number): Promise<Action[]> {

@@ -1,7 +1,7 @@
 /**
  * Playwright global setup - runs once before all workers.
  * Pre-fetches the actions list and caches it to disk so workers don't
- * each hit the 16MB API endpoint independently.
+ * each hit the large API endpoint independently.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,25 +9,54 @@ import { getApiBaseUrl, joinUrl } from './test-helpers';
 
 const CACHE_FILE = path.join(process.cwd(), 'test-results', 'actions-cache.json');
 
+// Prefer the precomputed snapshot, which is what the app itself loads: one
+// pre-built blob rather than a full table scan. /actions/list is kept as a
+// fallback for environments where the snapshot has not been built yet.
+async function fetchFromSnapshot(apiBaseUrl: string): Promise<unknown[] | null> {
+  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/snapshot'));
+
+  if (resp.status === 503) {
+    return null; // not built yet
+  }
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  if (!Array.isArray(data?.items)) {
+    throw new Error('Snapshot response has no items array');
+  }
+  return data.items;
+}
+
+async function fetchFromList(apiBaseUrl: string): Promise<unknown[]> {
+  const resp = await fetch(joinUrl(apiBaseUrl, '/actions/list'), {
+    headers: { 'Cache-Control': 'no-cache' }
+  });
+
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  if (!Array.isArray(data)) {
+    throw new Error('Response is not an array');
+  }
+  return data;
+}
+
 async function fetchActionsListWithRetry(retries = 10, delayMs = 5000): Promise<unknown[]> {
   const apiBaseUrl = getApiBaseUrl();
-  const url = joinUrl(apiBaseUrl, '/actions/list');
   let lastErr: unknown;
 
   for (let i = 0; i < retries; i += 1) {
     try {
-      console.log(`[global-setup] Fetching actions list (attempt ${i + 1}/${retries})...`);
-      const resp = await fetch(url, {
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      console.log(`[global-setup] Fetching actions (attempt ${i + 1}/${retries})...`);
 
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      if (!Array.isArray(data)) {
-        throw new Error('Response is not an array');
+      let data = await fetchFromSnapshot(apiBaseUrl);
+      if (data === null) {
+        console.log('[global-setup] Snapshot not built yet; falling back to /actions/list');
+        data = await fetchFromList(apiBaseUrl);
       }
 
       console.log(`[global-setup] Fetched ${data.length} actions`);
