@@ -7,13 +7,17 @@
 
 ## Documentation Map
 - Decision records live under the `/Decision Records` folder:
-  - `requirements.md`: Current data, usage expectations, hosting constraints.
+  - `requirements.md`: Current data, usage expectations, hosting constraints. Note the data exposure policy: vulnerability and security posture details stay server-side and must not be surfaced to users, including in AI tool output.
   - `stack-evaluation.md`: Proof-of-concept plan for Static Web Apps + Functions + Table Storage.
   - `cost-comparison.md`: Upgrade path costs (Azure AI Search, SQL, Cosmos, Container Apps).
+  - `action-versions-feed.md`: The `/api/actions/versions` wire format, ETag strategy, and why it is separate from the overview snapshot.
+  - `version-sha-map.md`: The agreed `versionShaMap` shape for mapping versions to commit SHAs.
 
 ## Collaboration Notes
 - Default to ASCII when editing files; keep comments concise and only when necessary for clarity.
 - Update the decision records first when architecture or cost assumptions change before implementing code.
+- Two precomputed feeds exist and are easy to confuse: `/actions/snapshot` (`lib/actionSummary.js`, for the frontend overview, no commit SHAs) and `/actions/versions` (`lib/versionsBuilder.js`, latest version + commit SHA per action, for offline clients). They share the `snapshots` blob container but are separate blobs, builders, and timers.
+- A commit SHA the dataset does not have is reported as `null` / "unknown" everywhere. Never substitute a SHA from a different version, and never let generated output imply one is known when it is not.
 - Backend tests live under `/src/backend/tests`; run `npm test` from `/src/backend` whenever touching backend logic or data contracts.
 - CI includes `deploy-functions.yml` which runs backend tests and zip deploys the function app on backend changes. Keep it green before merging.
 - Function deploy workflow discovers the app name via `az functionapp list` scoped to `${{ vars.AZURE_RESOURCE_GROUP }}`; keep the target RG unique to avoid ambiguous matches.

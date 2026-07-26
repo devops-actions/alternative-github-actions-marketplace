@@ -437,6 +437,28 @@ jobs:
             sleep 10
           done
 
+          # Warm up /actions/versions. On a fresh deployment no versions blob
+          # exists yet, so the first request builds one with a full table scan;
+          # doing that here means the first real client does not pay for it, and
+          # the VersionsWarmup timer keeps it fresh from then on. A 503 means the
+          # build is still in flight, so retry.
+          echo "Warming up /actions/versions (builds the blob on first request)..."
+          for i in $(seq 1 10); do
+            echo "Attempt $i/10 - versions"
+            code=$(curl -sS -o /tmp/actions-versions.json.gz -w "%{http_code}" \
+              --connect-timeout 10 --max-time 300 \
+              -H 'Accept-Encoding: gzip' \
+              "$API_BASE_URL/actions/versions" || true)
+            if [ "$code" = "200" ]; then
+              versionsSize=$(stat -c%s /tmp/actions-versions.json.gz 2>/dev/null || stat -f%z /tmp/actions-versions.json.gz 2>/dev/null || echo "0")
+              echo "Actions versions feed ready (size: ${versionsSize} bytes)"
+              break
+            else
+              echo "Versions feed not ready yet (http=$code)"
+            fi
+            sleep 15
+          done
+
       - name: Diagnose API access + CORS (runner + browser origin)
         env:
           FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
