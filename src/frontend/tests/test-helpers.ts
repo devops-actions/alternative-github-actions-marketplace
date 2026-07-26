@@ -54,14 +54,17 @@ export async function waitForResults(page: Page) {
           return { error: String(err) };
         }
       }
-      const list = await wrap('/actions/list');
+      // Probe the snapshot first: it is what the overview page actually loads,
+      // so a 503 here (snapshot never built) is the most likely explanation
+      // for an empty grid.
+      const snapshot = await wrap('/actions/snapshot');
       const stats = await wrap('/actions/stats');
-      return { list, stats };
+      return { snapshot, stats };
     }, apiBase);
 
-    const listPart = diag?.list ? (`list=${diag.list.status||diag.list.error}`) : 'list=err';
+    const snapshotPart = diag?.snapshot ? (`snapshot=${diag.snapshot.status||diag.snapshot.error}`) : 'snapshot=err';
     const statsPart = diag?.stats ? (`stats=${diag.stats.status||diag.stats.error}`) : 'stats=err';
-    apiDiag = `${listPart}, ${statsPart}`;
+    apiDiag = `${snapshotPart}, ${statsPart}`;
   } catch (e) {
     apiDiag = `apiDiagError=${String(e)}`;
   }
