@@ -33,6 +33,10 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps(frontend)"
+    groups:
+      frontend:
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directory: /src/backend
@@ -45,6 +49,10 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps(backend)"
+    groups:
+      backend:
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directory: /src/mcp-server
@@ -57,6 +65,10 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps(mcp)"
+    groups:
+      mcp:
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directory: /vscode-extension
@@ -69,6 +81,10 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps(vscode)"
+    groups:
+      vscode:
+        patterns:
+          - "*"
     ignore:
       # typescript-eslint only supports TypeScript below 6.1; a bump past that
       # breaks `npm ci` on a peer dependency conflict rather than failing a test.
