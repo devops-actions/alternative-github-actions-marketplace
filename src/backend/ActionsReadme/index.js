@@ -40,7 +40,7 @@ async function fetchReadmePath(url, headers) {
     }
     const data = await response.json();
     return data && typeof data.path === 'string' ? data.path : null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
