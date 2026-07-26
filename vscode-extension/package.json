@@ -1,0 +1,254 @@
+{
+  "name": "actions-marketplace",
+  "displayName": "Alternative GitHub Actions Marketplace",
+  "description": "Browse the alternative GitHub Actions marketplace offline, and give AI agents the real latest version and commit SHA of any action.",
+  "version": "0.1.0",
+  "publisher": "devops-actions",
+  "license": "CC0-1.0",
+  "private": true,
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.99.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "github-actions",
+    "workflows",
+    "copilot",
+    "marketplace",
+    "supply-chain"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devops-actions/alternative-github-actions-marketplace.git",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/devops-actions/alternative-github-actions-marketplace/issues"
+  },
+  "homepage": "https://marketplace.devopsjournal.io/",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "actionsMarketplace.open",
+        "title": "Open Marketplace Explorer",
+        "category": "Actions Marketplace",
+        "icon": "$(search)"
+      },
+      {
+        "command": "actionsMarketplace.quickSearch",
+        "title": "Search Actions",
+        "category": "Actions Marketplace",
+        "icon": "$(search)"
+      },
+      {
+        "command": "actionsMarketplace.refresh",
+        "title": "Refresh Dataset Now",
+        "category": "Actions Marketplace",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "actionsMarketplace.showDatasetInfo",
+        "title": "Show Dataset Info",
+        "category": "Actions Marketplace",
+        "icon": "$(info)"
+      }
+    ],
+    "configuration": {
+      "title": "Alternative GitHub Actions Marketplace",
+      "properties": {
+        "actionsMarketplace.apiBaseUrl": {
+          "type": "string",
+          "default": "https://func-wsg6po7n4p5dg.azurewebsites.net/api",
+          "markdownDescription": "Base URL of the marketplace API, including the `/api` path. Point this at your own deployment if you host the backend yourself.",
+          "scope": "machine-overridable"
+        },
+        "actionsMarketplace.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh the cached dataset automatically in the background once it goes stale. When disabled, the dataset only updates when you run 'Actions Marketplace: Refresh Dataset Now'.",
+          "scope": "machine-overridable"
+        },
+        "actionsMarketplace.refreshIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 24,
+          "maximum": 720,
+          "description": "Minimum hours between automatic dataset refreshes. The dataset is rebuilt server-side once a day, so refreshing more often than daily cannot return anything new. Manual refreshes ignore this interval.",
+          "scope": "machine-overridable"
+        },
+        "actionsMarketplace.requestTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 5000,
+          "description": "Timeout in milliseconds for dataset downloads. The compressed dataset is a few megabytes, so allow generous time on slow connections.",
+          "scope": "machine-overridable"
+        },
+        "actionsMarketplace.showStatusBarItem": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show dataset freshness in the status bar."
+        }
+      }
+    },
+    "languageModelTools": [
+      {
+        "name": "actions-marketplace_resolveActionVersions",
+        "displayName": "Resolve GitHub Action versions",
+        "toolReferenceName": "actionVersions",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(versions)",
+        "tags": [
+          "github-actions",
+          "workflows",
+          "versions"
+        ],
+        "userDescription": "Look up the real latest version and commit SHA of GitHub Actions.",
+        "modelDescription": "Resolve the actual latest published version of one or more GitHub Actions, and the commit SHA a version resolves to. Call this before writing or editing any GitHub Actions workflow that references an action, and before telling the user which version to use. Never guess or recall an action version from memory: versions change constantly and a stale pin is a real defect. Input is a list of action references such as 'actions/checkout', 'actions/checkout@v4', 'github/codeql-action/analyze@v3', or a SHA-pinned reference. For each reference the result reports the latest known version, its commit SHA, the date it was published, whether the pinned version is already the latest, and whether the repository is archived. A null SHA means the dataset has no SHA for that version: report it as unknown, never substitute a SHA from a different version. The result also states how old the local dataset is, so you can tell the user when data may be behind.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "actions": {
+              "type": "array",
+              "description": "GitHub Action references to resolve, for example [\"actions/checkout@v4\", \"actions/setup-node\"]. Include the version pin when you have one so the result can tell you whether it is current.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 50
+            }
+          },
+          "required": [
+            "actions"
+          ]
+        }
+      },
+      {
+        "name": "actions-marketplace_searchActions",
+        "displayName": "Search GitHub Actions",
+        "toolReferenceName": "actionSearch",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(search)",
+        "tags": [
+          "github-actions",
+          "workflows",
+          "search"
+        ],
+        "userDescription": "Search the alternative GitHub Actions marketplace dataset.",
+        "modelDescription": "Search the alternative GitHub Actions marketplace for actions matching a query, when you need to find an action to do a job rather than resolve a version you already know. Matches on owner and repository name; every whitespace-separated token in the query must appear somewhere in 'owner name'. Results are ordered by dependent count, so the most widely used matches come first, and each result carries the latest version, commit SHA, action type, archived state, and OpenSSF score. Optional filters narrow by action type (Node, Docker, Composite), owner, verified status, and whether archived actions are included. Prefer recommending non-archived actions with many dependents.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Free text to match against owner and action name, for example \"terraform lint\" or \"setup node\"."
+            },
+            "actionType": {
+              "type": "string",
+              "description": "Restrict results to one action type.",
+              "enum": [
+                "Node",
+                "Docker",
+                "Composite"
+              ]
+            },
+            "owner": {
+              "type": "string",
+              "description": "Restrict results to a single owner or organisation, for example \"actions\"."
+            },
+            "verifiedOnly": {
+              "type": "boolean",
+              "description": "Only return actions whose marketplace listing is verified."
+            },
+            "includeArchived": {
+              "type": "boolean",
+              "description": "Include archived repositories. Defaults to false, because archived actions should not be recommended."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of results to return. Defaults to 15, capped at 50.",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
+        "name": "actions-marketplace_getActionDetails",
+        "displayName": "Get GitHub Action details",
+        "toolReferenceName": "actionDetails",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(package)",
+        "tags": [
+          "github-actions",
+          "workflows"
+        ],
+        "userDescription": "Get full metadata for a single GitHub Action, including its version history.",
+        "modelDescription": "Get detailed metadata for one GitHub Action, including the full list of known versions and tags with the commit SHA each one resolves to, its OpenSSF scorecard score, action type and Node runtime version, dependent count, repository size, and whether the repository is archived or disabled. Use this when the user asks whether an action is well maintained or up to date, or when you need a version other than the latest. This queries the marketplace API for live detail and falls back to the locally cached dataset when offline, so it may be slower than resolving versions.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "description": "A single action reference, for example \"actions/checkout\" or \"actions/checkout@v4\"."
+            }
+          },
+          "required": [
+            "action"
+          ]
+        }
+      },
+      {
+        "name": "actions-marketplace_getDatasetStats",
+        "displayName": "GitHub Actions dataset stats",
+        "toolReferenceName": "actionStats",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(graph)",
+        "tags": [
+          "github-actions"
+        ],
+        "userDescription": "Report aggregate statistics and freshness of the cached dataset.",
+        "modelDescription": "Report aggregate statistics over the whole alternative GitHub Actions marketplace dataset: total number of actions, breakdown by action type, how many are verified, archived, or have an OpenSSF score, how many have a resolvable commit SHA, and when the dataset was generated and last downloaded. Use this to answer questions about the marketplace as a whole, or to explain how current the version data behind the other tools is.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run check-types && npm run lint && node esbuild.mjs --production",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "package": "npx --yes @vscode/vsce@^3 package --out actions-marketplace.vsix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.99.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.7.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  }
+}

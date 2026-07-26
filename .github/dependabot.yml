@@ -57,3 +57,23 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps(mcp)"
+
+  - package-ecosystem: npm
+    directory: /vscode-extension
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps(vscode)"
+    ignore:
+      # typescript-eslint only supports TypeScript below 6.1; a bump past that
+      # breaks `npm ci` on a peer dependency conflict rather than failing a test.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # The engine floor is a deliberate compatibility choice (the stable
+      # language model tools API), not something to track the latest release of.
+      - dependency-name: "@types/vscode"

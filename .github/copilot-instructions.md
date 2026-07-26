@@ -19,6 +19,7 @@
 - Two precomputed feeds exist and are easy to confuse: `/actions/snapshot` (`lib/actionSummary.js`, for the frontend overview, no commit SHAs) and `/actions/versions` (`lib/versionsBuilder.js`, latest version + commit SHA per action, for offline clients). They share the `snapshots` blob container but are separate blobs, builders, and timers.
 - A commit SHA the dataset does not have is reported as `null` / "unknown" everywhere. Never substitute a SHA from a different version, and never let generated output imply one is known when it is not.
 - Backend tests live under `/src/backend/tests`; run `npm test` from `/src/backend` whenever touching backend logic or data contracts.
+- The VS Code extension lives in `/vscode-extension`; run `npm run check-types`, `npm run lint`, and `npm test` from there when touching it. Its `src/data` and `src/tools/format.ts` modules must stay free of `vscode` imports so they remain unit testable.
 - CI includes `deploy-functions.yml` which runs backend tests and zip deploys the function app on backend changes. Keep it green before merging.
 - Function deploy workflow discovers the app name via `az functionapp list` scoped to `${{ vars.AZURE_RESOURCE_GROUP }}`; keep the target RG unique to avoid ambiguous matches.
 - `main.bicep` exposes `assignTableDataContributor`; leave it `false` unless the deployment identity can create role assignments, otherwise grant Storage Table Data Contributor manually post-deploy.
