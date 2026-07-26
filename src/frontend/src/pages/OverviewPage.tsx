@@ -422,7 +422,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setTypeFilterFromStats('All')}
           aria-label="Show all actions"
         >
-          <span className="stat-label">Total Actions</span>
+          <span className="stat-label">Total</span>
           <span className="stat-value"><AnimatedCounter value={stats.total} /></span>
         </button>
 
@@ -432,7 +432,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setTypeFilterFromStats('Verified')}
           aria-label="Show verified actions"
         >
-          <span className="stat-label">Verified Actions</span>
+          <span className="stat-label">Verified</span>
           <span className="stat-value"><AnimatedCounter value={stats.verified} /></span>
         </button>
 
@@ -444,7 +444,7 @@ export const OverviewPage: React.FC = () => {
             onClick={() => setTypeFilterFromStats(type)}
             aria-label={`Filter by ${type} actions`}
           >
-            <span className="stat-label">{type} Actions</span>
+            <span className="stat-label">{type}</span>
             <span className="stat-value"><AnimatedCounter value={count} /></span>
           </button>
         ))}
@@ -455,7 +455,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setTypeFilterFromStats('Archived')}
           aria-label="Include archived actions"
         >
-          <span className="stat-label">Archived Actions</span>
+          <span className="stat-label">Archived</span>
           <span className="stat-value"><AnimatedCounter value={stats.archived} /></span>
         </button>
 
@@ -465,7 +465,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setOpenssfFilter('above5')}
           aria-label="Show actions with OpenSSF score"
         >
-          <span className="stat-label">OpenSSF Actions</span>
+          <span className="stat-label">OpenSSF</span>
           <span className="stat-value"><AnimatedCounter value={stats.withOssf} /></span>
         </button>
       </div>
