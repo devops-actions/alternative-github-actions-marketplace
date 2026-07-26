@@ -322,4 +322,61 @@ describe('actionsReadme function', () => {
     expect(context.res.body.error).toContain('invalid characters');
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  it('rewrites relative image sources using the README path from GitHub metadata', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockImplementation((url, options) => {
+      if (options.headers.Accept === 'application/vnd.github+json') {
+        return Promise.resolve({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ path: 'docs/README.md' })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('<img src="images/foo.png">')
+      });
+    });
+
+    const context = createContext('step-security', 'harden-runner');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toContain(
+      'src="https://raw.githubusercontent.com/step-security/harden-runner/main/docs/images/foo.png"'
+    );
+  });
+
+  it('falls back to root-relative rewriting when the metadata lookup fails', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockImplementation((url, options) => {
+      if (options.headers.Accept === 'application/vnd.github+json') {
+        return Promise.reject(new Error('network error'));
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('<img src="images/foo.png">')
+      });
+    });
+
+    const context = createContext('step-security', 'harden-runner');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toContain(
+      'src="https://raw.githubusercontent.com/step-security/harden-runner/main/images/foo.png"'
+    );
+  });
 });

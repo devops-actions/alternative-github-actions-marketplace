@@ -6,6 +6,7 @@ const { ActionRecord } = require('../lib/actionRecord');
 const { extractRepoName } = require('../lib/actionNameDecoder');
 const { cacheControlHeaders } = require('../lib/cacheHeaders');
 const { normalizePartitionKey, normalizeRowKey } = require('../lib/keyUtils');
+const { rewriteRelativeAssetUrls } = require('../lib/readmeAssets');
 
 const CACHE_MAX_AGE_SECONDS = 1800; // 30 minutes
 
@@ -26,15 +27,36 @@ function sanitizeVersion(rawVersion) {
   return sanitized || 'main';
 }
 
+// GitHub allows a repo's displayed README to live in the root, docs/, or
+// .github/ folder. The HTML-rendered readme response doesn't say which, so
+// we fetch the JSON metadata in parallel just to learn the README's path,
+// which is needed to resolve its relative image links correctly. A failure
+// here isn't fatal - we fall back to assuming a root-level README.
+async function fetchReadmePath(url, headers) {
+  try {
+    const response = await fetch(url, { headers: { ...headers, Accept: 'application/vnd.github+json' } });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data && typeof data.path === 'string' ? data.path : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
   const repoName = extractRepoName(owner, name);
   const url = `https://api.github.com/repos/${owner}/${repoName}/readme?ref=${ref}`;
-  
+
   const headers = await getPublicReadHeaders();
 
-  const response = await fetch(url, { headers });
-  
+  const [response, readmePath] = await Promise.all([
+    fetch(url, { headers }),
+    fetchReadmePath(url, headers)
+  ]);
+
   if (!response.ok) {
     if (response.status === 404) {
       return null;
@@ -46,7 +68,7 @@ async function fetchReadmeFromGitHub(owner, name, version) {
   if (!html) {
     throw new Error(`GitHub API returned empty body for ${owner}/${repoName}@${ref}`);
   }
-  return html;
+  return rewriteRelativeAssetUrls(html, owner, repoName, ref, readmePath);
 }
 
 async function getRepoUpdatedAt(owner, name) {
