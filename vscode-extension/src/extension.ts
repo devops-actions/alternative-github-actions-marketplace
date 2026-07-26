@@ -4,6 +4,7 @@ import { DatasetStore } from './datasetStore';
 import { registerCommands } from './commands';
 import { registerTools } from './tools/registerTools';
 import { DatasetStatusBar } from './ui/statusBar';
+import { DashboardViewProvider } from './ui/dashboardViewProvider';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('Actions Marketplace', { log: true });
@@ -18,6 +19,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(...registerTools(store, output));
   context.subscriptions.push(new DatasetStatusBar(store));
   context.subscriptions.push(...registerCommands(store, output));
+
+  const dashboardProvider = new DashboardViewProvider(store);
+  context.subscriptions.push(
+    dashboardProvider,
+    vscode.window.registerWebviewViewProvider(DashboardViewProvider.viewType, dashboardProvider)
+  );
 
   await store.initialize();
 }

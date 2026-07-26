@@ -169,6 +169,8 @@ async function showDatasetInfo(store: DatasetStore, output: vscode.LogOutputChan
   output.show(true);
 }
 
+const STATE_OF_ACTIONS_URL = 'https://alternative-github-actions-marketplace.devopsjournal.io/state';
+
 export function registerCommands(
   store: DatasetStore,
   output: vscode.LogOutputChannel
@@ -179,6 +181,8 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand('actionsMarketplace.quickSearch', () => quickSearch(store)),
     vscode.commands.registerCommand('actionsMarketplace.refresh', () => refresh(store)),
-    vscode.commands.registerCommand('actionsMarketplace.showDatasetInfo', () => showDatasetInfo(store, output))
+    vscode.commands.registerCommand('actionsMarketplace.showDatasetInfo', () => showDatasetInfo(store, output)),
+    vscode.commands.registerCommand('actionsMarketplace.openStateOfActions', () =>
+      vscode.env.openExternal(vscode.Uri.parse(STATE_OF_ACTIONS_URL)))
   ];
 }
