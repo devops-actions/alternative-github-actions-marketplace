@@ -10,6 +10,7 @@ const {
   buildTagShaMap,
   collectFloatingTags,
   normalizeVersionEntry,
+  normalizeDescription,
   parseDependents,
   resolveLatestVersion,
   stripOwnerPrefix
@@ -315,6 +316,41 @@ describe('buildRow', () => {
     expect(row[FIELD.actionType]).toBeNull();
     expect(row[FIELD.dependents]).toBeNull();
     expect(row[FIELD.flags]).toBe(0);
+  });
+
+  it('projects the description, trimmed', () => {
+    const row = buildRow({ ...fullPayload, description: '  Checkout a Git repository  ' });
+    expect(row[FIELD.description]).toBe('Checkout a Git repository');
+  });
+
+  it('reports a null description when the pipeline has not sent one', () => {
+    // This is the common case today: the ingest pipeline doesn't populate
+    // description yet, so every row reports null - "unknown", not "none".
+    expect(buildRow(fullPayload)[FIELD.description]).toBeNull();
+  });
+});
+
+describe('normalizeDescription', () => {
+  it('trims whitespace', () => {
+    expect(normalizeDescription('  Lint your Dockerfiles  ')).toBe('Lint your Dockerfiles');
+  });
+
+  it('treats blank or non-string values as null', () => {
+    expect(normalizeDescription('   ')).toBeNull();
+    expect(normalizeDescription(undefined)).toBeNull();
+    expect(normalizeDescription(null)).toBeNull();
+    expect(normalizeDescription(42)).toBeNull();
+  });
+
+  it('truncates to 200 characters with an ellipsis', () => {
+    const result = normalizeDescription('x'.repeat(250));
+    expect(result).toHaveLength(200);
+    expect(result.endsWith('…')).toBe(true);
+  });
+
+  it('leaves a description at exactly the limit untouched', () => {
+    const exact = 'x'.repeat(200);
+    expect(normalizeDescription(exact)).toBe(exact);
   });
 });
 
