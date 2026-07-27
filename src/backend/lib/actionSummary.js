@@ -11,6 +11,28 @@
 //
 // When the overview or state pages start reading a new field, add it here —
 // otherwise it will silently be `undefined` in the snapshot.
+//
+// `description` is the one exception to "only what the UI renders": it's
+// carried purely so the overview's free-text search can match on it, same as
+// owner/name. It's null for effectively the whole dataset until the ingest
+// pipeline starts populating it.
+
+// Long enough for a useful search/display blurb, short enough not to inflate
+// the snapshot - mirrors lib/versionsBuilder.js's DESCRIPTION_MAX_LENGTH.
+const DESCRIPTION_MAX_LENGTH = 200;
+
+function readDescription(payload) {
+  if (typeof payload.description !== 'string') {
+    return null;
+  }
+  const trimmed = payload.description.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.length > DESCRIPTION_MAX_LENGTH
+    ? `${trimmed.slice(0, DESCRIPTION_MAX_LENGTH - 1).trimEnd()}…`
+    : trimmed;
+}
 
 // Reads the OpenSSF score from any of the casings that have appeared in the
 // pipeline data over time. Returns null when there is no usable numeric score.
@@ -114,6 +136,7 @@ function toActionSummary(payload) {
     },
     dependents: { dependents: dependentsCount },
     releaseInfo: readLatestRelease(payload),
+    description: readDescription(payload),
     verified: readVerified(payload),
     ossf: payload.ossf === true || ossfScore !== null,
     ossfScore: ossfScore === null ? 0 : ossfScore,
