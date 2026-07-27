@@ -25,6 +25,8 @@ export interface Action {
   };
   tagInfo: string[];
   releaseInfo: string[];
+  /** Short blurb from the action's action.yml. Null until the ingest pipeline populates it. */
+  description?: string | null;
   versionShaMap?: Record<string, string>;
   dependabotEnabled: boolean;
   mirrorLastUpdated: string | null;
