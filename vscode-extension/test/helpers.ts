@@ -11,7 +11,8 @@ export const SNAPSHOT_FIELDS = [
   'flags',
   'ossfScore',
   'dependents',
-  'floatingTags'
+  'floatingTags',
+  'description'
 ];
 
 export interface RowInput {
@@ -25,6 +26,7 @@ export interface RowInput {
   ossfScore?: number | null;
   dependents?: number | null;
   floatingTags?: Array<[string, string]> | 0;
+  description?: string | null;
 }
 
 export function row(input: RowInput): unknown[] {
@@ -38,7 +40,8 @@ export function row(input: RowInput): unknown[] {
     input.flags ?? 0,
     input.ossfScore ?? null,
     input.dependents ?? null,
-    input.floatingTags ?? 0
+    input.floatingTags ?? 0,
+    input.description ?? null
   ];
 }
 
@@ -113,6 +116,7 @@ export const SAMPLE_ROWS: RowInput[] = [
     latestSha: null,
     actionType: 'Composite',
     flags: 0,
-    dependents: 0
+    dependents: 0,
+    description: 'Lints Terraform configuration files before apply'
   }
 ];

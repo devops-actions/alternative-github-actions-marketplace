@@ -37,6 +37,8 @@ export interface ActionEntry {
   /** Publish date of the repository's latest release, ISO 8601. */
   publishedAt: string | null;
   actionType: string | null;
+  /** Short blurb from the action's `action.yml`. Null when not yet ingested. */
+  description: string | null;
   verified: boolean;
   archived: boolean;
   disabled: boolean;
@@ -157,6 +159,7 @@ export function decodeSnapshot(raw: unknown): DecodedSnapshot {
       latestSha: asString(row[index.latestSha]),
       publishedAt: asString(row[index.publishedAt]),
       actionType: asString(row[index.actionType]),
+      description: asString(row[index.description]),
       verified: (flags & ActionFlag.Verified) !== 0,
       archived: (flags & ActionFlag.Archived) !== 0,
       disabled: (flags & ActionFlag.Disabled) !== 0,

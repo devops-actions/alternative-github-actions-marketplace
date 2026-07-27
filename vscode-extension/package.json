@@ -170,13 +170,13 @@
           "search"
         ],
         "userDescription": "Search the alternative GitHub Actions marketplace dataset.",
-        "modelDescription": "Search the alternative GitHub Actions marketplace for actions matching a query, when you need to find an action to do a job rather than resolve a version you already know. Matches on owner and repository name; every whitespace-separated token in the query must appear somewhere in 'owner name'. Results are ordered by dependent count, so the most widely used matches come first, and each result carries the latest version, commit SHA, action type, archived state, and OpenSSF score. Optional filters narrow by action type (Node, Docker, Composite), owner, verified status, and whether archived actions are included. Prefer recommending non-archived actions with many dependents.",
+        "modelDescription": "Search the alternative GitHub Actions marketplace for actions matching a query, when you need to find an action to do a job rather than resolve a version you already know. Matches on owner, repository name, action type, verified/archived state, and description (when known); every whitespace-separated token in the query must appear somewhere in that combined text. Results are ordered by dependent count, so the most widely used matches come first, and each result carries the latest version, commit SHA, action type, archived state, and OpenSSF score. Optional filters narrow by action type (Node, Docker, Composite), owner, verified status, and whether archived actions are included. Prefer recommending non-archived actions with many dependents.",
         "inputSchema": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "Free text to match against owner and action name, for example \"terraform lint\" or \"setup node\"."
+              "description": "Free text to match against owner, action name, type, and description, for example \"terraform lint\" or \"docker build\"."
             },
             "actionType": {
               "type": "string",
