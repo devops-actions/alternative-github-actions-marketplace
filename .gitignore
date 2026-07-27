@@ -16,11 +16,11 @@ local.settings.json
 .azurite/
 
 # Editor and tooling
-.vscode/
-# The extension's own launch config is part of its development setup, not a
-# personal editor preference, so it is tracked.
-!vscode-extension/.vscode/
-!vscode-extension/.vscode/launch.json
+.vscode/*
+# The F5 launch/build configs are part of this repo's development setup, not a
+# personal editor preference, so they are tracked.
+!.vscode/launch.json
+!.vscode/tasks.json
 .vs/
 .DS_Store
 Thumbs.db
