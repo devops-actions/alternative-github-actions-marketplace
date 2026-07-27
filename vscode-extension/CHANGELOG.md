@@ -15,3 +15,6 @@ Initial version.
   website's token-matching behaviour.
 - Quick-pick search that copies or inserts a SHA-pinned `uses:` value.
 - Status bar item showing the action count and dataset age.
+- Activity bar entry point with a dashboard view mirroring the website's
+  "State of Actions" key metrics, and quick links to the explorer, search,
+  refresh, and the public website.

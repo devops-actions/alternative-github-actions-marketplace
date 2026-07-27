@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { DatasetStore } from './datasetStore';
 import { MarketplacePanel } from './ui/marketplacePanel';
 import { formatPinnedRef } from './data/actionRef';
+import { STATE_OF_ACTIONS_URL } from './config';
 
 interface ActionQuickPickItem extends vscode.QuickPickItem {
   pinnedRef: string;
@@ -179,6 +180,8 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand('actionsMarketplace.quickSearch', () => quickSearch(store)),
     vscode.commands.registerCommand('actionsMarketplace.refresh', () => refresh(store)),
-    vscode.commands.registerCommand('actionsMarketplace.showDatasetInfo', () => showDatasetInfo(store, output))
+    vscode.commands.registerCommand('actionsMarketplace.showDatasetInfo', () => showDatasetInfo(store, output)),
+    vscode.commands.registerCommand('actionsMarketplace.openStateOfActions', () =>
+      vscode.env.openExternal(vscode.Uri.parse(STATE_OF_ACTIONS_URL)))
   ];
 }

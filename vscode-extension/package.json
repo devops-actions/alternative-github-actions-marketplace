@@ -61,8 +61,34 @@
         "title": "Show Dataset Info",
         "category": "Actions Marketplace",
         "icon": "$(info)"
+      },
+      {
+        "command": "actionsMarketplace.openStateOfActions",
+        "title": "Open State of Actions Website",
+        "category": "Actions Marketplace",
+        "icon": "$(link-external)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "actionsMarketplace",
+          "title": "Actions Marketplace",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "actionsMarketplace": [
+        {
+          "id": "actionsMarketplace.dashboard",
+          "name": "Dashboard",
+          "type": "webview",
+          "icon": "media/activity-icon.svg",
+          "contextualTitle": "Actions Marketplace"
+        }
+      ]
+    },
     "configuration": {
       "title": "Alternative GitHub Actions Marketplace",
       "properties": {

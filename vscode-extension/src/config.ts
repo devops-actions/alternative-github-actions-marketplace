@@ -4,6 +4,9 @@ import { MIN_INTERVAL_HOURS } from './data/refreshPolicy';
 
 export const CONFIG_SECTION = 'actionsMarketplace';
 
+/** The public "State of Actions" page, linked from the dashboard and command. */
+export const STATE_OF_ACTIONS_URL = 'https://alternative-github-actions-marketplace.devopsjournal.io/state';
+
 export interface ExtensionConfig {
   apiBaseUrl: string;
   autoRefresh: boolean;

@@ -12,6 +12,11 @@ language model tools, so the agent can look the answer up instead of recalling i
 
 ## What you get
 
+- **An activity bar entry** ("Actions Marketplace") with a dashboard view
+  showing the same key metrics as the website's
+  [State of Actions](https://alternative-github-actions-marketplace.devopsjournal.io/state)
+  page, plus quick links into the explorer, search, and refresh - see
+  [Activity bar dashboard](#activity-bar-dashboard).
 - **Language model tools** that GitHub Copilot's agent mode (and any other tool-
   calling client in VS Code) can invoke - see [AI agent tools](#ai-agent-tools).
 - **A marketplace explorer** with the dataset's stats and a search that matches
@@ -21,6 +26,17 @@ language model tools, so the agent can look the answer up instead of recalling i
 - **A local dataset** of every action in the marketplace, refreshed at most once
   a day, that keeps working offline.
 
+## Activity bar dashboard
+
+The Actions Marketplace icon in the activity bar opens a "Dashboard" view with
+the dataset's key metrics (total actions, verified, archived, actions with an
+OpenSSF score, and the Node/Docker/Composite distribution) refreshed live as
+the dataset changes, plus buttons to open the full explorer, run a quick
+search, force a refresh, or open the public State of Actions website. Per the
+[data exposure policy](#what-the-tools-do-not-report), it does not show
+vulnerability counts or other security posture signals even though the public
+page does.
+
 ## Commands
 
 | Command | What it does |
@@ -29,6 +45,7 @@ language model tools, so the agent can look the answer up instead of recalling i
 | `Actions Marketplace: Search Actions` | Quick-pick search; copy or insert a pinned ref |
 | `Actions Marketplace: Refresh Dataset Now` | Force a refresh, ignoring the daily interval |
 | `Actions Marketplace: Show Dataset Info` | Print dataset counts and freshness to the output channel |
+| `Actions Marketplace: Open State of Actions Website` | Opens the public State of Actions page in a browser |
 
 The status bar shows the action count and, on hover, exactly how old the data is.
 
