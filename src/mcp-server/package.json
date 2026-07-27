@@ -23,7 +23,7 @@
     "@hono/node-server": "2.0.12",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "lru-cache": "^11.5.2",
     "zod": "^4.4.3"
   },
