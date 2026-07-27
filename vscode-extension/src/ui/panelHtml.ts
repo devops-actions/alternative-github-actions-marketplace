@@ -88,8 +88,16 @@ export function getPanelHtml(webview: vscode.Webview): string {
     padding: 0;
     border: none;
     text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   button.link:hover { text-decoration: underline; background: none; }
+
+  .icon-external {
+    flex: none;
+    fill: currentColor;
+  }
 
   .stats {
     display: grid;
@@ -288,6 +296,19 @@ export function getPanelHtml(webview: vscode.Webview): string {
 
   const number = (value) => (typeof value === 'number' ? value.toLocaleString('en-US') : '-');
 
+  function externalLinkIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'icon-external');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '12');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M10 1h5v5h-1.5V3.56L7.06 10 6 8.94 12.44 2.5H10V1zM3 3h4v1.5H3v8.5h8.5V9H13v5.5H1.5V3H3z');
+    svg.appendChild(path);
+    return svg;
+  }
+
   function card(value, label, detail) {
     const node = document.createElement('div');
     node.className = 'card';
@@ -444,7 +465,8 @@ export function getPanelHtml(webview: vscode.Webview): string {
       const openButton = document.createElement('button');
       openButton.type = 'button';
       openButton.className = 'link';
-      openButton.textContent = 'Open details';
+      openButton.title = 'Opens ' + row.url + ' in your browser';
+      openButton.append('Open details', externalLinkIcon());
       openButton.addEventListener('click', () => {
         vscodeApi.postMessage({ type: 'open', url: row.url });
       });

@@ -153,6 +153,25 @@ export function getDashboardHtml(webview: vscode.Webview): string {
   button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
 
   .hidden { display: none !important; }
+
+  .example { margin-bottom: 10px; }
+  .example:last-child { margin-bottom: 0; }
+
+  .example-label {
+    font-weight: 600;
+    font-size: 0.9em;
+    margin-bottom: 3px;
+  }
+
+  .example-prompt {
+    display: block;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.85em;
+    background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+    border-radius: 4px;
+    padding: 6px 8px;
+    white-space: pre-wrap;
+  }
 </style>
 </head>
 <body>
@@ -174,6 +193,17 @@ export function getDashboardHtml(webview: vscode.Webview): string {
     <button id="explorer" type="button">Open Marketplace Explorer</button>
     <button id="search" class="secondary" type="button">Search Actions&hellip;</button>
     <button id="website" class="secondary" type="button">Open State of Actions website</button>
+  </div>
+
+  <h2>Use with AI</h2>
+  <p class="subtitle">This extension gives AI agents (e.g. GitHub Copilot Chat) tools to look up real marketplace data, so answers use current versions instead of guesses from the model's training data.</p>
+  <div class="example">
+    <div class="example-label">Always look up the latest version</div>
+    <code class="example-prompt">Before pinning actions/checkout in my workflow, look up its latest version and commit SHA.</code>
+  </div>
+  <div class="example">
+    <div class="example-label">Audit all your workflows</div>
+    <code class="example-prompt">Check every action used in .github/workflows against the marketplace and flag any that are outdated, unverified, or archived.</code>
   </div>
 
 <script nonce="${nonce}">
