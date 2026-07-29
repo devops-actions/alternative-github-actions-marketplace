@@ -16,7 +16,8 @@ describe('decodeSnapshot', () => {
         flags: 1 | 4,
         ossfScore: 6.9,
         dependents: 15368157,
-        floatingTags: [['v7', SHA_CHECKOUT_LATEST]]
+        floatingTags: [['v7', SHA_CHECKOUT_LATEST]],
+        description: 'Checkout a Git repository'
       }
     ]));
 
@@ -34,7 +35,8 @@ describe('decodeSnapshot', () => {
       hasOssf: true,
       ossfScore: 6.9,
       dependents: 15368157,
-      floatingTags: { v7: SHA_CHECKOUT_LATEST }
+      floatingTags: { v7: SHA_CHECKOUT_LATEST },
+      description: 'Checkout a Git repository'
     });
   });
 
@@ -81,6 +83,21 @@ describe('decodeSnapshot', () => {
     expect(entry.ossfScore).toBeNull();
     expect(entry.dependents).toBeNull();
     expect(entry.floatingTags).toEqual({});
+    expect(entry.description).toBeNull();
+  });
+
+  it('decodes a snapshot with no "description" field at all as null on every entry', () => {
+    // The field is optional and won't exist until the ingest pipeline sends it -
+    // an old server response must still decode cleanly.
+    const decoded = decodeSnapshot({
+      schemaVersion: 1,
+      generatedAt: '2026-07-26T04:30:00.000Z',
+      count: 1,
+      fields: ['owner', 'name', 'latestVersion', 'latestSha'],
+      actions: [['actions', 'checkout', 'v7.0.1', SHA_CHECKOUT_LATEST]]
+    });
+
+    expect(decoded.entries[0].description).toBeNull();
   });
 
   it('skips rows without an owner or name instead of producing broken entries', () => {

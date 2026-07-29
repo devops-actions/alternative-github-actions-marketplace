@@ -6,7 +6,8 @@
  * for a client (e.g. the VS Code extension) to download on a daily refresh.
  * This projection keeps only what a consumer needs to answer "what is the
  * latest version of this action, when was it published, and which commit SHA
- * does it point at" plus the handful of facets worth filtering on.
+ * does it point at" plus the handful of facets worth filtering on, plus a short
+ * description for keyword search (null until the ingest pipeline populates it).
  *
  * Not to be confused with `lib/actionSummary.js`, which projects the same table
  * for the frontend overview. That one carries the fields the UI renders and
@@ -34,13 +35,18 @@ const VERSIONS_FIELDS = [
   'flags',
   'ossfScore',
   'dependents',
-  'floatingTags'
+  'floatingTags',
+  'description'
 ];
 
 const FLAG_VERIFIED = 1;
 const FLAG_ARCHIVED = 2;
 const FLAG_OSSF = 4;
 const FLAG_DISABLED = 8;
+
+// Long enough for a useful search/display blurb, short enough to not inflate
+// the feed - action.yml descriptions are one-liners in practice.
+const DESCRIPTION_MAX_LENGTH = 200;
 
 // Floating tags are the ones humans actually pin in workflows: `v4`, `v4.1`.
 // Immutable patch tags (`v4.1.2`) are already covered by `latestVersion`, and
@@ -210,6 +216,29 @@ function parseDependents(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Normalizes the action's description for the feed.
+ *
+ * The ingest pipeline does not populate this field yet, so it is null for
+ * effectively the whole dataset today - callers must treat null as "unknown",
+ * not "no description", the same convention `latestSha` already uses.
+ *
+ * @param {*} value
+ * @returns {string|null}
+ */
+function normalizeDescription(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.length > DESCRIPTION_MAX_LENGTH
+    ? `${trimmed.slice(0, DESCRIPTION_MAX_LENGTH - 1).trimEnd()}…`
+    : trimmed;
+}
+
 function normalizeOssfScore(payload) {
   const raw = payload.openssf_score ?? payload.ossfScore ?? payload.ossf_score ?? null;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
@@ -277,6 +306,7 @@ function buildRow(payload) {
   const flags = computeFlags(payload, ossfScore);
   const dependents = parseDependents(payload.dependents && payload.dependents.dependents);
   const floatingTags = collectFloatingTags(tagShaMap);
+  const description = normalizeDescription(payload.description);
 
   return [
     owner,
@@ -290,7 +320,8 @@ function buildRow(payload) {
     dependents,
     // 0 rather than [] or null: it is the cheapest "nothing here" marker in JSON
     // and this field is empty for the majority of rows.
-    floatingTags.length > 0 ? floatingTags : 0
+    floatingTags.length > 0 ? floatingTags : 0,
+    description
   ];
 }
 
@@ -371,7 +402,9 @@ module.exports = {
   buildTagShaMap,
   collectFloatingTags,
   normalizeVersionEntry,
+  normalizeDescription,
   parseDependents,
   resolveLatestVersion,
-  stripOwnerPrefix
+  stripOwnerPrefix,
+  DESCRIPTION_MAX_LENGTH
 };

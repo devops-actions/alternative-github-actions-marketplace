@@ -85,6 +85,22 @@ export function tokenizeQuery(query: string): string[] {
   return normalizeSearchable(query).split(/\s+/).filter(Boolean);
 }
 
+/**
+ * Builds the text a query is matched against for one entry: owner, name, type,
+ * verified/archived state, and description - everything a user might type to
+ * find an action by what it does rather than just what it's called.
+ */
+function buildSearchableText(entry: ActionEntry): string {
+  const parts = [entry.owner, entry.name, entry.actionType, entry.description];
+  if (entry.verified) {
+    parts.push('verified');
+  }
+  if (entry.archived) {
+    parts.push('archived');
+  }
+  return normalizeSearchable(parts.filter(Boolean).join(' '));
+}
+
 function actionUrl(owner: string, name: string): string {
   return `https://marketplace.devopsjournal.io/action/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
@@ -106,12 +122,9 @@ export class ActionIndex {
   constructor(snapshot: DecodedSnapshot) {
     this.generatedAt = snapshot.generatedAt;
     this.schemaVersion = snapshot.schemaVersion;
-    // actionType (e.g. "docker", "composite", "node") is folded in on top of
-    // the website's owner+name search so a query like "docker" surfaces
-    // actions by kind, using a field already present in this snapshot.
     this.indexed = snapshot.entries.map((entry) => ({
       entry,
-      searchable: normalizeSearchable(`${entry.owner} ${entry.name} ${entry.actionType ?? ''}`)
+      searchable: buildSearchableText(entry)
     }));
 
     for (const { entry } of this.indexed) {
@@ -325,10 +338,9 @@ export class ActionIndex {
   }
 
   /**
-   * Token search over `owner name actionType`: every token in the query must
-   * appear somewhere in the normalized text. The tokenizing/normalizing
-   * matches the website's search; actionType is extension-only, since the
-   * website's search does not fold it in.
+   * Token search over owner, name, type, verified/archived state, and
+   * description, matching the website's behaviour: every token in the query
+   * must appear somewhere in the normalized text.
    */
   search(query: string, filters: SearchFilters = {}): ActionSearchResult[] {
     const tokens = tokenizeQuery(query);

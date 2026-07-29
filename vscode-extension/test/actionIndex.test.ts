@@ -207,6 +207,25 @@ describe('ActionIndex.search', () => {
   it('includes a marketplace url for each result', () => {
     expect(index.search('checkout')[0].url).toBe('https://marketplace.devopsjournal.io/action/actions/checkout');
   });
+
+  it('matches a free-text query against the action type', () => {
+    expect(index.search('composite').map((item) => item.ref)).toEqual(['someone/no-releases']);
+  });
+
+  it('matches a free-text query against verified and archived state', () => {
+    expect(index.search('verified').map((item) => item.ref)).toEqual(['actions/setup-node']);
+    expect(index.search('archived', { includeArchived: true }).map((item) => item.ref))
+      .toEqual(['someone/abandoned-action']);
+  });
+
+  it('matches a free-text query against the description', () => {
+    expect(index.search('terraform').map((item) => item.ref)).toEqual(['someone/no-releases']);
+    expect(index.search('lints configuration').map((item) => item.ref)).toEqual(['someone/no-releases']);
+  });
+
+  it('still matches by owner/name when an entry has no description', () => {
+    expect(index.search('checkout').map((item) => item.ref)).toEqual(['actions/checkout']);
+  });
 });
 
 describe('ActionIndex.stats', () => {

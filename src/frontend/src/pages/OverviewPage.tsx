@@ -230,7 +230,14 @@ export const OverviewPage: React.FC = () => {
 
     const normalizedQuery = deferredSearchQuery.trim();
     if (normalizedQuery) {
-      filtered = filtered.filter(action => matchesSearchQuery({ owner: action.owner, name: action.name }, normalizedQuery));
+      filtered = filtered.filter(action => matchesSearchQuery({
+        owner: action.owner,
+        name: action.name,
+        actionType: action.actionType?.actionType,
+        verified: isActionVerified(action),
+        archived: action.repoInfo?.archived,
+        description: action.description
+      }, normalizedQuery));
     }
 
     if (typeFilter !== 'All') {
@@ -493,7 +500,7 @@ export const OverviewPage: React.FC = () => {
         <div className="search-box">
           <input
             type="text"
-            placeholder="Search by action name or owner..."
+            placeholder="Search by name, owner, type, or keyword..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />

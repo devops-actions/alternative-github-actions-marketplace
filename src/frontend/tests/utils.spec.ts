@@ -21,4 +21,29 @@ test.describe('matchesSearchQuery unit tests', () => {
     const item = { owner: 'Test-Org', name: 'my_repo-name' };
     expect(matchesSearchQuery(item, 'test org my repo')).toBe(true);
   });
+
+  test('matches a query against the action type', () => {
+    const item = { owner: 'actions', name: 'checkout', actionType: 'Docker' };
+    expect(matchesSearchQuery(item, 'docker')).toBe(true);
+    expect(matchesSearchQuery(item, 'node')).toBe(false);
+  });
+
+  test('matches a query against verified and archived state', () => {
+    const verified = { owner: 'actions', name: 'checkout', verified: true };
+    const archived = { owner: 'actions', name: 'old-thing', archived: true };
+    expect(matchesSearchQuery(verified, 'verified')).toBe(true);
+    expect(matchesSearchQuery(archived, 'archived')).toBe(true);
+    expect(matchesSearchQuery(verified, 'archived')).toBe(false);
+  });
+
+  test('matches a query against the description', () => {
+    const item = { owner: 'someone', name: 'no-releases', description: 'Lints Terraform configuration files' };
+    expect(matchesSearchQuery(item, 'terraform')).toBe(true);
+    expect(matchesSearchQuery(item, 'lints configuration')).toBe(true);
+  });
+
+  test('still matches by owner/name when description is missing', () => {
+    const item = { owner: 'actions', name: 'checkout' };
+    expect(matchesSearchQuery(item, 'checkout')).toBe(true);
+  });
 });

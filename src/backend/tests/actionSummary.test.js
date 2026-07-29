@@ -8,6 +8,7 @@ describe('toActionSummary', () => {
     repoInfo: { updated_at: '2026-07-20T10:00:00Z', archived: false, disabled: false },
     dependents: { dependents: '1,000', dependentsLastUpdated: '2026-07-01' },
     releaseInfo: ['v4.2.0', 'v4.1.0'],
+    description: 'Checkout a Git repository so a workflow can access it',
     verified: true,
     ossf: true,
     openssf_score: 8.4,
@@ -29,6 +30,7 @@ describe('toActionSummary', () => {
       repoInfo: { updated_at: '2026-07-20T10:00:00Z', archived: false },
       dependents: { dependents: '1,000' },
       releaseInfo: ['v4.2.0'],
+      description: 'Checkout a Git repository so a workflow can access it',
       verified: true,
       ossf: true,
       ossfScore: 8.4,
@@ -125,5 +127,21 @@ describe('toActionSummary', () => {
     const summary = toActionSummary({ owner: '  actions  ', name: '  checkout  ' });
     expect(summary.owner).toBe('actions');
     expect(summary.name).toBe('checkout');
+  });
+
+  it('reports null when the pipeline has not populated a description yet', () => {
+    expect(toActionSummary({ owner: 'o', name: 'n' }).description).toBeNull();
+    expect(toActionSummary({ owner: 'o', name: 'n', description: '   ' }).description).toBeNull();
+    expect(toActionSummary({ owner: 'o', name: 'n', description: 42 }).description).toBeNull();
+  });
+
+  it('trims a description and truncates it to 200 characters', () => {
+    expect(toActionSummary({ owner: 'o', name: 'n', description: '  Lint your Dockerfiles  ' }).description)
+      .toBe('Lint your Dockerfiles');
+
+    const long = 'x'.repeat(250);
+    const summary = toActionSummary({ owner: 'o', name: 'n', description: long });
+    expect(summary.description).toHaveLength(200);
+    expect(summary.description.endsWith('…')).toBe(true);
   });
 });
