@@ -260,7 +260,7 @@ export function getPanelHtml(webview: vscode.Webview): string {
 
   <section aria-label="Search">
     <div class="controls">
-      <input id="query" type="text" placeholder="Search by owner or action name, e.g. setup node" autocomplete="off" spellcheck="false" />
+      <input id="query" type="text" placeholder="Search by owner, action name, or type, e.g. setup node or docker" autocomplete="off" spellcheck="false" />
       <select id="type" aria-label="Action type">
         <option value="">All types</option>
         <option value="Node">Node</option>

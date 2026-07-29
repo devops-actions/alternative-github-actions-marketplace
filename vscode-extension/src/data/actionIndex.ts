@@ -106,9 +106,12 @@ export class ActionIndex {
   constructor(snapshot: DecodedSnapshot) {
     this.generatedAt = snapshot.generatedAt;
     this.schemaVersion = snapshot.schemaVersion;
+    // actionType (e.g. "docker", "composite", "node") is folded in on top of
+    // the website's owner+name search so a query like "docker" surfaces
+    // actions by kind, using a field already present in this snapshot.
     this.indexed = snapshot.entries.map((entry) => ({
       entry,
-      searchable: normalizeSearchable(`${entry.owner} ${entry.name}`)
+      searchable: normalizeSearchable(`${entry.owner} ${entry.name} ${entry.actionType ?? ''}`)
     }));
 
     for (const { entry } of this.indexed) {
@@ -322,8 +325,10 @@ export class ActionIndex {
   }
 
   /**
-   * Token search over `owner name`, matching the website's behaviour: every
-   * token in the query must appear somewhere in the normalized text.
+   * Token search over `owner name actionType`: every token in the query must
+   * appear somewhere in the normalized text. The tokenizing/normalizing
+   * matches the website's search; actionType is extension-only, since the
+   * website's search does not fold it in.
    */
   search(query: string, filters: SearchFilters = {}): ActionSearchResult[] {
     const tokens = tokenizeQuery(query);

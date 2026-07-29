@@ -30,7 +30,7 @@ async function quickSearch(store: DatasetStore): Promise<void> {
 
   const picker = vscode.window.createQuickPick<ActionQuickPickItem>();
   picker.title = 'Search GitHub Actions';
-  picker.placeholder = 'Search by owner or action name';
+  picker.placeholder = 'Search by owner, action name, or type (e.g. docker, composite)';
   picker.matchOnDescription = true;
   // The index already ranks and filters; VS Code's own filtering would fight it.
   picker.ignoreFocusOut = false;
