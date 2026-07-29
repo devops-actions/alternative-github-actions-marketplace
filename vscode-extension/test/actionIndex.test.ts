@@ -176,6 +176,15 @@ describe('ActionIndex.search', () => {
     expect(index.search('', { actionType: 'Composite' }).map((item) => item.ref)).toEqual(['someone/no-releases']);
   });
 
+  it('matches the action type as free text', () => {
+    expect(index.search('composite').map((item) => item.ref)).toEqual(['someone/no-releases']);
+  });
+
+  it('combines an action type token with an owner or name token', () => {
+    expect(index.search('node checkout').map((item) => item.ref)).toEqual(['actions/checkout']);
+    expect(index.search('node nonexistent')).toEqual([]);
+  });
+
   it('filters by owner', () => {
     expect(index.search('', { owner: 'GitHub' }).map((item) => item.ref)).toEqual(['github/codeql-action_analyze']);
   });
