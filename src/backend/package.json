@@ -44,17 +44,17 @@
     "@azure/data-tables": "^13.2.2",
     "@azure/identity": "^4.13.1",
     "@azure/storage-blob": "^12.33.0",
-    "@octokit/app": "^16.1.2",
+    "@octokit/app": "^16.1.4",
     "@octokit/auth-app": "^8.2.0"
   },
   "devDependencies": {
     "@azure/functions": "^4.16.2",
-    "@cucumber/cucumber": "^13.2.0",
+    "@cucumber/cucumber": "^13.2.1",
     "@eslint/js": "^10.0.1",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/jest-runner": "^9.6.1",
     "eslint": "^10.8.0",
-    "globals": "^17.8.0",
+    "globals": "^17.9.0",
     "jest": "^30.4.2"
   },
   "engines": {
