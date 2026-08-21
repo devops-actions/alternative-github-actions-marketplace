@@ -32,5 +32,9 @@ obj/
 src/frontend/test-results/
 src/frontend/playwright-report/
 
+# Stryker mutation reports
+src/mcp-server/reports/
+src/backend/reports/
+
 # Bicep compiled ARM templates
 IAC/*.json
