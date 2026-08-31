@@ -7,8 +7,10 @@ concurrency:
 on:
   workflow_dispatch:
   push:
-    #branches:
-      #- main
+    # Only deploy from main: other branches (e.g. Dependabot PR branches) lack
+    # the required secrets, so azure/login would fail there.
+    branches:
+      - main
     paths:
       - 'IAC/**'
       - '.github/workflows/deploy-infra.yml'
