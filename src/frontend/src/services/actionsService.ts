@@ -127,7 +127,12 @@ function normalizeAction(raw: unknown): Action {
     parsedScore = rawScore;
   }
 
-  const ossf = Boolean(action.ossf) || (parsedScore !== null);
+  // `ossf` must reflect the raw flag exactly: it is only ever set to `true` by
+  // the crawler when a Scorecard result was actually loaded. Synthesizing it
+  // from "any legacy score field is present" would re-introduce the same
+  // overcount bug that was just fixed on the backend (a leftover/stale score
+  // field would get counted as "found" again).
+  const ossf = action.ossf === true;
   const ossfScore = parsedScore !== null ? parsedScore : (typeof action.ossfScore === 'number' ? action.ossfScore : 0);
 
   return {

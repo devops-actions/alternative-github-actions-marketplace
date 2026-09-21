@@ -73,10 +73,8 @@ async function updateStatsCache(tableClient, record, existing, result) {
   const oldVerified = oldPayload && oldPayload.verified === true;
   const newArchived = newPayload && newPayload.repoInfo && newPayload.repoInfo.archived === true;
   const oldArchived = oldPayload && oldPayload.repoInfo && oldPayload.repoInfo.archived === true;
-  const newRawScore = newPayload ? (newPayload.openssf_score ?? newPayload.ossfScore ?? newPayload.ossf_score ?? null) : null;
-  const newHasOssf = newPayload && (newPayload.ossf === true || (newRawScore !== null && newRawScore !== undefined));
-  const oldRawScore = oldPayload ? (oldPayload.openssf_score ?? oldPayload.ossfScore ?? oldPayload.ossf_score ?? null) : null;
-  const oldHasOssf = oldPayload && (oldPayload.ossf === true || (oldRawScore !== null && oldRawScore !== undefined));
+  const newHasOssf = newPayload && newPayload.ossf === true;
+  const oldHasOssf = oldPayload && oldPayload.ossf === true;
 
   await patchCache(tableClient, (cache) => {
     const stats = cache.stats ? { ...cache.stats } : { total: 0, byType: {}, verified: 0, archived: 0, withOssf: 0 };

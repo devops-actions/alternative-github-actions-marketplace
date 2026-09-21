@@ -54,7 +54,9 @@ describe('computeStats', () => {
       byType: { Node: 2, Docker: 1 },
       verified: 1,
       archived: 1,
-      withOssf: 2
+      // 'a' has a leftover openssf_score but ossf !== true, so it is not
+      // counted -- only ossf === true reflects a confirmed Scorecard result.
+      withOssf: 1
     });
   });
 
