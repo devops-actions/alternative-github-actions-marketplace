@@ -18,6 +18,9 @@ interface ComputedStats {
   nodeVersions: Record<string, number>;
   lastUpdatedBands: { label: string; count: number }[];
   archivedCount: number;
+  ossfNeverCheckedCount: number;
+  ossfCheckedNoDataCount: number;
+  ossfScoreFoundCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -37,6 +40,9 @@ function computeStats(actions: Action[]): ComputedStats {
       nodeVersions: {},
       lastUpdatedBands: [],
       archivedCount: 0,
+      ossfNeverCheckedCount: 0,
+      ossfCheckedNoDataCount: 0,
+      ossfScoreFoundCount: 0,
     };
   }
 
@@ -50,6 +56,9 @@ function computeStats(actions: Action[]): ComputedStats {
   let ossfScoreActionCount = 0;
   const nodeVersions: Record<string, number> = {};
   let archivedCount = 0;
+  let ossfNeverCheckedCount = 0;
+  let ossfCheckedNoDataCount = 0;
+  let ossfScoreFoundCount = 0;
 
   const now = Date.now();
   const bandCounts = [0, 0, 0, 0, 0]; // <7d, 7-30d, 30-90d, 90-365d, >365d
@@ -60,11 +69,21 @@ function computeStats(actions: Action[]): ComputedStats {
     if (a.dependabotEnabled) dependabotEnabledCount++;
     if (a.secretScanningEnabled) secretScanningCount++;
 
-    if (a.ossf && typeof a.ossfScore === 'number' && a.ossfScore > 0) {
-      const band = Math.min(Math.floor(a.ossfScore / 2), 4);
-      ossfScoreBands[band]++;
-      ossfScoreSum += a.ossfScore;
-      ossfScoreActionCount++;
+    // OSSF scan funnel: every repo is either found (ossf === true, a real
+    // score was loaded from securityscorecards.dev), checked-but-no-data
+    // (we scanned it but OSSF has nothing for it), or never checked yet.
+    if (a.ossf === true) {
+      ossfScoreFoundCount++;
+      if (typeof a.ossfScore === 'number') {
+        const band = Math.min(Math.floor(a.ossfScore / 2), 4);
+        ossfScoreBands[band]++;
+        ossfScoreSum += a.ossfScore;
+        ossfScoreActionCount++;
+      }
+    } else if (a.ossfDateLastUpdate) {
+      ossfCheckedNoDataCount++;
+    } else {
+      ossfNeverCheckedCount++;
     }
 
     if (a.actionType?.actionType === 'Node' && a.actionType.nodeVersion) {
@@ -104,6 +123,9 @@ function computeStats(actions: Action[]): ComputedStats {
       { label: 'Over 1 year', count: bandCounts[4] },
     ],
     archivedCount,
+    ossfNeverCheckedCount,
+    ossfCheckedNoDataCount,
+    ossfScoreFoundCount,
   };
 }
 
@@ -167,6 +189,41 @@ const DonutChart: React.FC<DonutChartProps> = ({ slices, size = 160, thickness =
     </svg>
   );
 };
+
+/* ------------------------------------------------------------------ */
+/*  Funnel                                                              */
+/* ------------------------------------------------------------------ */
+
+interface FunnelStageProps {
+  label: string;
+  value: number;
+  pctOfTotal?: string;
+  color: string;
+  subtitle?: string;
+  children?: React.ReactNode;
+}
+
+const FunnelStage: React.FC<FunnelStageProps> = ({ label, value, pctOfTotal, color, subtitle, children }) => (
+  <div className="soa-funnel-stage">
+    <div className="soa-card-title">{label}</div>
+    <div className="soa-metric" style={{ color, fontSize: 34 }}>
+      <AnimatedCounter value={value} />
+    </div>
+    {pctOfTotal && <div className="soa-metric-label">{pctOfTotal} of all actions</div>}
+    {subtitle && <div style={{ fontSize: 12, color: 'var(--c-text-3)', marginTop: 8 }}>{subtitle}</div>}
+    {children}
+  </div>
+);
+
+const FunnelArrow: React.FC<{ conversionPct: string }> = ({ conversionPct }) => (
+  <div className="soa-funnel-arrow">
+    <span className="soa-funnel-arrow-pct">{conversionPct}</span>
+    <svg width="32" height="18" viewBox="0 0 32 18" fill="none" aria-hidden="true">
+      <line x1="0" y1="9" x2="23" y2="9" stroke="var(--c-border-strong)" strokeWidth="2" />
+      <path d="M18 3 L26 9 L18 15" stroke="var(--c-border-strong)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </div>
+);
 
 /* ------------------------------------------------------------------ */
 /*  Bar chart row                                                       */
@@ -259,6 +316,13 @@ export const StateOfActionsPage: React.FC = () => {
   const ossfBandLabels = ['0-2', '2-4', '4-6', '6-8', '8-10'];
   const ossfColors = ['var(--c-red)', 'var(--c-amber)', 'var(--c-sky)', 'var(--c-green)', 'var(--c-green)'];
   const maxOssfBand = Math.max(...computed.ossfScoreBands, 1);
+
+  const ossfChecked = computed.ossfScoreFoundCount + computed.ossfCheckedNoDataCount;
+  const ossfDonutSlices: DonutSlice[] = ossfBandLabels.map((label, i) => ({
+    label,
+    value: computed.ossfScoreBands[i],
+    color: ossfColors[i],
+  }));
 
   const updateColors = ['var(--c-green)', 'var(--c-sky)', 'var(--c-amber)', 'var(--c-red)', 'var(--c-red)'];
 
@@ -377,8 +441,54 @@ export const StateOfActionsPage: React.FC = () => {
         />
       </div>
 
+      {/* OSSF scan funnel */}
+      <div className="soa-section-title">OpenSSF Scan Funnel</div>
+      <div className="soa-funnel">
+        <FunnelStage
+          label="Total Actions"
+          value={total}
+          color="var(--c-text)"
+          subtitle="in the marketplace"
+        />
+        <FunnelArrow conversionPct={pct(ossfChecked, total)} />
+        <FunnelStage
+          label="Checked for OSSF Data"
+          value={ossfChecked}
+          pctOfTotal={pct(ossfChecked, total)}
+          color="var(--c-sky)"
+          subtitle={`${computed.ossfNeverCheckedCount.toLocaleString()} not scanned yet`}
+        />
+        <FunnelArrow conversionPct={pct(computed.ossfScoreFoundCount, ossfChecked)} />
+        <FunnelStage
+          label="Score Found"
+          value={computed.ossfScoreFoundCount}
+          pctOfTotal={pct(computed.ossfScoreFoundCount, total)}
+          color="var(--c-green)"
+          subtitle={`${computed.ossfCheckedNoDataCount.toLocaleString()} checked, no Scorecard data`}
+        />
+        <FunnelArrow conversionPct="100%" />
+        <div className="soa-funnel-stage soa-funnel-stage-chart">
+          <div className="soa-card-title">Score Distribution</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <DonutChart slices={ossfDonutSlices} size={130} thickness={24} />
+            <div className="soa-legend" style={{ flex: 1 }}>
+              {ossfBandLabels.map((label, i) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="soa-legend-dot" style={{ background: ossfColors[i] }} />
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--c-text-2)' }}>{label}</span>
+                  <span className="soa-pct-label">{computed.ossfScoreBands[i].toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--c-text-3)', marginTop: 10 }}>
+            Average score: <strong style={{ color: 'var(--c-text-2)' }}>{computed.avgOssfScore > 0 ? computed.avgOssfScore.toFixed(1) : '—'} / 10.0</strong>
+          </div>
+        </div>
+      </div>
+
       {/* OpenSSF score distribution */}
-      <div className="soa-section-title">OpenSSF Score Distribution</div>
+      <div className="soa-section-title">OpenSSF Score Detail</div>
       <div className="soa-grid soa-grid-2">
         <div className="soa-card">
           <div className="soa-card-title">Score Bands</div>

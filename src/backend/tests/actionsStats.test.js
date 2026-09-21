@@ -155,7 +155,7 @@ describe('ActionsStats function', () => {
     expect(body.verified).toBe(1);
   });
 
-  it('counts entities with openssf_score field', async () => {
+  it('does not count entities that only have a leftover score field without ossf === true', async () => {
     const entities = [
       {
         PayloadJson: JSON.stringify({
@@ -163,6 +163,47 @@ describe('ActionsStats function', () => {
           actionType: { actionType: 'Node' },
           repoInfo: { archived: false },
           openssf_score: 7.5
+        })
+      },
+      {
+        PayloadJson: JSON.stringify({
+          verified: false,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false },
+          ossf_score: 6.0
+        })
+      },
+      {
+        PayloadJson: JSON.stringify({
+          verified: false,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false },
+          ossf: false,
+          ossfScore: 5.3
+        })
+      }
+    ];
+    getTableClient.mockReturnValue(createFakeTableClient(entities));
+
+    const context = createContext();
+    const req = { method: 'GET', headers: {} };
+
+    await actionsStats(context, req);
+
+    const body = JSON.parse(context.res.body);
+    expect(body.withOssf).toBe(0);
+    expect(context.res.headers['X-Ossf-Count']).toBe(0);
+  });
+
+  it('counts entities with ossf === true regardless of score field naming', async () => {
+    const entities = [
+      {
+        PayloadJson: JSON.stringify({
+          verified: false,
+          actionType: { actionType: 'Node' },
+          repoInfo: { archived: false },
+          ossf: true,
+          ossfScore: 6.0
         })
       }
     ];
@@ -176,28 +217,6 @@ describe('ActionsStats function', () => {
     const body = JSON.parse(context.res.body);
     expect(body.withOssf).toBe(1);
     expect(context.res.headers['X-Ossf-Count']).toBe(1);
-  });
-
-  it('counts entities with ossf_score field', async () => {
-    const entities = [
-      {
-        PayloadJson: JSON.stringify({
-          verified: false,
-          actionType: { actionType: 'Node' },
-          repoInfo: { archived: false },
-          ossf_score: 6.0
-        })
-      }
-    ];
-    getTableClient.mockReturnValue(createFakeTableClient(entities));
-
-    const context = createContext();
-    const req = { method: 'GET', headers: {} };
-
-    await actionsStats(context, req);
-
-    const body = JSON.parse(context.res.body);
-    expect(body.withOssf).toBe(1);
   });
 
   it('returns zero counts for empty table', async () => {

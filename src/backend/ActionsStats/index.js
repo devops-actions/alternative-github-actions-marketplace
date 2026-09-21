@@ -31,9 +31,7 @@ async function computeStats(tableClient) {
         archived += 1;
       }
 
-      const rawScore = payload.openssf_score ?? payload.ossfScore ?? payload.ossf_score ?? null;
-      const hasOssf = payload.ossf === true || (rawScore !== null && rawScore !== undefined);
-      if (hasOssf) {
+      if (payload.ossf === true) {
         withOssf += 1;
       }
     } catch (_parseErr) {
