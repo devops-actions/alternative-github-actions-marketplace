@@ -13,6 +13,7 @@ describe('toActionSummary', () => {
     ossf: true,
     openssf_score: 8.4,
     vulnerabilityStatus: { critical: 1, high: 2, lastUpdated: '2026-07-01' },
+    immutableReleasePolicy: 'enabled',
     // Fields the list pages never read; must not survive the projection.
     versionShaMap: { 'v4.2.0': 'abc123' },
     tagInfo: ['v4', 'v4.2'],
@@ -32,6 +33,7 @@ describe('toActionSummary', () => {
       releaseInfo: ['v4.2.0'],
       description: 'Checkout a Git repository so a workflow can access it',
       verified: true,
+      immutableReleasePolicy: 'enabled',
       ossf: true,
       ossfScore: 8.4,
       vulnerabilityStatus: { critical: 1, high: 2 }
@@ -143,5 +145,16 @@ describe('toActionSummary', () => {
     const summary = toActionSummary({ owner: 'o', name: 'n', description: long });
     expect(summary.description).toHaveLength(200);
     expect(summary.description.endsWith('…')).toBe(true);
+  });
+
+  it('passes through each valid immutableReleasePolicy state', () => {
+    expect(toActionSummary({ owner: 'o', name: 'n', immutableReleasePolicy: 'enabled' }).immutableReleasePolicy).toBe('enabled');
+    expect(toActionSummary({ owner: 'o', name: 'n', immutableReleasePolicy: 'disabled' }).immutableReleasePolicy).toBe('disabled');
+    expect(toActionSummary({ owner: 'o', name: 'n', immutableReleasePolicy: 'unknown' }).immutableReleasePolicy).toBe('unknown');
+  });
+
+  it('reports immutableReleasePolicy as undefined when absent or not yet a recognised state', () => {
+    expect(toActionSummary({ owner: 'o', name: 'n' }).immutableReleasePolicy).toBeUndefined();
+    expect(toActionSummary({ owner: 'o', name: 'n', immutableReleasePolicy: 'bogus' }).immutableReleasePolicy).toBeUndefined();
   });
 });

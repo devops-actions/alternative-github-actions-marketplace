@@ -40,6 +40,9 @@ export interface Action {
   verified: boolean;
   ossf: boolean;
   ossfScore: number;
+  /** Tri-state current immutable-release policy for the repo, as observed by actions-marketplace-checks. Absent until that collector has run for this action. */
+  immutableReleasePolicy?: 'enabled' | 'disabled' | 'unknown';
+  immutableReleaseSummary?: string;
   _metadata?: {
     partitionKey: string;
     rowKey: string;
