@@ -42,19 +42,28 @@
   ],
   "dependencies": {
     "@azure/data-tables": "^13.2.2",
-    "@azure/identity": "^4.13.1",
-    "@octokit/app": "^16.1.2",
-    "@octokit/auth-app": "^8.2.0"
+    "@azure/identity": "^4.13.3",
+    "@azure/storage-blob": "^12.33.0",
+    "@octokit/app": "^16.1.4",
+    "@octokit/auth-app": "^8.3.1"
   },
   "devDependencies": {
-    "@azure/functions": "^4.16.2",
-    "@cucumber/cucumber": "^13.0.0",
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/jest-runner": "^9.6.1",
-    "eslint": "^10.7.0",
-    "jest": "^30.4.2"
+    "@azure/functions": "^4.16.5",
+    "@cucumber/cucumber": "^13.2.1",
+    "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/jest-runner": "^10.0.0",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "jest": "^30.5.1"
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "@babel/core": "^7.29.6",
+    "brace-expansion": "^5.0.7",
+    "js-yaml": "^3.15.2",
+    "qs": ">=6.15.2"
   }
 }

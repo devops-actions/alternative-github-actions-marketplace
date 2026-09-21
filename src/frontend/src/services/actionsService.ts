@@ -1,10 +1,18 @@
 import { Action, ActionStats, DbStatus } from '../types/Action';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const README_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface ReadmeCacheEntry {
+  content: string | null;
+  cachedAt: number;
+}
 
 function getApiBaseUrl(): string {
   const fallback = '/api';
-  const configured = import.meta.env.VITE_API_BASE_URL;
+  // Optional chaining on `env` keeps this safe when the module is imported outside of
+  // Vite (e.g. by the Playwright test runner), where `import.meta.env` is undefined.
+  const configured = import.meta.env?.VITE_API_BASE_URL;
 
   if (!configured) {
     return fallback;
@@ -38,7 +46,11 @@ const API_BASE_URL = getApiBaseUrl();
 export function parseDependentsCount(value: string | undefined): number {
   if (!value) return 0;
   const isPlus = value.endsWith('+');
-  const num = parseInt(value, 10);
+  // Values may be comma-formatted (e.g. "15,356,161"); parseInt stops at the
+  // first non-digit character, so strip thousands separators first or large
+  // counts get silently truncated (e.g. "16,842,392" -> 16).
+  const digitsOnly = value.replace(/,/g, '');
+  const num = parseInt(digitsOnly, 10);
   if (!Number.isFinite(num)) return 0;
   // Fractional bump ensures "999+" sorts strictly above "999".
   return isPlus ? num + 0.5 : num;
@@ -48,7 +60,9 @@ export function parseDependentsCount(value: string | undefined): number {
 export function formatDependentsCount(value: string | undefined): string {
   if (!value) return '0';
   const isPlus = value.endsWith('+');
-  const num = parseInt(value, 10);
+  // Strip thousands separators before parsing; see parseDependentsCount.
+  const digitsOnly = value.replace(/,/g, '');
+  const num = parseInt(digitsOnly, 10);
   if (!Number.isFinite(num)) return '0';
   return isPlus ? `${num.toLocaleString()}+` : num.toLocaleString();
 }
@@ -177,7 +191,7 @@ function extractArrayFromUnknown(value: unknown): unknown[] {
   return [];
 }
 
-class ActionsService {
+export class ActionsService {
   private actions: Action[] = [];
   private loading: boolean = false;
   private lastFetch: number = 0;
@@ -188,6 +202,8 @@ class ActionsService {
   private inFlightActionsFetch: Promise<Action[]> | null = null;
   private inFlightStatsFetch: Promise<ActionStats> | null = null;
   private inFlightDbStatusFetch: Promise<DbStatus> | null = null;
+  private readmeCache: Map<string, ReadmeCacheEntry> = new Map();
+  private snapshotGeneratedAt: string | null = null;
 
   constructor() {
     this.startAutoRefresh();
@@ -213,9 +229,37 @@ class ActionsService {
     this.listeners.forEach(listener => listener());
   }
 
+  // Fetches the precomputed snapshot: every action the list pages need, in one
+  // request, already sorted newest-first.
+  //
+  // Uses the default HTTP cache rather than `no-store` so the endpoint's
+  // Cache-Control/ETag actually do something — a repeat visit inside the
+  // freshness window costs no network at all, and outside it costs a 304.
+  private async fetchSnapshot(): Promise<Action[] | null> {
+    const response = await fetch(`${API_BASE_URL}/actions/snapshot`);
+
+    if (response.status === 503) {
+      // No snapshot built yet (fresh environment, or the pipeline has never
+      // completed). Signal the caller to fall back rather than showing an error.
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch actions snapshot: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const items = extractArrayFromUnknown(data);
+    this.snapshotGeneratedAt = (data && typeof data === 'object' && typeof data.generatedAt === 'string')
+      ? data.generatedAt
+      : null;
+
+    return items.map(normalizeAction);
+  }
+
   async fetchActions(force: boolean = false): Promise<Action[]> {
     const now = Date.now();
-    
+
     if (!force && this.actions.length > 0 && (now - this.lastFetch) < REFRESH_INTERVAL) {
       return this.actions;
     }
@@ -228,35 +272,43 @@ class ActionsService {
 
     const fetchPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch actions: ${response.statusText}`);
+        let items = await this.fetchSnapshot();
+
+        if (items === null) {
+          // Fall back to the full list scan. Slow (~50s over ~35k actions) but
+          // correct, so the site still works before the first snapshot exists.
+          console.warn('Actions snapshot unavailable; falling back to the full /actions/list scan.');
+          const response = await fetch(`${API_BASE_URL}/actions/list`, { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch actions: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const fallbackItems = extractArrayFromUnknown(data);
+          const hasCountHeader = response.headers.has('x-actions-count');
+          const declaredCount = Number(response.headers.get('x-actions-count') || '0');
+
+          const serverExplicitlyEmpty =
+            (hasCountHeader && declaredCount === 0) ||
+            (Array.isArray(data) && data.length === 0);
+
+          // If the server claims there are results but we couldn't extract them,
+          // keep any previously cached actions instead of wiping the UI.
+          if (fallbackItems.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
+            const responseType = Array.isArray(data) ? 'array' : typeof data;
+            const keys = (data && typeof data === 'object' && !Array.isArray(data))
+              ? Object.keys(data)
+              : [];
+            console.warn(
+              `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
+            );
+            items = this.actions;
+          } else {
+            items = fallbackItems.map(normalizeAction);
+          }
         }
 
-        const data = await response.json();
-
-        const items = extractArrayFromUnknown(data);
-        const hasCountHeader = response.headers.has('x-actions-count');
-        const declaredCount = Number(response.headers.get('x-actions-count') || '0');
-
-        const serverExplicitlyEmpty =
-          (hasCountHeader && declaredCount === 0) ||
-          (Array.isArray(data) && data.length === 0);
-
-        // If the server claims there are results but we couldn't extract them,
-        // keep any previously cached actions instead of wiping the UI.
-        if (items.length === 0 && this.actions.length > 0 && !serverExplicitlyEmpty) {
-          const responseType = Array.isArray(data) ? 'array' : typeof data;
-          const keys = (data && typeof data === 'object' && !Array.isArray(data))
-            ? Object.keys(data)
-            : [];
-          console.warn(
-            `Actions list response parsed to 0 items; keeping cached actions. responseType=${responseType}, keys=${keys.join(',')}`
-          );
-        } else {
-          this.actions = items.map(normalizeAction);
-        }
-
+        this.actions = items;
         this.lastFetch = now;
         this.notify();
         return this.actions;
@@ -271,6 +323,12 @@ class ActionsService {
 
     this.inFlightActionsFetch = fetchPromise;
     return await fetchPromise;
+  }
+
+  // ISO timestamp of when the served snapshot was built, or null when the
+  // data came from the live-scan fallback.
+  getSnapshotGeneratedAt(): string | null {
+    return this.snapshotGeneratedAt;
   }
 
   async fetchActionsPage(limit: number): Promise<Action[]> {
@@ -375,6 +433,12 @@ class ActionsService {
   }
 
   async fetchReadme(owner: string, name: string, version?: string): Promise<string | null> {
+    const cacheKey = `${owner.toLowerCase()}/${name.toLowerCase()}@${version ?? ''}`;
+    const cached = this.readmeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.cachedAt) < README_TTL_MS) {
+      return cached.content;
+    }
+
     try {
       const versionParam = version ? `?version=${encodeURIComponent(version)}` : '';
       const response = await fetch(
@@ -383,12 +447,15 @@ class ActionsService {
       );
       if (!response.ok) {
         if (response.status === 404) {
+          this.readmeCache.set(cacheKey, { content: null, cachedAt: Date.now() });
           return null;
         }
         throw new Error(`Failed to fetch README: ${response.statusText}`);
       }
 
-      return await response.text();
+      const content = await response.text();
+      this.readmeCache.set(cacheKey, { content, cachedAt: Date.now() });
+      return content;
     } catch (error) {
       console.error('Error fetching README:', error);
       throw error;
@@ -424,6 +491,7 @@ class ActionsService {
       clearInterval(this.refreshTimer);
     }
     this.listeners = [];
+    this.readmeCache.clear();
   }
 }
 

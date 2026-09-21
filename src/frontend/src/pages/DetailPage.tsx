@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Action } from '../types/Action';
 import { actionsService, formatDependentsCount } from '../services/actionsService';
-import { splitOwnerRepo } from '../services/utils';
+import { splitOwnerRepo, isGitHubOwnedAction } from '../services/utils';
+import { GitHubOwnedBadge } from '../components/GitHubOwnedBadge';
 
 export const DetailPage: React.FC = () => {
   const { owner, name } = useParams<{ owner: string; name: string }>();
@@ -16,7 +17,18 @@ export const DetailPage: React.FC = () => {
   const [readmeLoading, setReadmeLoading] = useState(false);
   const [readmeError, setReadmeError] = useState<string | null>(null);
 
-  const handleBack = () => {
+  const backHref = typeof document !== 'undefined' ? document.referrer || '/' : '/';
+
+  const handleBack = (event?: React.MouseEvent) => {
+    if (event) {
+      const isModifiedClick = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+      if (isModifiedClick) {
+        // Let the browser open the <a href> in a new tab/window.
+        return;
+      }
+      event.preventDefault();
+    }
+
     if (window.history.length > 1) {
       navigate(-1);
       return;
@@ -130,9 +142,9 @@ export const DetailPage: React.FC = () => {
   if (error || !action) {
     return (
       <div className="app">
-        <button className="back-button" onClick={handleBack}>
+        <a className="back-button" href={backHref} onClick={e => handleBack(e)}>
           ← Back to Overview
-        </button>
+        </a>
         <div className="error-message">{error || 'Action not found'}</div>
       </div>
     );
@@ -147,14 +159,15 @@ export const DetailPage: React.FC = () => {
         <p>Browse and search through GitHub Actions with more information</p>
       </div>
 
-      <button className="back-button" onClick={handleBack}>
+      <a className="back-button" href={backHref} onClick={e => handleBack(e)}>
         ← Back to Overview
-      </button>
+      </a>
 
       <div className="detail-page">
         <div className="detail-header">
           <h1 className="detail-title">{`${action.owner} / ${splitOwnerRepo(action).repo}`}</h1>
           <div className="detail-badges">
+            {isGitHubOwnedAction(action) && <GitHubOwnedBadge />}
             <span
               className={`action-badge ${getActionTypeBadgeClass(
                 action.actionType.actionType

@@ -50,7 +50,20 @@ async function fetchActionsList(options = {}) {
     throw new Error(`Backend API returned ${response.status} for actions list`);
   }
 
-  return response.json();
+  const body = await response.json();
+
+  // The endpoint returns a plain array when unpaginated, or a paginated
+  // `{ items, nextCursor }` envelope when `limit` is used (as it always is
+  // here). Normalize to a plain array for callers.
+  if (Array.isArray(body)) {
+    return body;
+  }
+
+  if (body && Array.isArray(body.items)) {
+    return body.items;
+  }
+
+  return body;
 }
 
 module.exports = { fetchAction, fetchActionsList };

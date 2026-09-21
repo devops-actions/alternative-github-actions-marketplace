@@ -18,6 +18,12 @@ on:
         required: true
         default: true
         type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/frontend/**'
+      - 'src/backend/**'
 
 
 env:
@@ -44,11 +50,11 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Filter paths
         id: filter
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         with:
           filters: |
             frontend:
@@ -72,10 +78,10 @@ jobs:
       appinsights_connection_string: ${{ steps.appinsights.outputs.connection_string }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -160,7 +166,7 @@ jobs:
       DO_BACKEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_backend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.backend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Syntax check non-project JavaScript files
         if: ${{ env.DO_BACKEND == 'true' }}
@@ -178,7 +184,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: '22'
 
@@ -199,7 +205,7 @@ jobs:
 
       - name: Log in to Azure (OIDC)
         if: ${{ env.DO_BACKEND == 'true' }}
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -228,11 +234,11 @@ jobs:
       DO_FRONTEND: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend == true) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Log in to Azure (OIDC)
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -240,7 +246,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ env.DO_FRONTEND == 'true' }}
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: '22'
 
@@ -294,10 +300,10 @@ jobs:
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_e2e == true) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true')) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -431,6 +437,28 @@ jobs:
             sleep 10
           done
 
+          # Warm up /actions/versions. On a fresh deployment no versions blob
+          # exists yet, so the first request builds one with a full table scan;
+          # doing that here means the first real client does not pay for it, and
+          # the VersionsWarmup timer keeps it fresh from then on. A 503 means the
+          # build is still in flight, so retry.
+          echo "Warming up /actions/versions (builds the blob on first request)..."
+          for i in $(seq 1 10); do
+            echo "Attempt $i/10 - versions"
+            code=$(curl -sS -o /tmp/actions-versions.json.gz -w "%{http_code}" \
+              --connect-timeout 10 --max-time 300 \
+              -H 'Accept-Encoding: gzip' \
+              "$API_BASE_URL/actions/versions" || true)
+            if [ "$code" = "200" ]; then
+              versionsSize=$(stat -c%s /tmp/actions-versions.json.gz 2>/dev/null || stat -f%z /tmp/actions-versions.json.gz 2>/dev/null || echo "0")
+              echo "Actions versions feed ready (size: ${versionsSize} bytes)"
+              break
+            else
+              echo "Versions feed not ready yet (http=$code)"
+            fi
+            sleep 15
+          done
+
       - name: Diagnose API access + CORS (runner + browser origin)
         env:
           FRONTEND_BASE_URL: ${{ needs.resolve.outputs.frontend_base_url }}
@@ -503,7 +531,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: '22'
 

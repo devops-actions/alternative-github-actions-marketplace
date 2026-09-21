@@ -57,4 +57,4 @@ async function patchCache(tableClient, patchFn) {
   }
 }
 
-module.exports = { readCache, writeCache, patchCache };
+module.exports = { STATS_CACHE_PARTITION, STATS_CACHE_ROW, readCache, writeCache, patchCache };

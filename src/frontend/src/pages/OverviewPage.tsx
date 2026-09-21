@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'r
 import { useNavigate } from 'react-router-dom';
 import { Action, ActionStats, ActionTypeFilter } from '../types/Action';
 import { actionsService, parseDependentsCount, formatDependentsCount } from '../services/actionsService';
-import { normalizeRepoName, matchesSearchQuery, isActionVerified } from '../services/utils';
+import { normalizeRepoName, matchesSearchQuery, isActionVerified, isGitHubOwnedAction } from '../services/utils';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import { NavBar } from '../components/NavBar';
+import { GitHubOwnedBadge } from '../components/GitHubOwnedBadge';
 
 const PAGE_SIZE = 12;
 const OVERVIEW_STATE_KEY = 'overviewState:v1';
@@ -25,6 +26,7 @@ type OverviewUiState = {
   currentPage: number;
   scrollY?: number;
   openssfFilter?: 'all' | 'above5' | 'above7';
+  githubOwnedFilter?: 'all' | 'only' | 'hide';
 };
 
 function readOverviewState(): Partial<OverviewUiState> | null {
@@ -79,6 +81,10 @@ export const OverviewPage: React.FC = () => {
     const candidate = initialPersisted?.openssfFilter as string | undefined;
     return candidate === 'above5' || candidate === 'above7' ? candidate : 'all';
   });
+  const [githubOwnedFilter, setGithubOwnedFilter] = useState<'all' | 'only' | 'hide'>(() => {
+    const candidate = (initialPersisted as any)?.githubOwnedFilter as string | undefined;
+    return candidate === 'only' || candidate === 'hide' ? candidate : 'all';
+  });
   const [sortBy, setSortBy] = useState<'updated' | 'dependents'>(() => (initialPersisted?.sortBy === 'dependents' ? 'dependents' : 'updated'));
   const [currentPage, setCurrentPage] = useState(() => {
     const candidate = Number(initialPersisted?.currentPage);
@@ -97,7 +103,8 @@ export const OverviewPage: React.FC = () => {
     activityFilter,
     verifiedFilter,
     sortBy,
-    openssfFilter
+    openssfFilter,
+    githubOwnedFilter
   });
   const restoredScrollRef = useRef(false);
 
@@ -132,6 +139,7 @@ export const OverviewPage: React.FC = () => {
     setActivityFilter('hide');
     setOpenssfFilter('all');
     setSortBy('updated');
+    setGithubOwnedFilter('all');
     setCurrentPage(1);
     try {
       sessionStorage.removeItem(OVERVIEW_STATE_KEY);
@@ -166,25 +174,23 @@ export const OverviewPage: React.FC = () => {
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const force = attempt > 0;
-        
-        // First, fetch stats and initial page of actions for quick display
-        const [statsData, initialActions] = await Promise.all([
+
+        // One request for the whole dataset. This used to show a 50-row
+        // preview first and swap in the full list once the ~50s scan finished,
+        // but that preview was the first 50 rows in PartitionKey order — owners
+        // starting with "0" — of which only a handful survived the default
+        // filters. The snapshot arrives fast enough and pre-sorted, so the
+        // first render is already the real, correctly ordered result.
+        const [statsData, allActions] = await Promise.all([
           actionsService.fetchStats(force),
-          actionsService.fetchActionsPage(50)
+          actionsService.fetchActions(force)
         ]);
-        
+
         setStats(statsData);
-        setActions(initialActions);
+        setActions(allActions);
         setError(null);
         setLoading(false);
-        
-        // Then fetch the full list in the background
-        actionsService.fetchActions(force).then(fullActions => {
-          setActions(fullActions);
-        }).catch(err => {
-          console.warn('Failed to load complete actions list in background. Limited view active:', err);
-        });
-        
+
         return;
       } catch (err) {
         lastErr = err;
@@ -212,9 +218,10 @@ export const OverviewPage: React.FC = () => {
       activityFilter,
       sortBy,
       openssfFilter,
+      githubOwnedFilter,
       currentPage
     });
-  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, currentPage]);
+  }, [searchQuery, typeFilter, showVerifiedOnly, verifiedFilter, archivedFilter, activityFilter, sortBy, openssfFilter, githubOwnedFilter, currentPage]);
 
   // Memoize filter+sort to avoid recomputing on every render.
   // Uses deferredSearchQuery so typing does not block the UI.
@@ -223,7 +230,14 @@ export const OverviewPage: React.FC = () => {
 
     const normalizedQuery = deferredSearchQuery.trim();
     if (normalizedQuery) {
-      filtered = filtered.filter(action => matchesSearchQuery({ owner: action.owner, name: action.name }, normalizedQuery));
+      filtered = filtered.filter(action => matchesSearchQuery({
+        owner: action.owner,
+        name: action.name,
+        actionType: action.actionType?.actionType,
+        verified: isActionVerified(action),
+        archived: action.repoInfo?.archived,
+        description: action.description
+      }, normalizedQuery));
     }
 
     if (typeFilter !== 'All') {
@@ -268,6 +282,12 @@ export const OverviewPage: React.FC = () => {
       });
     }
 
+    if (githubOwnedFilter === 'only') {
+      filtered = filtered.filter(action => isGitHubOwnedAction(action));
+    } else if (githubOwnedFilter === 'hide') {
+      filtered = filtered.filter(action => !isGitHubOwnedAction(action));
+    }
+
     // Apply sorting
     return [...filtered].sort((a, b) => {
       if (sortBy === 'dependents') {
@@ -281,7 +301,7 @@ export const OverviewPage: React.FC = () => {
         return bDate - aDate; // Descending (most recent first)
       }
     });
-  }, [actions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [actions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter]);
 
   // Reset page to 1 when filter criteria change; clamp when only the actions list updates.
   useEffect(() => {
@@ -294,9 +314,10 @@ export const OverviewPage: React.FC = () => {
       prev.archivedFilter !== archivedFilter ||
       prev.activityFilter !== activityFilter ||
       prev.sortBy !== sortBy ||
-      prev.openssfFilter !== openssfFilter;
+      prev.openssfFilter !== openssfFilter ||
+      prev.githubOwnedFilter !== githubOwnedFilter;
 
-    prevFiltersRef.current = { searchQuery: deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter };
+    prevFiltersRef.current = { searchQuery: deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter };
 
     const nextTotalPages = Math.max(1, Math.ceil(filteredActions.length / PAGE_SIZE));
     if (filtersChanged) {
@@ -304,7 +325,7 @@ export const OverviewPage: React.FC = () => {
     } else {
       setCurrentPage(p => Math.min(Math.max(p, 1), nextTotalPages));
     }
-  }, [filteredActions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter]);
+  }, [filteredActions, deferredSearchQuery, typeFilter, showVerifiedOnly, archivedFilter, activityFilter, verifiedFilter, sortBy, openssfFilter, githubOwnedFilter]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -342,7 +363,25 @@ export const OverviewPage: React.FC = () => {
   const showingFrom = filteredActions.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const showingTo = Math.min(currentPage * PAGE_SIZE, filteredActions.length);
 
-  const handleActionClick = (action: Action) => {
+  // The stat tiles report database totals while the grid reports what survives
+  // the filters, and the defaults (hide archived, hide low-activity) remove
+  // roughly 70% of the dataset. Without spelling that out, the two numbers just
+  // look like they disagree.
+  const hiddenByFilters = Math.max(0, actions.length - filteredActions.length);
+  const hasActiveFilters = hiddenByFilters > 0;
+
+  const handleActionClick = (action: Action, event?: React.MouseEvent) => {
+    const detailUrl = `/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`;
+
+    if (event) {
+      const isModifiedClick = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+      if (isModifiedClick) {
+        // Let the browser open the <a href> in a new tab/window.
+        return;
+      }
+      event.preventDefault();
+    }
+
     writeOverviewState({
       searchQuery,
       typeFilter,
@@ -353,7 +392,7 @@ export const OverviewPage: React.FC = () => {
       currentPage,
       scrollY: window.scrollY
     });
-    navigate(`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`);
+    navigate(detailUrl);
   };
 
   const getActionTypeBadgeClass = (type: string) => {
@@ -395,18 +434,21 @@ export const OverviewPage: React.FC = () => {
     <div className="app">
       <div className="header">
         <NavBar />
-        <h1>Alternative GitHub Actions Marketplace</h1>        
+        <h1>Alternative GitHub Actions Marketplace</h1>
         <p>Browse and search through <AnimatedCounter value={stats.total} /> with more information</p>
       </div>
 
-      <div className="stats-bar">
+      {/* These tiles count the whole database. The grid below counts only what
+          passes the current filters, so the two differ by design — the
+          pagination summary spells out the gap. */}
+      <div className="stats-bar" aria-label="Database totals across all actions">
         <button
           type="button"
           className="stat-item stat-button"
           onClick={() => setTypeFilterFromStats('All')}
           aria-label="Show all actions"
         >
-          <span className="stat-label">Total Actions</span>
+          <span className="stat-label">Total</span>
           <span className="stat-value"><AnimatedCounter value={stats.total} /></span>
         </button>
 
@@ -416,7 +458,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setTypeFilterFromStats('Verified')}
           aria-label="Show verified actions"
         >
-          <span className="stat-label">Verified Actions</span>
+          <span className="stat-label">Verified</span>
           <span className="stat-value"><AnimatedCounter value={stats.verified} /></span>
         </button>
 
@@ -428,7 +470,7 @@ export const OverviewPage: React.FC = () => {
             onClick={() => setTypeFilterFromStats(type)}
             aria-label={`Filter by ${type} actions`}
           >
-            <span className="stat-label">{type} Actions</span>
+            <span className="stat-label">{type}</span>
             <span className="stat-value"><AnimatedCounter value={count} /></span>
           </button>
         ))}
@@ -439,7 +481,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setTypeFilterFromStats('Archived')}
           aria-label="Include archived actions"
         >
-          <span className="stat-label">Archived Actions</span>
+          <span className="stat-label">Archived</span>
           <span className="stat-value"><AnimatedCounter value={stats.archived} /></span>
         </button>
 
@@ -449,7 +491,7 @@ export const OverviewPage: React.FC = () => {
           onClick={() => setOpenssfFilter('above5')}
           aria-label="Show actions with OpenSSF score"
         >
-          <span className="stat-label">OpenSSF Actions</span>
+          <span className="stat-label">OpenSSF</span>
           <span className="stat-value"><AnimatedCounter value={stats.withOssf} /></span>
         </button>
       </div>
@@ -458,7 +500,7 @@ export const OverviewPage: React.FC = () => {
         <div className="search-box">
           <input
             type="text"
-            placeholder="Search by action name or owner..."
+            placeholder="Search by name, owner, type, or keyword..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -554,6 +596,15 @@ export const OverviewPage: React.FC = () => {
           </div>
 
           <div className="filter-group">
+            <label>GitHub-owned:</label>
+            <select data-testid="filter-github-owned" value={githubOwnedFilter} onChange={e => setGithubOwnedFilter(e.target.value as any)}>
+              <option value="all">All</option>
+              <option value="only">Only GitHub-owned</option>
+              <option value="hide">Hide GitHub-owned</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label>Sort by:</label>
             <button data-testid="sort-updated"
               className={sortBy === 'updated' ? 'active' : ''}
@@ -591,14 +642,18 @@ export const OverviewPage: React.FC = () => {
         <>
           <div className="actions-grid">
             {pagedActions.map(action => (
-              <div
+              <a
                 key={`${action.owner}/${action.name}`}
                 className={`action-card ${action.repoInfo?.archived ? 'archived' : ''}`}
-                onClick={() => handleActionClick(action)}
+                href={`/action/${encodeURIComponent(action.owner)}/${encodeURIComponent(action.name)}`}
+                onClick={e => handleActionClick(action, e)}
               >
                 <div className="action-header">
                   <div className="action-title">
-                      <div className="action-owner">{action.owner}</div>
+                      <div className="action-owner">
+                        {action.owner}
+                        {isGitHubOwnedAction(action) && <GitHubOwnedBadge />}
+                      </div>
                       <div className="action-name">{normalizeRepoName(action.owner, action.name)}</div>
                   </div>
                   <span
@@ -656,13 +711,27 @@ export const OverviewPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
 
           <div className="pagination">
             <div className="pagination-summary">
-              Showing {showingFrom}-{showingTo} of {filteredActions.length.toLocaleString()} actions
+              Showing {showingFrom}-{showingTo} of {filteredActions.length.toLocaleString()} matching
+              {hasActiveFilters && (
+                <>
+                  {' · '}
+                  <span className="pagination-hidden">
+                    {hiddenByFilters.toLocaleString()} hidden by filters
+                  </span>
+                  {' · '}
+                  {actions.length.toLocaleString()} total
+                  {' · '}
+                  <button type="button" className="link-button" onClick={clearFilters}>
+                    Reset filters
+                  </button>
+                </>
+              )}
             </div>
             <div className="pagination-controls">
               <button

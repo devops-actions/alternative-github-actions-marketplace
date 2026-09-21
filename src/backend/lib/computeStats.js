@@ -1,0 +1,55 @@
+const { STATS_CACHE_PARTITION } = require('./statsCache');
+
+// Scans the full actions table and aggregates the counts used by the
+// /actions/stats endpoint. This is an O(n) scan over every entity, so it is
+// deliberately kept out of the request hot path (see StatsWarmup, which runs
+// this on a schedule) and only used as a last-resort fallback when no cache
+// entry exists yet (e.g. right after the table is first created).
+async function computeStats(tableClient) {
+  let total = 0;
+  const byType = {};
+  let verified = 0;
+  let archived = 0;
+  let withOssf = 0;
+
+  for await (const entity of tableClient.listEntities()) {
+    // The stats cache is stored in this same table under its own partition.
+    // Counting it inflated `total` by one, which is why /actions/stats
+    // reported one more action than /actions/list ever returned.
+    if (entity.partitionKey === STATS_CACHE_PARTITION) {
+      continue;
+    }
+
+    try {
+      const payload = typeof entity.PayloadJson === 'string'
+        ? JSON.parse(entity.PayloadJson)
+        : (entity.PayloadJson || {});
+
+      // Only count entities that we can successfully parse and inspect.
+      total += 1;
+
+      const type = payload.actionType && payload.actionType.actionType;
+      if (type) {
+        byType[type] = (byType[type] || 0) + 1;
+      }
+
+      if (payload.verified === true) {
+        verified += 1;
+      }
+
+      if (payload.repoInfo && payload.repoInfo.archived === true) {
+        archived += 1;
+      }
+
+      if (payload.ossf === true) {
+        withOssf += 1;
+      }
+    } catch (_parseErr) {
+      // skip malformed payloads entirely (don't include in totals)
+    }
+  }
+
+  return { total, byType, verified, archived, withOssf };
+}
+
+module.exports = { computeStats };

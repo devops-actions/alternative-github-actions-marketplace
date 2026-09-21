@@ -16,7 +16,11 @@ local.settings.json
 .azurite/
 
 # Editor and tooling
-.vscode/
+.vscode/*
+# The F5 launch/build configs are part of this repo's development setup, not a
+# personal editor preference, so they are tracked.
+!.vscode/launch.json
+!.vscode/tasks.json
 .vs/
 .DS_Store
 Thumbs.db
@@ -27,6 +31,10 @@ bin/
 obj/
 src/frontend/test-results/
 src/frontend/playwright-report/
+
+# Stryker mutation reports
+src/mcp-server/reports/
+src/backend/reports/
 
 # Bicep compiled ARM templates
 IAC/*.json

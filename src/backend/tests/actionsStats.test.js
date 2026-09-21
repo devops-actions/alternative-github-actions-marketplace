@@ -79,6 +79,7 @@ describe('ActionsStats function', () => {
     expect(context.res.headers['X-Verified-Count']).toBe(1);
     expect(context.res.headers['X-Archived-Count']).toBe(1);
     expect(context.res.headers['X-Ossf-Count']).toBe(1);
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=300');
 
     const body = JSON.parse(context.res.body);
     expect(body).toEqual(
@@ -115,6 +116,7 @@ describe('ActionsStats function', () => {
   it('returns 500 when table query fails', async () => {
     const fakeClient = {
       url: 'http://127.0.0.1:10002/devstoreaccount1/actions',
+      // eslint-disable-next-line require-yield -- must stay an async generator to match the real client's iterable interface
       async *listEntities() {
         throw new Error('connection refused');
       }
@@ -128,6 +130,7 @@ describe('ActionsStats function', () => {
 
     expect(context.res.status).toBe(500);
     expect(context.res.body.error).toBe('Failed to compute stats.');
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 
   it('skips malformed PayloadJson without throwing', async () => {

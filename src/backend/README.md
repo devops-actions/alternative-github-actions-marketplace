@@ -49,6 +49,79 @@ The backend Azure Functions support the following environment variables:
 - **`README_TABLE_NAME`** - Table name for README cache (default: `readmes`)
 - **`ACTIONS_TABLE_CONNECTION`** or **`AzureWebJobsStorage`** - Storage connection string
 - **`ACTIONS_TABLE_URL`** or **`ACTIONS_TABLE_ENDPOINT`** - Table endpoint URL for Azure Identity authentication
+- **`ACTIONS_VERSIONS_BLOB`** - Blob holding the versions feed (default: `actions-versions.json.gz`), in the `ACTIONS_SNAPSHOT_CONTAINER` container
+
+### Versions Feed Endpoint
+
+`GET /api/actions/versions` serves the latest version of every action together
+with its **commit SHA** and publish date, for clients that resolve versions
+locally instead of querying per action - notably the
+[VS Code extension](../../vscode-extension/README.md), which answers AI agent
+tool calls from a cached copy.
+
+This is **not** the same as `/api/actions/snapshot`. That endpoint serves the
+frontend overview and its projection (`lib/actionSummary.js`) deliberately drops
+`tagInfo` and `versionShaMap`, so it cannot answer "which commit does `@v4` point
+at". They are kept separate so the overview payload, which is on the page-load
+hot path, does not grow to carry SHA data the website never reads.
+
+The feed is roughly 4.7 MB of JSON, about 1.6 MB gzipped (measured over a
+3,000-record sample of production data), because it keeps only the latest version
+per action and stores rows as positional arrays instead of objects.
+
+**Response envelope:**
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-26T04:30:00.000Z",
+  "count": 35314,
+  "skipped": 0,
+  "fields": ["owner", "name", "latestVersion", "latestSha", "publishedAt",
+             "actionType", "flags", "ossfScore", "dependents", "floatingTags"],
+  "flags": { "verified": 1, "archived": 2, "ossf": 4, "disabled": 8 },
+  "actions": [
+    ["actions", "checkout", "v7.0.1", "3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "2026-07-20T15:10:05Z", "Node", 4, 6.9, 15368157,
+     [["v7", "3d3c42e5aac5ba805825da76410c181273ba90b1"]]]
+  ]
+}
+```
+
+`fields` names the row positions so clients can validate the layout rather than
+trusting hard-coded indexes. New fields are appended; reordering or removing one
+bumps `schemaVersion`. `floatingTags` carries `[tag, sha]` pairs for floating
+major/minor tags (`v4`, `v4.1`) - the ones people actually pin - and only when a
+SHA is known.
+
+**Caching:**
+- `ETag` is a hash of the feed content, not of the blob. A rebuild that finds
+  nothing changed keeps the same `ETag`, so clients keep getting `304`s.
+- Send `If-None-Match` to get `304 Not Modified` with no body - this is the normal
+  outcome of a client's daily refresh.
+- `Cache-Control: public, max-age=3600`, and `Content-Encoding: gzip` when the
+  client accepts it.
+- `?meta=true` returns just `{ schemaVersion, generatedAt, count, etag, rawBytes,
+  gzipBytes }` for callers that want to check freshness before downloading.
+- `X-Versions-Generated-At`, `X-Versions-Count`, and `X-Versions-Schema-Version`
+  are set on every response, including `304`s.
+
+**Building:** `VersionsWarmup` rebuilds the feed daily at 04:30 UTC into blob
+storage, because building it is a full O(n) table scan. `ActionsVersions` only
+builds on demand when no feed exists at all (the first request after a fresh
+deployment), and returns `503` with `Retry-After` if that still yields nothing.
+
+**SHA availability:** about half the dataset stores `tagInfo` as plain version
+strings with no SHA. Those rows return `latestSha: null`. A null SHA means
+"unknown", and consumers must not substitute a SHA from another version. SHAs are
+read from `versionShaMap` when present (see
+[the decision record](../../Decision%20Records/version-sha-map.md)) and from
+`{ sha, tag }` objects in `tagInfo` otherwise.
+
+**Example:**
+```bash
+curl -H 'Accept-Encoding: gzip' https://your-api.azurewebsites.net/api/actions/versions --output actions-versions.json.gz
+```
 
 ### README Endpoint with Caching
 

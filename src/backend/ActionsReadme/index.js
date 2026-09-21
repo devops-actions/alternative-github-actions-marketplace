@@ -4,16 +4,59 @@ const { getCachedReadme, cacheReadme, isCacheValid } = require('../lib/readmeCac
 const { getActionEntity } = require('../lib/tableStorage');
 const { ActionRecord } = require('../lib/actionRecord');
 const { extractRepoName } = require('../lib/actionNameDecoder');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+const { normalizePartitionKey, normalizeRowKey } = require('../lib/keyUtils');
+const { rewriteRelativeAssetUrls } = require('../lib/readmeAssets');
+
+const CACHE_MAX_AGE_SECONDS = 1800; // 30 minutes
+
+// GitHub owner/org names: alphanumeric and hyphens only.
+const VALID_OWNER = /^[a-zA-Z0-9-]+$/;
+// Action "name" route segment may encode composite action paths as
+// {owner}_{repo}_{subpath} (see actionNameDecoder.js), so it also allows
+// underscores and dots (e.g. ".github").
+const VALID_NAME = /^[a-zA-Z0-9._-]+$/;
+// Characters that are valid in a git ref/tag/branch name.
+const INVALID_REF_CHARS = /[^a-zA-Z0-9._\-/]/g;
+
+function sanitizeVersion(rawVersion) {
+  if (!rawVersion) {
+    return 'main';
+  }
+  const sanitized = String(rawVersion).replace(INVALID_REF_CHARS, '');
+  return sanitized || 'main';
+}
+
+// GitHub allows a repo's displayed README to live in the root, docs/, or
+// .github/ folder. The HTML-rendered readme response doesn't say which, so
+// we fetch the JSON metadata in parallel just to learn the README's path,
+// which is needed to resolve its relative image links correctly. A failure
+// here isn't fatal - we fall back to assuming a root-level README.
+async function fetchReadmePath(url, headers) {
+  try {
+    const response = await fetch(url, { headers: { ...headers, Accept: 'application/vnd.github+json' } });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data && typeof data.path === 'string' ? data.path : null;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchReadmeFromGitHub(owner, name, version) {
   const ref = version || 'main';
   const repoName = extractRepoName(owner, name);
   const url = `https://api.github.com/repos/${owner}/${repoName}/readme?ref=${ref}`;
-  
+
   const headers = await getPublicReadHeaders();
 
-  const response = await fetch(url, { headers });
-  
+  const [response, readmePath] = await Promise.all([
+    fetch(url, { headers }),
+    fetchReadmePath(url, headers)
+  ]);
+
   if (!response.ok) {
     if (response.status === 404) {
       return null;
@@ -25,12 +68,12 @@ async function fetchReadmeFromGitHub(owner, name, version) {
   if (!html) {
     throw new Error(`GitHub API returned empty body for ${owner}/${repoName}@${ref}`);
   }
-  return html;
+  return rewriteRelativeAssetUrls(html, owner, repoName, ref, readmePath);
 }
 
 async function getRepoUpdatedAt(owner, name) {
-  const partitionKey = ActionRecord.normalizeKey(owner);
-  const rowKey = ActionRecord.normalizeKey(name);
+  const partitionKey = normalizePartitionKey(owner);
+  const rowKey = normalizeRowKey(name);
   
   try {
     const entity = await getActionEntity(partitionKey, rowKey);
@@ -44,7 +87,7 @@ async function getRepoUpdatedAt(owner, name) {
     if (payload.repoInfo && payload.repoInfo.updated_at) {
       return new Date(payload.repoInfo.updated_at);
     }
-  } catch (error) {
+  } catch {
     // If we can't get the action data, just proceed without caching
     return null;
   }
@@ -72,13 +115,22 @@ module.exports = async function actionsReadme(context, req) {
 
   const owner = context.bindingData && context.bindingData.owner;
   const name = context.bindingData && context.bindingData.name;
-  const version = req.query && req.query.version;
+  const version = sanitizeVersion(req.query && req.query.version);
 
   if (!owner || !name) {
     context.res = {
       status: 400,
       headers: withCorsHeaders(req),
       body: { error: 'Owner and name route parameters are required.' }
+    };
+    return;
+  }
+
+  if (!VALID_OWNER.test(owner) || !VALID_NAME.test(name)) {
+    context.res = {
+      status: 400,
+      headers: withCorsHeaders(req),
+      body: { error: 'Owner and name route parameters contain invalid characters.' }
     };
     return;
   }
@@ -95,9 +147,10 @@ module.exports = async function actionsReadme(context, req) {
       context.log.info(`Serving cached README for ${owner}/${name}@${version || 'main'}`);
       context.res = {
         status: 200,
-        headers: withCorsHeaders(req, { 
+        headers: withCorsHeaders(req, {
           'Content-Type': 'text/html; charset=utf-8',
-          'X-Cache': 'HIT'
+          'X-Cache': 'HIT',
+          ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
         }),
         body: cachedReadme.content
       };
@@ -128,9 +181,10 @@ module.exports = async function actionsReadme(context, req) {
 
     context.res = {
       status: 200,
-      headers: withCorsHeaders(req, { 
+      headers: withCorsHeaders(req, {
         'Content-Type': 'text/html; charset=utf-8',
-        'X-Cache': 'MISS'
+        'X-Cache': 'MISS',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
       }),
       body: readmeHtml
     };

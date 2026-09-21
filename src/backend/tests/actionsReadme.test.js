@@ -136,6 +136,7 @@ describe('actionsReadme function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toBe('<h1>README</h1>');
     expect(context.res.headers['X-Cache']).toBe('HIT');
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=1800');
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -159,6 +160,7 @@ describe('actionsReadme function', () => {
     expect(context.res.status).toBe(200);
     expect(context.res.body).toBe('<h1>Fresh README</h1>');
     expect(context.res.headers['X-Cache']).toBe('MISS');
+    expect(context.res.headers['Cache-Control']).toBe('public, max-age=1800');
   });
 
   it('returns 404 when GitHub returns 404', async () => {
@@ -178,6 +180,7 @@ describe('actionsReadme function', () => {
 
     expect(context.res.status).toBe(404);
     expect(context.res.body.error).toBe('README not found.');
+    expect(context.res.headers['Cache-Control']).toBeUndefined();
   });
 
   it('returns 500 when GitHub returns non-ok non-404 error', async () => {
@@ -241,6 +244,139 @@ describe('actionsReadme function', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('ref=v3'),
       expect.any(Object)
+    );
+  });
+
+  it('strips characters that are not valid in a git ref from the version query param', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h2>sanitized README</h2>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = {
+      method: 'GET',
+      headers: {},
+      // Attempt to inject extra path/query segments via the version param.
+      query: { version: '../../evil?foo=bar&x=<script>' }
+    };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    const fetchedUrl = global.fetch.mock.calls[0][0];
+    // The only "?" in the URL should be the one separating the readme path
+    // from the "ref" query param itself — no extra query params or markup
+    // should have leaked in from the (malicious) version value.
+    expect(fetchedUrl.indexOf('?')).toBe(fetchedUrl.lastIndexOf('?'));
+    expect(fetchedUrl).not.toMatch(/[<>&]/);
+    expect(fetchedUrl).toContain('ref=../../evilfoobarxscript');
+  });
+
+  it('falls back to "main" when the sanitized version is empty', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue('<h2>main README</h2>')
+    });
+
+    const context = createContext('actions', 'checkout');
+    const req = { method: 'GET', headers: {}, query: { version: '!!!***' } };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('ref=main'),
+      expect.any(Object)
+    );
+  });
+
+  it('returns 400 when owner contains invalid characters', async () => {
+    const context = createContext('actions/evil', 'checkout');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('invalid characters');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when name contains invalid characters', async () => {
+    const context = createContext('actions', 'checkout/../secrets');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(400);
+    expect(context.res.body.error).toContain('invalid characters');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rewrites relative image sources using the README path from GitHub metadata', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockImplementation((url, options) => {
+      if (options.headers.Accept === 'application/vnd.github+json') {
+        return Promise.resolve({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ path: 'docs/README.md' })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('<img src="images/foo.png">')
+      });
+    });
+
+    const context = createContext('step-security', 'harden-runner');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toContain(
+      'src="https://raw.githubusercontent.com/step-security/harden-runner/main/docs/images/foo.png"'
+    );
+  });
+
+  it('falls back to root-relative rewriting when the metadata lookup fails', async () => {
+    mockGetActionEntity.mockResolvedValue(null);
+    mockGetCachedReadme.mockResolvedValue(null);
+    mockCacheReadme.mockResolvedValue(undefined);
+
+    global.fetch.mockImplementation((url, options) => {
+      if (options.headers.Accept === 'application/vnd.github+json') {
+        return Promise.reject(new Error('network error'));
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('<img src="images/foo.png">')
+      });
+    });
+
+    const context = createContext('step-security', 'harden-runner');
+    const req = { method: 'GET', headers: {}, query: {} };
+
+    await actionsReadme(context, req);
+
+    expect(context.res.status).toBe(200);
+    expect(context.res.body).toContain(
+      'src="https://raw.githubusercontent.com/step-security/harden-runner/main/images/foo.png"'
     );
   });
 });

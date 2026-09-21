@@ -1,6 +1,9 @@
 const { getTableClient } = require('../lib/tableStorage');
 const { withCorsHeaders } = require('../lib/cors');
-const { readCache, writeCache } = require('../lib/statsCache');
+const { readCache, writeCache, STATS_CACHE_PARTITION } = require('../lib/statsCache');
+const { cacheControlHeaders } = require('../lib/cacheHeaders');
+
+const CACHE_MAX_AGE_SECONDS = 300; // 5 minutes
 
 /**
  * Returns data-freshness metrics for the actions database.
@@ -27,6 +30,11 @@ async function computeStatus(tableClient) {
   };
 
   for await (const entity of tableClient.listEntities()) {
+    // Skip the stats cache row, which shares this table but is not an action.
+    if (entity.partitionKey === STATS_CACHE_PARTITION) {
+      continue;
+    }
+
     totalCount += 1;
 
     const raw = entity.LastSyncedUtc;
@@ -122,7 +130,10 @@ module.exports = async function actionsStatus(context, req) {
     context.res = {
       status: 200,
       isRaw: true,
-      headers: withCorsHeaders(req, { 'Content-Type': 'application/json' }),
+      headers: withCorsHeaders(req, {
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
+      }),
       body: JSON.stringify(payload)
     };
   } catch (error) {

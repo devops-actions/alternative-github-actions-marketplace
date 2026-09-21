@@ -11,8 +11,6 @@ import { NavBar } from '../components/NavBar';
 interface ComputedStats {
   criticalVulnCount: number;
   highVulnCount: number;
-  dependabotEnabledCount: number;
-  secretScanningCount: number;
   ossfScoreBands: number[];
   avgOssfScore: number;
   nodeVersions: Record<string, number>;
@@ -33,8 +31,6 @@ function computeStats(actions: Action[]): ComputedStats {
     return {
       criticalVulnCount: 0,
       highVulnCount: 0,
-      dependabotEnabledCount: 0,
-      secretScanningCount: 0,
       ossfScoreBands: [0, 0, 0, 0, 0],
       avgOssfScore: 0,
       nodeVersions: {},
@@ -48,8 +44,6 @@ function computeStats(actions: Action[]): ComputedStats {
 
   let criticalVulnCount = 0;
   let highVulnCount = 0;
-  let dependabotEnabledCount = 0;
-  let secretScanningCount = 0;
   // bands: 0-2, 2-4, 4-6, 6-8, 8-10
   const ossfScoreBands = [0, 0, 0, 0, 0];
   let ossfScoreSum = 0;
@@ -66,8 +60,6 @@ function computeStats(actions: Action[]): ComputedStats {
   for (const a of actions) {
     if (a.vulnerabilityStatus?.critical > 0) criticalVulnCount++;
     if (a.vulnerabilityStatus?.high > 0) highVulnCount++;
-    if (a.dependabotEnabled) dependabotEnabledCount++;
-    if (a.secretScanningEnabled) secretScanningCount++;
 
     // OSSF scan funnel: every repo is either found (ossf === true, a real
     // score was loaded from securityscorecards.dev), checked-but-no-data
@@ -110,8 +102,6 @@ function computeStats(actions: Action[]): ComputedStats {
   return {
     criticalVulnCount,
     highVulnCount,
-    dependabotEnabledCount,
-    secretScanningCount,
     ossfScoreBands,
     avgOssfScore: ossfScoreActionCount > 0 ? ossfScoreSum / ossfScoreActionCount : 0,
     nodeVersions,
@@ -313,6 +303,33 @@ export const StateOfActionsPage: React.FC = () => {
 
   const nodeTotal = topNodeVersions.reduce((s, [, v]) => s + v, 0);
 
+  const nodeVersionColors = ['var(--c-green)', 'var(--c-sky)', 'var(--c-purple)', 'var(--c-amber)', 'var(--c-red)'];
+  const nodeVersionSlices: DonutSlice[] = topNodeVersions.map(([ver, count], i) => ({
+    label: `node${ver}`,
+    value: count,
+    color: nodeVersionColors[i % nodeVersionColors.length],
+  }));
+
+  // GitHub-hosted runners currently bundle only node20 and node24 as supported
+  // `runs.using` runtimes for JavaScript actions. Node actions pinned to any
+  // other/older version aren't natively runnable and effectively need the
+  // consumer to bring their own Node.js (e.g. via actions/setup-node) to be safe.
+  const currentRunnerNodeVersions = new Set(['20', '24']);
+  let runsByDefaultCount = 0;
+  let needsSetupNodeCount = 0;
+  for (const [ver, count] of Object.entries(computed.nodeVersions)) {
+    if (currentRunnerNodeVersions.has(ver)) runsByDefaultCount += count;
+    else needsSetupNodeCount += count;
+  }
+  // Docker and Composite actions don't rely on the runner's bundled Node.js runtime.
+  runsByDefaultCount += (stats?.byType['Docker'] ?? 0) + (stats?.byType['Composite'] ?? 0);
+
+  const runnerReadinessTotal = runsByDefaultCount + needsSetupNodeCount;
+  const runnerReadinessSlices: DonutSlice[] = [
+    { label: 'Runs by default', value: runsByDefaultCount, color: 'var(--c-green)' },
+    { label: 'Needs setup-node', value: needsSetupNodeCount, color: 'var(--c-amber)' },
+  ];
+
   const ossfBandLabels = ['0-2', '2-4', '4-6', '6-8', '8-10'];
   const ossfColors = ['var(--c-red)', 'var(--c-amber)', 'var(--c-sky)', 'var(--c-green)', 'var(--c-green)'];
   const maxOssfBand = Math.max(...computed.ossfScoreBands, 1);
@@ -410,7 +427,7 @@ export const StateOfActionsPage: React.FC = () => {
 
       {/* Security overview */}
       <div className="soa-section-title">Security Overview</div>
-      <div className="soa-grid soa-grid-4">
+      <div className="soa-grid soa-grid-2">
         <SecurityCard
           title="Critical Vulnerabilities"
           count={computed.criticalVulnCount}
@@ -424,20 +441,6 @@ export const StateOfActionsPage: React.FC = () => {
           total={total}
           color="var(--c-amber)"
           subtitle="Actions with at least one high CVE"
-        />
-        <SecurityCard
-          title="Dependabot Enabled"
-          count={computed.dependabotEnabledCount}
-          total={total}
-          color="var(--c-green)"
-          subtitle="Actions with Dependabot alerts enabled"
-        />
-        <SecurityCard
-          title="Secret Scanning"
-          count={computed.secretScanningCount}
-          total={total}
-          color="var(--c-sky)"
-          subtitle="Actions with secret scanning enabled"
         />
       </div>
 
@@ -532,26 +535,46 @@ export const StateOfActionsPage: React.FC = () => {
       {topNodeVersions.length > 0 && (
         <>
           <div className="soa-section-title">Node.js Version Distribution</div>
-          <div className="soa-card">
-            <div className="soa-card-title">Top Node.js runtimes used in Node-type actions</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginTop: 12 }}>
-              {topNodeVersions.map(([ver, count]) => (
-                <div key={ver}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span style={{ color: 'var(--c-text)', fontWeight: 600 }}>node{ver}</span>
-                    <span className="soa-pct-label">{count.toLocaleString()} ({pct(count, nodeTotal)})</span>
+          <div className="soa-grid soa-grid-2">
+            <div className="soa-card" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+              <DonutChart slices={nodeVersionSlices} size={160} thickness={30} />
+              <div style={{ flex: 1 }}>
+                <div className="soa-card-title" style={{ marginBottom: 10 }}>Top Node.js runtimes used in Node-type actions</div>
+                {nodeVersionSlices.map(sl => (
+                  <div key={sl.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span className="soa-legend-dot" style={{ background: sl.color }} />
+                    <span style={{ flex: 1, fontSize: 14, color: 'var(--c-text-2)' }}>{sl.label}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--c-text)' }}>
+                      {sl.value.toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 42, textAlign: 'right' }}>
+                      {pct(sl.value, nodeTotal)}
+                    </span>
                   </div>
-                  <div className="soa-bar-track">
-                    <div
-                      className="soa-bar-fill"
-                      style={{
-                        width: `${(count / (topNodeVersions[0]?.[1] ?? 1)) * 100}%`,
-                        background: 'var(--c-green)'
-                      }}
-                    />
+                ))}
+              </div>
+            </div>
+            <div className="soa-card" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+              <DonutChart slices={runnerReadinessSlices} size={160} thickness={30} />
+              <div style={{ flex: 1 }}>
+                <div className="soa-card-title" style={{ marginBottom: 10 }}>Runs by default vs needs setup-node</div>
+                {runnerReadinessSlices.map(sl => (
+                  <div key={sl.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span className="soa-legend-dot" style={{ background: sl.color }} />
+                    <span style={{ flex: 1, fontSize: 14, color: 'var(--c-text-2)' }}>{sl.label}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--c-text)' }}>
+                      {sl.value.toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 42, textAlign: 'right' }}>
+                      {pct(sl.value, runnerReadinessTotal)}
+                    </span>
                   </div>
+                ))}
+                <div style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 8 }}>
+                  Based on Docker/Composite actions plus Node actions on the runner's currently
+                  bundled runtimes (node20/node24); older Node versions may need setup-node.
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </>

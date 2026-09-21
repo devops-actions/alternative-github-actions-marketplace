@@ -403,6 +403,40 @@ describe('ActionsMarketplaceClient', () => {
         );
       });
 
+      it('unwraps a paginated { items, nextCursor } response into an array', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockActions = [
+          { owner: 'actions', name: 'checkout', description: 'Checkout code' }
+        ];
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ items: mockActions, nextCursor: 'abc123' })
+        });
+        global.fetch = mockFetch;
+
+        const result = await client.listActions({ limit: 1 });
+
+        expect(result).toEqual(mockActions);
+      });
+
+      it('throws when the response is neither an array nor a paginated envelope', async () => {
+        const client = new ActionsMarketplaceClient({
+          apiUrl: 'https://example.com'
+        });
+
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ unexpected: true })
+        });
+        global.fetch = mockFetch;
+
+        await expect(client.listActions()).rejects.toThrow('Invalid response format: expected an array of actions');
+      });
+
       it('appends limit to URL when provided', async () => {
         const client = new ActionsMarketplaceClient({
           apiUrl: 'https://example.com'

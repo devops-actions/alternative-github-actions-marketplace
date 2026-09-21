@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/vscode-extension"],
+      "outFiles": ["${workspaceFolder}/vscode-extension/dist/**/*.js"],
+      "preLaunchTask": "vscode-extension: build"
+    },
+    {
+      "name": "Launch Marketplace Website",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/src/frontend",
+      "preLaunchTask": "frontend: dev server"
+    }
+  ]
+}

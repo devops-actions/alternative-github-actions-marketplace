@@ -1,6 +1,7 @@
 const { ActionRecord } = require('../lib/actionRecord');
 const { createTableClient } = require('../lib/tableStorage');
 const { MarketplaceApiError } = require('../lib/errors');
+const { normalizePartitionKey } = require('../lib/keyUtils');
 
 class ActionsMarketplaceClient {
   constructor(options = {}) {
@@ -44,7 +45,7 @@ class ActionsMarketplaceClient {
       let errorBody;
       try {
         errorBody = await response.json();
-      } catch (jsonError) {
+      } catch {
         const textBody = await response.text();
         throw new MarketplaceApiError(
           `Failed to upsert action via HTTP API: ${response.status} ${textBody}`,
@@ -211,12 +212,19 @@ class ActionsMarketplaceClient {
     }
 
     const body = await response.json();
-    
-    if (!Array.isArray(body)) {
-      throw new Error('Invalid response format: expected an array of actions');
+
+    // The endpoint returns a plain array when no `limit` is requested, or a
+    // paginated `{ items, nextCursor }` envelope when `limit` (and optionally
+    // `cursor`) is used. Normalize both shapes to a plain array for callers.
+    if (Array.isArray(body)) {
+      return body;
     }
 
-    return body;
+    if (body && Array.isArray(body.items)) {
+      return body.items;
+    }
+
+    throw new Error('Invalid response format: expected an array of actions');
   }
 
   async _listViaTable(options = {}) {
@@ -228,7 +236,7 @@ class ActionsMarketplaceClient {
       
       if (owner) {
         // Sanitize owner to prevent OData injection - escape single quotes first, then normalize case
-        const sanitizedOwner = String(owner).replace(/'/g, "''").toLowerCase();
+        const sanitizedOwner = normalizePartitionKey(String(owner).replace(/'/g, "''"));
         queryOptions = { queryOptions: { filter: `PartitionKey eq '${sanitizedOwner}'` } };
       }
       
@@ -242,15 +250,15 @@ class ActionsMarketplaceClient {
             rowKey: entity.rowKey
           });
           entities.push(actionInfo);
-        } catch (error) {
+        } catch {
           // Skip entities that can't be parsed
           continue;
         }
       }
-      
+
       return entities;
     } catch (error) {
-      throw new Error(`Failed to list actions from table storage: ${error.message}`);
+      throw new Error(`Failed to list actions from table storage: ${error.message}`, { cause: error });
     }
   }
 }
