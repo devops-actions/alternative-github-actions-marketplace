@@ -19,6 +19,10 @@ interface ComputedStats {
   ossfNeverCheckedCount: number;
   ossfCheckedNoDataCount: number;
   ossfScoreFoundCount: number;
+  immutableEnabledCount: number;
+  immutableDisabledCount: number;
+  immutableUnknownCount: number;
+  immutableNotCheckedCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -39,6 +43,10 @@ function computeStats(actions: Action[]): ComputedStats {
       ossfNeverCheckedCount: 0,
       ossfCheckedNoDataCount: 0,
       ossfScoreFoundCount: 0,
+      immutableEnabledCount: 0,
+      immutableDisabledCount: 0,
+      immutableUnknownCount: 0,
+      immutableNotCheckedCount: 0,
     };
   }
 
@@ -53,6 +61,10 @@ function computeStats(actions: Action[]): ComputedStats {
   let ossfNeverCheckedCount = 0;
   let ossfCheckedNoDataCount = 0;
   let ossfScoreFoundCount = 0;
+  let immutableEnabledCount = 0;
+  let immutableDisabledCount = 0;
+  let immutableUnknownCount = 0;
+  let immutableNotCheckedCount = 0;
 
   const now = Date.now();
   const bandCounts = [0, 0, 0, 0, 0]; // <7d, 7-30d, 30-90d, 90-365d, >365d
@@ -85,6 +97,13 @@ function computeStats(actions: Action[]): ComputedStats {
 
     if (a.repoInfo?.archived) archivedCount++;
 
+    switch (a.immutableReleasePolicy) {
+      case 'enabled': immutableEnabledCount++; break;
+      case 'disabled': immutableDisabledCount++; break;
+      case 'unknown': immutableUnknownCount++; break;
+      default: immutableNotCheckedCount++; break;
+    }
+
     const updatedStr = a.repoInfo?.updated_at;
     if (updatedStr) {
       const ms = Date.now() - new Date(updatedStr).getTime();
@@ -116,6 +135,10 @@ function computeStats(actions: Action[]): ComputedStats {
     ossfNeverCheckedCount,
     ossfCheckedNoDataCount,
     ossfScoreFoundCount,
+    immutableEnabledCount,
+    immutableDisabledCount,
+    immutableUnknownCount,
+    immutableNotCheckedCount,
   };
 }
 
@@ -343,6 +366,14 @@ export const StateOfActionsPage: React.FC = () => {
 
   const updateColors = ['var(--c-green)', 'var(--c-sky)', 'var(--c-amber)', 'var(--c-red)', 'var(--c-red)'];
 
+  const immutableSlices: DonutSlice[] = [
+    { label: 'Enabled', value: computed.immutableEnabledCount, color: 'var(--c-green)' },
+    { label: 'Disabled', value: computed.immutableDisabledCount, color: 'var(--c-red)' },
+    { label: 'Unknown', value: computed.immutableUnknownCount, color: 'var(--c-amber)' },
+    { label: 'Not checked yet', value: computed.immutableNotCheckedCount, color: 'var(--c-text-3)' },
+  ];
+  const immutableChecked = computed.immutableEnabledCount + computed.immutableDisabledCount + computed.immutableUnknownCount;
+
   return (
     <div className="app">
       <div className="header">
@@ -418,8 +449,13 @@ export const StateOfActionsPage: React.FC = () => {
           </div>
         </div>
         <div className="soa-card">
-          <div className="soa-card-title">Distribution</div>
-          {donutSlices.map(sl => (
+          <div className="soa-card-title">Immutable Releases</div>
+          <div style={{ fontSize: 12, color: 'var(--c-text-3)', marginBottom: 12 }}>
+            {loadingActions
+              ? 'Loading...'
+              : `${pct(computed.immutableEnabledCount, immutableChecked)} of checked actions have immutable releases enabled`}
+          </div>
+          {immutableSlices.map(sl => (
             <BarRow key={sl.label} label={sl.label} count={sl.value} total={total} color={sl.color} />
           ))}
         </div>
