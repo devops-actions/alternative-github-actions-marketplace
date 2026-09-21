@@ -5,8 +5,9 @@
 // The full payloads average ~1.7 KB each, so returning all ~35k of them costs
 // ~56 MB uncompressed. Every field below is read by OverviewPage or
 // StateOfActionsPage; everything else (dependabot, forkFound, tagInfo,
-// versionShaMap, mirrorLastUpdated, repoSize, …) is only ever needed on the
-// detail page, which fetches a single action via /api/actions/{owner}/{name}.
+// versionShaMap, mirrorLastUpdated, repoSize, immutableReleaseSummary,
+// immutableReleaseObservations, …) is only ever needed on the detail page,
+// which fetches a single action via /api/actions/{owner}/{name}.
 // Dropping the rest takes the same dataset to ~6 MB.
 //
 // When the overview or state pages start reading a new field, add it here —
@@ -76,6 +77,16 @@ function readLatestRelease(payload) {
   return [];
 }
 
+// Tri-state field collected by actions-marketplace-checks (issue #264); any
+// other value (missing, or a future/unexpected string) means "not checked
+// yet" as far as the UI is concerned, so it is not carried through as-is.
+function readImmutableReleasePolicy(payload) {
+  const value = payload.immutableReleasePolicy;
+  return value === 'enabled' || value === 'disabled' || value === 'unknown'
+    ? value
+    : undefined;
+}
+
 // `verified` has arrived as a boolean, the number 1, and the strings
 // 'true'/'1' depending on which pipeline version wrote the record.
 function readVerified(payload) {
@@ -138,6 +149,7 @@ function toActionSummary(payload) {
     releaseInfo: readLatestRelease(payload),
     description: readDescription(payload),
     verified: readVerified(payload),
+    immutableReleasePolicy: readImmutableReleasePolicy(payload),
     ossf: payload.ossf === true || ossfScore !== null,
     ossfScore: ossfScore === null ? 0 : ossfScore,
     vulnerabilityStatus: {
