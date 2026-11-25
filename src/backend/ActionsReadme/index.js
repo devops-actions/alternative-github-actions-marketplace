@@ -74,20 +74,22 @@ async function fetchReadmeFromGitHub(owner, name, version) {
 async function getRepoUpdatedAt(owner, name) {
   const partitionKey = normalizePartitionKey(owner);
   const rowKey = normalizeRowKey(name);
+  let entity;
   
   try {
-    const entity = await getActionEntity(partitionKey, rowKey);
+    entity = await getActionEntity(partitionKey, rowKey);
     if (!entity) {
       return null;
     }
 
-    const record = ActionRecord.fromEntity(entity);
+    const record = await ActionRecord.fromStoredEntity(entity);
     const payload = JSON.parse(record.canonicalJson);
     
     if (payload.repoInfo && payload.repoInfo.updated_at) {
       return new Date(payload.repoInfo.updated_at);
     }
-  } catch {
+  } catch (error) {
+    if (entity && entity.PayloadBlobName) throw error;
     // If we can't get the action data, just proceed without caching
     return null;
   }

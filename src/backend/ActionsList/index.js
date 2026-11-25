@@ -28,15 +28,17 @@ function decodeCursor(cursor) {
   return JSON.parse(json);
 }
 
-function entityToActionInfo(e) {
+async function entityToActionInfo(e) {
   try {
-    return ActionRecord.fromEntity(e).toActionInfo(true, {
+    const record = await ActionRecord.fromStoredEntity(e);
+    return record.toActionInfo(true, {
       etag: e.etag,
       lastSyncedUtc: e.LastSyncedUtc,
       partitionKey: e.partitionKey || e.PartitionKey,
       rowKey: e.rowKey || e.RowKey
     });
-  } catch {
+  } catch (error) {
+    if (e.PayloadBlobName) throw error;
     return null;
   }
 }
@@ -97,60 +99,60 @@ module.exports = async function actionsList(context, req) {
   const tableClient = getTableClient();
   const tableUrl = tableClient && tableClient.url ? tableClient.url.split('?')[0] : 'unknown';
 
-  // For now, only support in-memory/fake client for integration tests
-  if (typeof tableClient.store === 'object' && tableClient.store instanceof Map) {
-    // Simulate Table Storage query by owner
-    const filteredEntities = Array.from(tableClient.store.values()).filter(e => {
-      const entityOwner = e.Owner || (e.PayloadJson && JSON.parse(e.PayloadJson).owner);
-      return owner ? entityOwner === owner : true;
-    });
+  try {
+    // For now, only support in-memory/fake client for integration tests
+    if (typeof tableClient.store === 'object' && tableClient.store instanceof Map) {
+      // Simulate Table Storage query by owner
+      const filteredEntities = Array.from(tableClient.store.values()).filter(e => {
+        const entityOwner = e.Owner || (e.PayloadJson && JSON.parse(e.PayloadJson).owner);
+        return owner ? entityOwner === owner : true;
+      });
 
-    const totalCount = filteredEntities.length;
-    const baseHeaders = {
-      'X-Total-Count': totalCount,
-      'X-Table-Endpoint': tableUrl,
-      'Content-Type': 'application/json',
-      ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
-    };
+      const totalCount = filteredEntities.length;
+      const baseHeaders = {
+        'X-Total-Count': totalCount,
+        'X-Table-Endpoint': tableUrl,
+        'Content-Type': 'application/json',
+        ...cacheControlHeaders(CACHE_MAX_AGE_SECONDS)
+      };
 
-    if (limit !== null) {
-      let startIndex = 0;
-      if (continuationToken !== undefined) {
-        const parsedIndex = Number(continuationToken);
-        startIndex = Number.isFinite(parsedIndex) && parsedIndex > 0 ? parsedIndex : 0;
+      if (limit !== null) {
+        let startIndex = 0;
+        if (continuationToken !== undefined) {
+          const parsedIndex = Number(continuationToken);
+          startIndex = Number.isFinite(parsedIndex) && parsedIndex > 0 ? parsedIndex : 0;
+        }
+
+        const pageEntities = filteredEntities.slice(startIndex, startIndex + limit);
+        const nextIndex = startIndex + pageEntities.length;
+        const nextCursor = nextIndex < filteredEntities.length ? encodeCursor(nextIndex) : null;
+        const results = (await Promise.all(pageEntities.map(entityToActionInfo))).filter(Boolean);
+
+        context.log(`ActionsList: returning page of ${results.length} of ${totalCount} entities (fake client), table ${tableUrl}`);
+
+        context.res = {
+          status: 200,
+          headers: { ...baseHeaders, 'X-Actions-Count': results.length },
+          body: { items: results, nextCursor }
+        };
+        context.res.headers = withCorsHeaders(req, context.res.headers);
+        return;
       }
 
-      const pageEntities = filteredEntities.slice(startIndex, startIndex + limit);
-      const nextIndex = startIndex + pageEntities.length;
-      const nextCursor = nextIndex < filteredEntities.length ? encodeCursor(nextIndex) : null;
-      const results = pageEntities.map(entityToActionInfo).filter(Boolean);
+      const results = (await Promise.all(filteredEntities.map(entityToActionInfo))).filter(Boolean);
 
-      context.log(`ActionsList: returning page of ${results.length} of ${totalCount} entities (fake client), table ${tableUrl}`);
+      context.log(`ActionsList: returning ${results.length} of ${totalCount} entities (fake client), table ${tableUrl}`);
 
       context.res = {
         status: 200,
         headers: { ...baseHeaders, 'X-Actions-Count': results.length },
-        body: { items: results, nextCursor }
+        body: results
       };
       context.res.headers = withCorsHeaders(req, context.res.headers);
       return;
     }
 
-    const results = filteredEntities.map(entityToActionInfo).filter(Boolean);
-
-    context.log(`ActionsList: returning ${results.length} of ${totalCount} entities (fake client), table ${tableUrl}`);
-
-    context.res = {
-      status: 200,
-      headers: { ...baseHeaders, 'X-Actions-Count': results.length },
-      body: results
-    };
-    context.res.headers = withCorsHeaders(req, context.res.headers);
-    return;
-  }
-
-  // Real Table Storage query for production
-  try {
+    // Real Table Storage query for production
     let queryOptions = {};
 
     if (owner) {
@@ -212,7 +214,7 @@ module.exports = async function actionsList(context, req) {
         }
       }
 
-      const results = pageEntities.map(entityToActionInfo).filter(Boolean);
+      const results = (await Promise.all(pageEntities.map(entityToActionInfo))).filter(Boolean);
       const nextCursor = encodeCursor(pageToken);
 
       const headers = {
@@ -242,7 +244,7 @@ module.exports = async function actionsList(context, req) {
       entities.push(entity);
     }
 
-    const results = entities.map(entityToActionInfo).filter(Boolean);
+    const results = (await Promise.all(entities.map(entityToActionInfo))).filter(Boolean);
 
     const headers = {
       'X-Actions-Count': results.length,

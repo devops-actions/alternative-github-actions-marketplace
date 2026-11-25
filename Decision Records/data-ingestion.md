@@ -1,7 +1,7 @@
 # Data Ingestion & Update Plan
 
 ## Goal
-Provide an HTTP API that accepts a single GitHub Actions record, stores it in Azure Table Storage, and only writes when the payload differs from what is already persisted. The API must support external callers that bulk-load new data and later push targeted updates, with an emphasis on low-latency and atomic writes.
+Provide an HTTP API that accepts a single GitHub Actions record, stores it in Azure Table Storage with private Blob Storage overflow for oversized payloads, and only writes when the payload differs from what is already persisted. The API must support external callers that bulk-load new data and later push targeted updates, with an emphasis on low-latency and atomic writes.
 
 ## Storage Layout
 - **Table**: `actions` (same as baseline template).
@@ -11,7 +11,38 @@ Provide an HTTP API that accepts a single GitHub Actions record, stores it in Az
 - **Columns**:
   - `LastSyncedUtc`: timestamp of the last successfully persisted payload.
   - `PayloadHash`: SHA-256 hash (Base64/hex) of the canonical JSON payload to detect changes quickly.
-  - `PayloadJson`: compressed or raw JSON string for the record. Maintains the flexible schema without extra columns.
+  - `PayloadJson`: canonical JSON for records up to 32,768 UTF-16 code units (Azure's 64 KB string-property limit).
+  - `PayloadBlobName`: for larger records, replaces `PayloadJson` with a private blob reference, `payloads/{PayloadHash}.json`, in the existing snapshot container. The blob contains the complete canonical JSON, including append-only `immutableReleaseObservations`.
+
+### Oversized Payloads
+The November 2026 uploader failures include `overtrue/overtrue_phplint` (36,882
+canonical JSON code units, 33,993 in observation history) and
+`python-semantic-release/python-semantic-release_python-semantic-release`
+(83,366 code units). These cannot fit in a single Table string property.
+Trimming release lists is not sufficient, and trimming observation history would
+lose required data. Splitting across Table properties would merely move the
+failure to the 1 MB entity limit as history grows.
+
+Write the content-addressed blob before publishing its Table reference. Creation
+uses `If-None-Match: *`; an already existing blob is not overwritten. Table
+creation and ETag-conditional replacement remain the atomic commit point. Failed
+or competing Table writes may leave unreferenced blobs, but must never delete
+blobs in the request path: another row/writer/reader can still reference them.
+No production migration or garbage collection is performed by this change.
+
+All API, direct-client, snapshot, versions, and stats readers hydrate references
+and verify the SHA-256 before parsing. Missing, corrupt, or unreadable referenced
+blobs fail explicitly rather than returning metadata-only records or omitting
+actions from feeds. Legacy inline rows remain readable, and small updates use
+Table `Replace` to remove obsolete references. Canonical hashes and HTTP payloads
+are unchanged.
+
+This reuses private Blob Storage, its connection string/managed identity, and
+the existing snapshot container (default `snapshots`); no new Azure service or
+role is required. Only oversized writes/reads add blob operations and retained
+payload versions add storage cost. Direct Table clients need the updated package,
+blob read/write access, and `blobEndpoint` (or the storage connection string);
+existing HTTP uploaders require no package or checks-repository change.
 
 ## Ingestion Workflow
 1. **Request**: Client `POST /api/ActionsUpsert` with JSON body matching the record schema.
@@ -22,7 +53,7 @@ Provide an HTTP API that accepts a single GitHub Actions record, stores it in Az
    - If entity exists and `PayloadHash` matches, return HTTP 200 with `updated: false`.
    - If hashes differ or entity missing, proceed to upsert.
 5. **Upsert**:
-   - Build entity with latest `PayloadJson`, `PayloadHash`, and `LastSyncedUtc` (`DateTime.UtcNow`).
+   - Build entity with latest `PayloadJson` or `PayloadBlobName`, `PayloadHash`, and `LastSyncedUtc` (`DateTime.UtcNow`).
    - Use `UpsertEntity` with `TableUpdateMode.Merge` to keep metadata or `TableUpdateMode.Replace` if a full overwrite is desired.
    - For strict atomicity, if the entity exists, supply the current `ETag` and call `UpdateEntity`/`SetEntity` with `IfMatch` semantics. Retry on `412 Precondition Failed` with a fresh read.
 6. **Response**: Return HTTP 200 with `updated: true` and timestamps; 201 optional for new inserts.

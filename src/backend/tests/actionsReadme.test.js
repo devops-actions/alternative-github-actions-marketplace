@@ -140,6 +140,56 @@ describe('actionsReadme function', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('hydrates blob-backed repository timestamps before validating the README cache', async () => {
+    const { Readable } = require('stream');
+    const { ActionRecord } = require('../lib/actionRecord');
+    const { setSnapshotBlobClient } = require('../lib/snapshotStore');
+    const input = {
+      owner: 'actions',
+      name: 'checkout',
+      description: 'x'.repeat(32768),
+      repoInfo: { updated_at: '2026-11-25T00:00:00Z' }
+    };
+    const record = ActionRecord.fromRequest(input);
+    const blobName = `payloads/${record.hash}.json`;
+    const container = {
+      getBlockBlobClient: jest.fn().mockReturnValue({
+        download: jest.fn().mockResolvedValue({
+          readableStreamBody: Readable.from([Buffer.from(record.canonicalJson)])
+        })
+      })
+    };
+    setSnapshotBlobClient(null, container);
+    mockGetActionEntity.mockResolvedValue(record.toEntity(new Date(), { payloadBlobName: blobName }));
+    const cachedEntry = { content: '<h1>README</h1>', cachedAt: new Date() };
+    mockGetCachedReadme.mockResolvedValue(cachedEntry);
+    mockIsCacheValid.mockReturnValue(true);
+
+    const context = createContext('actions', 'checkout');
+    await actionsReadme(context, { method: 'GET', headers: {}, query: {} });
+    expect(context.res.status).toBe(200);
+    expect(mockIsCacheValid).toHaveBeenCalledWith(cachedEntry, new Date(input.repoInfo.updated_at));
+    expect(container.getBlockBlobClient).toHaveBeenCalledWith(blobName);
+    setSnapshotBlobClient(null, null);
+  });
+
+  it('fails rather than using a timestamp fallback when a referenced payload blob is missing', async () => {
+    const { setSnapshotBlobClient } = require('../lib/snapshotStore');
+    const hash = 'a'.repeat(64);
+    mockGetActionEntity.mockResolvedValue({ PayloadBlobName: `payloads/${hash}.json`, PayloadHash: hash });
+    setSnapshotBlobClient(null, {
+      getBlockBlobClient: () => ({
+        download: jest.fn().mockRejectedValue(Object.assign(new Error('Missing blob'), { statusCode: 404 }))
+      })
+    });
+    const context = createContext('actions', 'checkout');
+    await actionsReadme(context, { method: 'GET', headers: {}, query: {} });
+    expect(context.res.status).toBe(500);
+    expect(mockIsCacheValid).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+    setSnapshotBlobClient(null, null);
+  });
+
   it('fetches README from GitHub when cache is invalid', async () => {
     mockGetActionEntity.mockResolvedValue(null);
     mockGetCachedReadme.mockResolvedValue(null);

@@ -2,6 +2,7 @@ const { ActionRecord } = require('../lib/actionRecord');
 const { createTableClient } = require('../lib/tableStorage');
 const { MarketplaceApiError } = require('../lib/errors');
 const { normalizePartitionKey } = require('../lib/keyUtils');
+const { prepareActionEntity } = require('../lib/actionPayloadStore');
 
 class ActionsMarketplaceClient {
   constructor(options = {}) {
@@ -11,6 +12,7 @@ class ActionsMarketplaceClient {
       this.useHttpApi = true;
     } else {
       this.tableClient = createTableClient(options);
+      this.storageOptions = options;
       this.useHttpApi = false;
     }
   }
@@ -115,8 +117,8 @@ class ActionsMarketplaceClient {
     }
   }
 
-  async _persistActionRecord(record, existing) {
-    const entity = record.toEntity();
+  async _persistActionRecord(record, existing, storedEntity) {
+    const entity = storedEntity || await prepareActionEntity(record, this.storageOptions);
 
     if (!existing) {
       try {
@@ -127,7 +129,7 @@ class ActionsMarketplaceClient {
           throw error;
         }
         const latest = await this.tableClient.getEntity(entity.partitionKey, entity.rowKey);
-        return this._persistActionRecord(record, latest);
+        return this._persistActionRecord(record, latest, entity);
       }
     }
 
@@ -142,7 +144,7 @@ class ActionsMarketplaceClient {
       if (record.matchesExisting(latest)) {
         return { updated: false, created: false, lastSyncedUtc: latest.LastSyncedUtc };
       }
-      return this._persistActionRecord(record, latest);
+      return this._persistActionRecord(record, latest, entity);
     }
   }
 
@@ -242,7 +244,7 @@ class ActionsMarketplaceClient {
       
       for await (const entity of this.tableClient.listEntities(queryOptions)) {
         try {
-          const record = ActionRecord.fromEntity(entity);
+          const record = await ActionRecord.fromStoredEntity(entity, this.storageOptions);
           const actionInfo = record.toActionInfo(true, {
             etag: entity.etag,
             lastSyncedUtc: entity.LastSyncedUtc,
@@ -250,7 +252,8 @@ class ActionsMarketplaceClient {
             rowKey: entity.rowKey
           });
           entities.push(actionInfo);
-        } catch {
+        } catch (error) {
+          if (entity.PayloadBlobName) throw error;
           // Skip entities that can't be parsed
           continue;
         }
