@@ -10,7 +10,7 @@ Provide an HTTP API that accepts a single GitHub Actions record, stores it in Az
   - `RowKey`: normalized action name (unique per owner). Combined key yields a stable identifier while staying inside 1 KB row-key limit.
 - **Columns**:
   - `LastSyncedUtc`: timestamp of the last successfully persisted payload.
-  - `PayloadHash`: SHA-256 hash (Base64/hex) of the canonical JSON payload to detect changes quickly.
+  - `PayloadHash`: lowercase hexadecimal SHA-256 hash of the canonical JSON payload to detect changes quickly.
   - `PayloadJson`: canonical JSON for records up to 32,768 UTF-16 code units (Azure's 64 KB string-property limit).
   - `PayloadBlobName`: for larger records, replaces `PayloadJson` with a private blob reference, `payloads/{PayloadHash}.json`, in the existing snapshot container. The blob contains the complete canonical JSON, including append-only `immutableReleaseObservations`.
 
@@ -53,9 +53,9 @@ existing HTTP uploaders require no package or checks-repository change.
    - If entity exists and `PayloadHash` matches, return HTTP 200 with `updated: false`.
    - If hashes differ or entity missing, proceed to upsert.
 5. **Upsert**:
-   - Build entity with latest `PayloadJson` or `PayloadBlobName`, `PayloadHash`, and `LastSyncedUtc` (`DateTime.UtcNow`).
-   - Use `UpsertEntity` with `TableUpdateMode.Merge` to keep metadata or `TableUpdateMode.Replace` if a full overwrite is desired.
-   - For strict atomicity, if the entity exists, supply the current `ETag` and call `UpdateEntity`/`SetEntity` with `IfMatch` semantics. Retry on `412 Precondition Failed` with a fresh read.
+   - Use `prepareActionEntity` to retain canonical JSON in `PayloadJson` when it is at most 32,768 UTF-16 code units, or first create/verify the immutable private blob and then store its `PayloadBlobName` reference for larger records.
+   - For a new row, create the entity. For an existing row, replace it using its current ETag; on a `412 Precondition Failed`, read again and retry or return unchanged if the hash now matches.
+   - Do not remove content-addressed blobs from a request path: a failed or competing Table write can leave an unreferenced blob, and other readers or rows may still use it.
 6. **Response**: Return HTTP 200 with `updated: true` and timestamps; 201 optional for new inserts.
 
 ## Implementation Notes

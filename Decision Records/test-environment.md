@@ -15,5 +15,5 @@ Frontend (build):
 - npm run build
 
 Notes:
-- The CI workflow (.github/workflows/swa-test.yml) runs these steps and skips deployment if Azure secrets are not provided.
-- Use Node.js 22 to match the project's engine requirements for the frontend and Node 20+ for backend tools.
+- These unit tests and the frontend build run locally without Azure credentials or production data. The CI workflow (`.github/workflows/swa-test.yml`) runs the backend tests and frontend build; it skips deployment if Azure secrets are not provided.
+- Use Node.js 22 for validation because CI and Azure Functions production use Node.js 22. The backend and MCP package manifests declare `node >=20`, which is a broader package minimum, not the production validation target.

@@ -1,8 +1,15 @@
 # Requirements Snapshot
 
 ## Current Data Profile
-- 30k GitHub Actions records stored as flat JSON (~26 MB total payload).
-- Single-table workload; each record includes metadata (owner, release info, security posture).
+- About 30k GitHub Actions records are keyed in the `actions` Azure Table by
+  normalized owner and action name.
+- Canonical record JSON is stored inline in `PayloadJson` up to 32,768 UTF-16
+  code units. Larger records are stored losslessly in private Blob Storage and
+  referenced from the Table row by `PayloadBlobName` and SHA-256 `PayloadHash`.
+- The private `snapshots` container also stores distinct precomputed overview
+  and versions feeds; these are not interchangeable with stored action payloads.
+- Records include metadata such as owner and release information. Security
+  posture details remain server-side under the data exposure policy below.
 
 ## Usage Expectations
 - Initial traffic is minimal; prioritize low operating cost over peak throughput.
@@ -10,7 +17,9 @@
 - All fields searchable; initial release relies on API-side filtering rather than managed search indexes.
 
 ## Data Exposure Policy
-- Do not surface vulnerability or security posture details (e.g., dependabot status, vuln counts) in the public UI; keep them server-side to avoid exposing sensitive signals to users.
+- Do not surface vulnerability or security posture details (e.g., dependabot
+  status or vulnerability counts) in the public UI or AI tool output. Keep
+  them server-side to avoid exposing sensitive signals to users.
 
 ## Hosting Constraints
 - Optimize for Azure services with free or near-free tiers until load grows.

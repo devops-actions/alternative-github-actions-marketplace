@@ -10,8 +10,9 @@ model back to guessing versions from memory.
 No existing read path fits:
 
 - `GET /actions/{owner}/{name}` is one request per action.
-- `GET /actions/list` returns the full records - roughly 26 MB over ~35k actions -
-  which is far too much to transfer on a recurring refresh.
+- `GET /actions/list` returns full records from a Table scan (about 56 MB
+  uncompressed at the current dataset size), which is far too much to transfer
+  on a recurring refresh.
 - `GET /actions/snapshot` (the overview snapshot, see below) is close in spirit
   but its projection in `lib/actionSummary.js` deliberately drops `tagInfo` and
   `versionShaMap`, so it carries no commit SHAs at all.

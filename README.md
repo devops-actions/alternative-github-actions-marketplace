@@ -49,3 +49,4 @@ The application is deployed to Azure using:
 - **Azure Static Web Apps** (Free tier) - Hosts the frontend
 - **Azure Functions** (Consumption plan) - Hosts the backend API
 - **Azure Table Storage** - Stores action metadata
+- **Private Azure Blob Storage** - Stores oversized action payloads and the separate precomputed overview and versions feeds
