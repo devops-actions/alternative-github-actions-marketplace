@@ -1,4 +1,5 @@
 const { STATS_CACHE_PARTITION } = require('./statsCache');
+const { readActionPayload } = require('./actionPayloadStore');
 
 // Scans the full actions table and aggregates the counts used by the
 // /actions/stats endpoint. This is an O(n) scan over every entity, so it is
@@ -21,9 +22,7 @@ async function computeStats(tableClient) {
     }
 
     try {
-      const payload = typeof entity.PayloadJson === 'string'
-        ? JSON.parse(entity.PayloadJson)
-        : (entity.PayloadJson || {});
+      const payload = await readActionPayload(entity) || {};
 
       // Only count entities that we can successfully parse and inspect.
       total += 1;
@@ -44,7 +43,8 @@ async function computeStats(tableClient) {
       if (payload.ossf === true) {
         withOssf += 1;
       }
-    } catch (_parseErr) {
+    } catch (error) {
+      if (entity.PayloadBlobName) throw error;
       // skip malformed payloads entirely (don't include in totals)
     }
   }

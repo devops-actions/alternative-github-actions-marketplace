@@ -50,6 +50,25 @@ The backend Azure Functions support the following environment variables:
 - **`ACTIONS_TABLE_CONNECTION`** or **`AzureWebJobsStorage`** - Storage connection string
 - **`ACTIONS_TABLE_URL`** or **`ACTIONS_TABLE_ENDPOINT`** - Table endpoint URL for Azure Identity authentication
 - **`ACTIONS_VERSIONS_BLOB`** - Blob holding the versions feed (default: `actions-versions.json.gz`), in the `ACTIONS_SNAPSHOT_CONTAINER` container
+- **`ACTIONS_BLOB_URL`** or **`ACTIONS_BLOB_ENDPOINT`** - Blob endpoint for managed identity authentication (also used for oversized action payloads)
+- **`ACTIONS_SNAPSHOT_CONTAINER`** - Private container for feeds and oversized action payloads (default: `snapshots`)
+
+Action payloads up to 32,768 UTF-16 code units are stored inline in `PayloadJson`.
+Larger payloads are stored losslessly as `payloads/{PayloadHash}.json` in the
+private snapshot container, with only a `PayloadBlobName` reference in Table
+Storage. All readers verify and hydrate this reference; HTTP requests/responses
+and hashes are unchanged, including the complete `immutableReleaseObservations`
+history. Missing/corrupt blobs fail the read rather than returning incomplete
+data. Deploy the backend before resuming uploads; no bulk rewrite is needed.
+
+HTTP clients need no changes. Direct Table clients must use a package release containing this change
+and provide `blobEndpoint` (or `connectionString`) with blob read/write access
+alongside Table access; an optional `payloadContainerName` overrides the default
+container. Use `await ActionRecord.fromStoredEntity(entity, storageOptions)` for
+raw stored entities; synchronous `fromEntity` only supports inline rows.
+Standalone `toEntity` rejects oversized payloads to prevent unsafe Table writes.
+Content-addressed blobs are never deleted by a request, including after failed
+Table writes; any future cleanup must respect active references and readers.
 
 ### Versions Feed Endpoint
 

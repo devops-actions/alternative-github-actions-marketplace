@@ -3,12 +3,13 @@ const { getTableClient, getActionEntity } = require('../lib/tableStorage');
 const { ErrorCodes, createErrorResponse, extractErrorDetails, logErrorDetails } = require('../lib/errorResponse');
 const { withCorsHeaders } = require('../lib/cors');
 const { patchCache } = require('../lib/statsCache');
+const { prepareActionEntity, readActionPayload } = require('../lib/actionPayloadStore');
 
 async function fetchExisting(tableClient, partitionKey, rowKey) {
   return getActionEntity(partitionKey, rowKey, { tableClient });
 }
 
-async function persistActionRecord(tableClient, actionRecord, existing, retryCount = 0) {
+async function persistActionRecord(tableClient, actionRecord, existing, retryCount = 0, storedEntity) {
   const MAX_RETRIES = 3;
 
   if (retryCount > MAX_RETRIES) {
@@ -22,7 +23,7 @@ async function persistActionRecord(tableClient, actionRecord, existing, retryCou
     await new Promise(resolve => setTimeout(resolve, backoffMs));
   }
 
-  const entity = actionRecord.toEntity();
+  const entity = storedEntity || await prepareActionEntity(actionRecord);
 
   if (!existing) {
     try {
@@ -33,7 +34,7 @@ async function persistActionRecord(tableClient, actionRecord, existing, retryCou
         throw error;
       }
       const latest = await tableClient.getEntity(entity.partitionKey, entity.rowKey);
-      return persistActionRecord(tableClient, actionRecord, latest, retryCount + 1);
+      return persistActionRecord(tableClient, actionRecord, latest, retryCount + 1, entity);
     }
   }
 
@@ -48,24 +49,23 @@ async function persistActionRecord(tableClient, actionRecord, existing, retryCou
     if (actionRecord.matchesExisting(latest)) {
       return { updated: false, created: false, lastSyncedUtc: latest.LastSyncedUtc };
     }
-    return persistActionRecord(tableClient, actionRecord, latest, retryCount + 1);
+    return persistActionRecord(tableClient, actionRecord, latest, retryCount + 1, entity);
   }
 }
 
-function parsePayload(entity) {
+async function parsePayload(entity) {
   if (!entity) return null;
   try {
-    return typeof entity.PayloadJson === 'string'
-      ? JSON.parse(entity.PayloadJson)
-      : (entity.PayloadJson || null);
-  } catch (_err) {
+    return await readActionPayload(entity);
+  } catch (error) {
+    if (entity.PayloadBlobName) throw error;
     return null;
   }
 }
 
 async function updateStatsCache(tableClient, record, existing, result) {
-  const newPayload = parsePayload({ PayloadJson: record.canonicalJson });
-  const oldPayload = parsePayload(existing);
+  const newPayload = record.raw;
+  const oldPayload = await parsePayload(existing);
 
   const newType = newPayload && newPayload.actionType && newPayload.actionType.actionType;
   const oldType = oldPayload && oldPayload.actionType && oldPayload.actionType.actionType;
@@ -179,7 +179,9 @@ module.exports = async function actionsUpsert(context, req) {
     const result = await persistActionRecord(tableClient, record, existing);
 
     // Best-effort incremental cache update; must not block or fail the response.
-    updateStatsCache(tableClient, record, existing, result).catch(() => {});
+    updateStatsCache(tableClient, record, existing, result).catch((error) => {
+      context.log.warn('Failed to update stats cache: %s', error.message);
+    });
 
     context.res = {
       status: result.created ? 201 : 200,

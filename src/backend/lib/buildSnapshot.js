@@ -1,6 +1,7 @@
 const { toActionSummary } = require('./actionSummary');
 const { writeSnapshot } = require('./snapshotStore');
 const { STATS_CACHE_PARTITION } = require('./statsCache');
+const { readActionPayload } = require('./actionPayloadStore');
 
 // Current snapshot payload shape. Bumped when the projection in
 // lib/actionSummary.js changes in a way older clients cannot read, so a
@@ -39,10 +40,9 @@ async function buildSnapshotDocument(tableClient) {
 
     let payload;
     try {
-      payload = typeof entity.PayloadJson === 'string'
-        ? JSON.parse(entity.PayloadJson)
-        : (entity.PayloadJson || null);
-    } catch {
+      payload = await readActionPayload(entity);
+    } catch (error) {
+      if (entity.PayloadBlobName) throw error;
       skipped += 1;
       continue;
     }

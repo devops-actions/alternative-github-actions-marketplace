@@ -65,7 +65,7 @@ module.exports = async function actionsGet(context, req) {
 
     let record;
     try {
-      record = ActionRecord.fromEntity(entity);
+      record = await ActionRecord.fromStoredEntity(entity);
     } catch (error) {
       context.log.error('Failed to deserialize stored entity: %s', error.message);
       context.res = {

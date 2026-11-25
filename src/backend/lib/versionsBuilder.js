@@ -20,6 +20,8 @@
  * instead of hard-coding indexes blindly.
  */
 
+const { readActionPayload } = require('./actionPayloadStore');
+
 const VERSIONS_SCHEMA_VERSION = 1;
 
 // Positional field names for each row in `actions`. Append-only: adding a field
@@ -325,15 +327,14 @@ function buildRow(payload) {
   ];
 }
 
-function parsePayload(entity) {
+async function parsePayload(entity) {
   if (!entity) {
     return null;
   }
   try {
-    return typeof entity.PayloadJson === 'string'
-      ? JSON.parse(entity.PayloadJson)
-      : (entity.PayloadJson || null);
-  } catch {
+    return await readActionPayload(entity);
+  } catch (error) {
+    if (entity.PayloadBlobName) throw error;
     return null;
   }
 }
@@ -355,7 +356,7 @@ async function buildVersionsFeed(tableClient, options = {}) {
   let skipped = 0;
 
   for await (const entity of tableClient.listEntities()) {
-    const payload = parsePayload(entity);
+    const payload = await parsePayload(entity);
     const row = payload ? buildRow(payload) : null;
     if (row) {
       actions.push(row);

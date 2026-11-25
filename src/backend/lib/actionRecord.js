@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { normalizePartitionKey, normalizeRowKey } = require('./keyUtils');
+const { MAX_INLINE_CODE_UNITS, readActionPayload } = require('./actionPayloadStore');
 
 class ActionRecord {
   constructor(raw, canonicalJson, hash, partitionKey, rowKey) {
@@ -81,6 +82,9 @@ class ActionRecord {
     if (!entity) {
       throw new Error('Entity is required.');
     }
+    if (entity.PayloadBlobName) {
+      throw new Error('Blob-backed action requires ActionRecord.fromStoredEntity.');
+    }
 
     const payload = typeof entity.PayloadJson === 'string'
       ? JSON.parse(entity.PayloadJson)
@@ -110,17 +114,28 @@ class ActionRecord {
     return new ActionRecord({ ...sanitized, owner, name }, canonicalJson, expectedHash, partitionKey, rowKey);
   }
 
+  static async fromStoredEntity(entity, options = {}) {
+    if (!entity || !entity.PayloadBlobName) return ActionRecord.fromEntity(entity);
+    const payload = await readActionPayload(entity, options);
+    return ActionRecord.fromEntity({ ...entity, PayloadBlobName: undefined, PayloadJson: payload });
+  }
+
   matchesExisting(entity) {
     return Boolean(entity && entity.PayloadHash === this.hash);
   }
 
-  toEntity(timestamp = new Date()) {
+  toEntity(timestamp = new Date(), options = {}) {
     const isoTimestamp = timestamp.toISOString();
+    if (!options.payloadBlobName && this.canonicalJson.length > MAX_INLINE_CODE_UNITS) {
+      throw new Error('Oversized action requires prepareActionEntity for blob persistence.');
+    }
 
     return {
       partitionKey: this.partitionKey,
       rowKey: this.rowKey,
-      PayloadJson: this.canonicalJson,
+      ...(options.payloadBlobName
+        ? { PayloadBlobName: options.payloadBlobName }
+        : { PayloadJson: this.canonicalJson }),
       PayloadHash: this.hash,
       LastSyncedUtc: isoTimestamp,
       Owner: this.owner,
