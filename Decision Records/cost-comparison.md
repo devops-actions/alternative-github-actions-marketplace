@@ -3,7 +3,7 @@
 ## Baseline Stack (Target Launch)
 - **Static Web Apps Free**: $0/month, 100 GB bandwidth, 0.5 GB storage, SSL, GitHub Actions integration.
 - **Azure Functions Consumption**: ~1M executions and 400k GB-s free; overage $0.20 per million executions, $0.000016 per GB-s.
-- **Azure Table Storage (Hot)**: ~26 MB data footprint; typically <$0.01/month including storage and modest transactions.
+- **Azure Table Storage + private Blob Storage (Hot)**: Table rows hold keys, hashes, timestamps, and bounded inline payloads; oversized payloads and precomputed feeds use the existing private `snapshots` container. Estimate both Table transactions and retained blob bytes/operations; the older ~26 MB flat-payload estimate does not describe the current split-storage layout.
 
 ## Managed Search Option
 - **Azure AI Search Basic**: ~$74/month per search unit; adds full-text indexing, scoring, semantic search. Requires dedicated pricing plan even at low load.
